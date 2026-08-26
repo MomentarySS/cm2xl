@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
+
+logger = logging.getLogger("pc_to_excel")
 
 from ..app_meta import APP_TITLE, APP_VERSION
 from ..connector.com_detector import check_elevation_match, is_pcdmis_elevated, is_pcdmis_running
@@ -816,6 +819,7 @@ class MainWindow:
                     ),
                 )
             except Exception as exc:
+                logger.exception("填入失败: %s", exc)
                 self.root.after(
                     0,
                     lambda: self._on_error("填入失败", format_user_error("填入失败", exc, with_trace=True)),
@@ -860,6 +864,7 @@ class MainWindow:
                 result.chained = preview.chained
                 self.root.after(0, lambda: self._on_fill_ok(result, len(records)))
             except Exception as exc:
+                logger.exception("填入写入失败: %s", exc)
                 self.root.after(
                     0,
                     lambda: self._on_error("填入失败", format_user_error("填入失败", exc, with_trace=True)),
@@ -974,6 +979,7 @@ class MainWindow:
                 )
                 self.root.after(0, lambda: self._on_export_ok(out_path, len(records)))
             except Exception as exc:
+                logger.exception("导出失败: %s", exc)
                 self.root.after(
                     0,
                     lambda: self._on_error("导出失败", format_user_error("导出失败", exc, with_trace=True)),
@@ -994,6 +1000,7 @@ class MainWindow:
             audit("pcdmis_bas_deploy", path=str(path))
             messagebox.showinfo("部署完成", f"脚本已更新:\n{path}")
         except Exception as exc:
+            logger.exception("BAS 部署失败: %s", exc)
             messagebox.showerror("部署失败", format_user_error("部署失败", exc))
 
     def _inject_command(self) -> None:
@@ -1018,6 +1025,7 @@ class MainWindow:
                     result = inject_export_command(app)
                 self.root.after(0, lambda: self._on_inject_done(result))
             except Exception as exc:
+                logger.exception("植入失败: %s", exc)
                 self.root.after(
                     0,
                     lambda: self._on_error("植入失败", format_user_error("植入失败", exc, with_trace=True)),

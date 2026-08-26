@@ -19,6 +19,12 @@ def _check_elevation_warning() -> None:
 
 def main() -> None:
     _check_elevation_warning()
+    # pc_to_excel 日志落盘（独立运行模式也写到 log_dir）
+    from utils.logging import setup_logging
+    from utils.paths import paths
+
+    setup_logging("pc_to_excel", paths.log_dir)
+
     from .gui.main_window import run_app
 
     run_app()

@@ -141,7 +141,7 @@
 | 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | 2026-08-26：filler 4 处取消点（cancel_check 回调）+ GUI 5 处 worker 引用维护、关闭/卸载时 `request_cancel`+`wait(5)` | — |
 | 3.45 主题统一 | Shell 主入口调一次 `set_default_color_theme`，模块内删除 | ✅ | Phase 0-1 已落地 | — |
 | 3.42 atexit | `atexit.register(cleanup_on_exit)` | ✅ | Phase 0 已落地（main.py 清理 *.tmp.pdf + logging.shutdown） | — |
-| 3.6 日志落盘 | CMMFiller logger 接文件 handler | ✅ | 2026-08-26：`main.py` + `cmm_filler/main.py` 初始化 `setup_logging("CMMFiller")`；gui.py「查看日志」路径对齐大小写 `CMMFiller.log`（原 `cmm_filler.log` 读不到，日志文件实际按 `{module_name}.log` 生成） | — |
+| 3.6 日志落盘 | CMMFiller / pc_to_excel logger 接文件 handler | ✅ | 2026-08-26：CMMFiller：`main.py` + `cmm_filler/main.py` 初始化 `setup_logging("CMMFiller")`；gui.py「查看日志」路径对齐大小写 `CMMFiller.log`（原 `cmm_filler.log` 读不到）。**pc_to_excel 补**：`main.py` + `pc_to_excel/main.py` 初始化 `setup_logging("pc_to_excel")`；`main_window.py` 5 个 work except 处加 `logger.exception`（填入/填入写入/导出/部署/植入），连接/导出/植入/部署异常均有完整堆栈落到 `pc_to_excel.log` | — |
 | 3.36 审计日志分离 | audit logger 不冒泡 + 普通 logger 不挂 audit handler | ✅ | 2026-08-26：`setup_logging` 移除 TimedRotatingFileHandler（不再给普通 logger 挂 `{name}.audit.log`，该文件名误导实际装的是普通日志按天副本）；`setup_audit_logging` 独立挂专用 handler（写 `toolbox.audit.audit.log`）+ 设 `propagate=False`。效果：audit() 只写专用 audit 文件；普通日志不混入 audit；CMMFiller 日志不污染 toolbox 日志 | — |
 
 ---
