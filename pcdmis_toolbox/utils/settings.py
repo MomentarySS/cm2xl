@@ -1,0 +1,261 @@
+"""
+PCDMIS Toolbox 2.0 — 配置管理
+原子写 + 文件锁 + 配置迁移 + 版本升级链。
+"""
+
+import json
+import os
+import shutil
+import time
+import logging
+import sys
+from pathlib import Path
+from datetime import datetime
+from typing import Callable
+
+# fcntl 仅 Unix 可用
+try:
+    import fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
+
+logger = logging.getLogger(__name__)
+
+# 配置 schema 版本（与 toolbox.app_meta.APP_VERSION 同步）
+CONFIG_SCHEMA_VERSION = "2.0.0"
+
+# 迁移函数类型
+Migration = Callable[[dict], dict]
+
+# 迁移函数注册表：module_name -> {from_version: migration_fn}
+_MIGRATIONS: dict[str, dict[str, Migration]] = {}
+
+
+def register_migration(module: str, from_ver: str, to_ver: str | None = None):
+    """
+    装饰器：注册迁移函数。
+    自动推断 to_ver（from_ver 去掉尾号 v，如 "1.0.0" → "1.0.1"）。
+    """
+    def deco(fn: Migration):
+        _MIGRATIONS.setdefault(module, {})[from_ver] = fn
+        return fn
+    return deco
+
+
+# ── 原子写 ─────────────────────────────────────────────────────────────────
+
+def save_settings_json_atomic(path: Path, data: dict) -> None:
+    """
+    将 data 以原子方式写入 path（临时文件 + os.replace）。
+    修复 json.dump 直接写、异常中断留半截文件的问题。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+        logger.debug(f"settings saved (atomic): {path}")
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+
+
+# ── 文件锁 ─────────────────────────────────────────────────────────────────
+
+class FileLock:
+    """
+    基于 O_EXCL 的跨进程文件锁（Windows + Linux 通用）。
+
+    用法：
+        with FileLock(lock_path, timeout=5.0) as locked:
+            if locked:
+                # 拿到了锁
+                pass
+            else:
+                # 超时
+    """
+
+    def __init__(self, lock_path: Path, timeout: float = 5.0, retry_interval: float = 0.1):
+        self._lock_path = lock_path
+        self._timeout = timeout
+        self._retry_interval = retry_interval
+        self._fd = None
+
+    def __enter__(self) -> bool:
+        """尝试获取锁，返回 True 表示拿到，False 表示超时。"""
+        start = time.monotonic()
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+        while True:
+            try:
+                self._fd = os.open(
+                    str(self._lock_path),
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                )
+                # 写入当前 PID
+                os.write(self._fd, str(os.getpid()).encode())
+                os.close(self._fd)
+                self._fd = None
+                return True
+            except FileExistsError:
+                # 检查是否死锁（进程已不存在）
+                if self._is_stale():
+                    try:
+                        self._lock_path.unlink()
+                        continue
+                    except Exception:
+                        pass
+                if time.monotonic() - start >= self._timeout:
+                    return False
+                time.sleep(self._retry_interval)
+
+    def __exit__(self, *args) -> None:
+        if self._fd is not None:
+            try:
+                os.close(self._fd)
+            except Exception:
+                pass
+            self._fd = None
+        try:
+            self._lock_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def _is_stale(self) -> bool:
+        """检查锁文件对应的进程是否还存活。"""
+        try:
+            pid_str = self._lock_path.read_text(encoding="utf-8").strip()
+            pid = int(pid_str)
+            # Windows: os.kill(pid, 0) 会抛异常
+            os.kill(pid, 0)
+            return False  # 进程存活
+        except (ValueError, ProcessLookupError, PermissionError, OSError):
+            return True  # 进程已死
+
+
+# ── 配置迁移 ────────────────────────────────────────────────────────────────
+
+def migrate_settings_if_needed(
+    module_name: str,
+    old_path: Path,
+    new_path: Path,
+) -> dict:
+    """
+    配置文件迁移：旧路径 → 新路径，复制后删除旧文件。
+    适用于首次启动时的单向迁移（无版本升级链）。
+    """
+    if new_path.exists():
+        return load_json(new_path)
+    if not old_path.exists():
+        return {}
+
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(old_path, new_path)
+    bak_path = old_path.with_suffix(".bak")
+    old_path.rename(bak_path)
+    logger.info(f"[settings] migrated {old_path} → {new_path}, old backed up")
+    return load_json(new_path)
+
+
+def load_json(path: Path) -> dict:
+    """读取 JSON 文件，失败返回空 dict。"""
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"[settings] read error {path}: {e}, using defaults")
+        corrupt = path.with_suffix(f".corrupt-{datetime.now():%Y%m%d%H%M%S}.bak")
+        shutil.copy2(path, corrupt)
+        return {}
+
+
+def _next_version(ver: str) -> str:
+    """简单版本递增（最后一段 +1）。"""
+    parts = ver.rsplit(".", 1)
+    parts[-1] = str(int(parts[-1]) + 1)
+    return ".".join(parts)
+
+
+def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
+    """
+    加载配置，执行版本升级链（如有），返回最终 settings dict。
+    详见 ARCHITECTURE.md 3.9.1。
+    """
+    if not config_path.is_file():
+        return _default_settings(module_name)
+
+    data = load_json(config_path)
+    file_version = data.get("_version", "0.0.0")
+
+    if file_version == CONFIG_SCHEMA_VERSION:
+        return data
+
+    # 升级前先备份
+    backup_path = config_path.with_suffix(f".v{file_version}.bak")
+    if not backup_path.exists():
+        shutil.copy2(config_path, backup_path)
+        logger.info(f"[settings] backup {config_path} → {backup_path}")
+
+    # 沿迁移链逐步升级
+    migrations = _MIGRATIONS.get(module_name, {})
+    current = data
+    current_version = file_version
+
+    while current_version != CONFIG_SCHEMA_VERSION:
+        if current_version not in migrations:
+            raise RuntimeError(
+                f"{module_name}: 没有从 v{current_version} 升级的迁移函数"
+            )
+        migration = migrations[current_version]
+        try:
+            current = migration(current)
+            current["_version"] = _next_version(current_version)
+            current["_updated_at"] = datetime.now().isoformat()
+            current_version = current["_version"]
+            logger.info(f"[settings] {module_name} 升级 → v{current_version}")
+        except Exception as e:
+            logger.error(f"[settings] 迁移失败: {e}，从备份恢复")
+            current = load_json(backup_path)
+            break
+
+    save_settings_json_atomic(config_path, current)
+    return current
+
+
+def _default_settings(module_name: str) -> dict:
+    """返回模块默认 settings（含 _version 和 _schema 字段）。"""
+    return {
+        "_version": CONFIG_SCHEMA_VERSION,
+        "_schema": f"{module_name}.settings",
+        "_updated_at": datetime.now().isoformat(),
+    }
+
+
+# ── 降级导出 ───────────────────────────────────────────────────────────────
+
+def export_legacy_settings(module_name: str, target_path: Path, current_data: dict) -> None:
+    """
+    把 2.0 配置降级导出为 1.x 格式，导出给旧工具使用。
+    详见 ARCHITECTURE.md 3.9.2。
+    """
+    if module_name == "cmm_filler":
+        legacy = {
+            k: v for k, v in current_data.get("paths", {}).items()
+            if k in ("template", "pdf_folder", "output")
+        }
+    elif module_name == "pc_to_excel":
+        legacy = {k: v for k, v in current_data.items() if not k.startswith("_")}
+    else:
+        legacy = {}
+
+    target_path.write_text(
+        json.dumps(legacy, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info(f"[settings] exported legacy settings for {module_name} → {target_path}")

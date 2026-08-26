@@ -32,55 +32,162 @@ TOOLBOX_THEME_JSON_PATH = Path(__file__).parent / "theme.json"
 def _build_theme_json(dest: Path | None = None) -> None:
     """
     生成 CustomTkinter 自定义主题 JSON，写入 dest 或默认 theme.json。
-    使用青绿主色，避免默认紫/蓝/绿切换时的颜色跳变。
+    使用青绿主色，基于 green 主题完整字段表，避免默认紫/蓝/绿切换时的颜色跳变。
+    完整字段参考：customtkinter/assets/themes/green.json
     """
+    accent = TOOLBOX_THEME["accent"]
+    accent_h = TOOLBOX_THEME["accent_hover"]
+    primary = TOOLBOX_THEME["primary"]
+    page_bg_l = TOOLBOX_THEME["page_bg"]
+    page_bg_d = "#0F172A"
+    card_bg_l = TOOLBOX_THEME["card_bg"]
+    card_bg_d = "#1E293B"
+    card_bd = TOOLBOX_THEME["card_border"]
+    card_bd_d = "#334155"
+    text_l = TOOLBOX_THEME["text"]
+    text_d = "#F1F5F9"
+    muted = "#94A3B8"
+
     theme = {
-        "CTk": {
-            "fg_color": [TOOLBOX_THEME["page_bg"], "#0F172A"],
-        },
+        "CTk": {"fg_color": [page_bg_l, page_bg_d]},
+        "CTkToplevel": {"fg_color": [card_bg_l, card_bg_d]},
         "CTkFrame": {
             "corner_radius": 8,
-            "border_color": [TOOLBOX_THEME["card_border"], "#334155"],
-            "fg_color": [TOOLBOX_THEME["card_bg"], "#1E293B"],
+            "border_width": 0,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [card_bg_l, card_bg_d],
+            "top_fg_color": [page_bg_l, page_bg_d],
         },
         "CTkButton": {
             "corner_radius": 6,
-            "border_color": [TOOLBOX_THEME["accent"], "#14B8A6"],
-            "hover_color": [TOOLBOX_THEME["accent_hover"], "#0D9488"],
-            "pressed_color": [TOOLBOX_THEME["primary"], "#115E59"],
-            "fg_color": [TOOLBOX_THEME["accent"], "#0F766E"],
-            "text_color": ["#FFFFFF", "#F1F5F9"],
             "border_width": 0,
+            "border_color": [accent, accent_h],
+            "fg_color": [accent, accent],
+            "hover_color": [accent_h, "#0D9488"],
+            "pressed_color": [primary, primary],
+            "text_color": ["#FFFFFF", "#F1F5F9"],
+            "text_color_disabled": [muted, "#64748B"],
         },
         "CTkLabel": {
             "corner_radius": 0,
-            "fg_color": [TOOLBOX_THEME["page_bg"], "#0F172A"],
-            "text_color": [TOOLBOX_THEME["text"], "#F1F5F9"],
+            "border_width": 0,
+            "fg_color": [page_bg_l, page_bg_d],
+            "border_color": [card_bd, card_bd_d],
+            "text_color": [text_l, text_d],
         },
         "CTkEntry": {
             "corner_radius": 6,
-            "border_color": [TOOLBOX_THEME["card_border"], "#334155"],
-            "fg_color": [TOOLBOX_THEME["page_bg"], "#1E293B"],
-            "text_color": [TOOLBOX_THEME["text"], "#F1F5F9"],
+            "border_width": 1,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [page_bg_l, page_bg_d],
+            "text_color": [text_l, text_d],
+            "placeholder_text_color": [muted, "#64748B"],
         },
         "CTkOptionMenu": {
             "corner_radius": 6,
-            "fg_color": [TOOLBOX_THEME["accent"], "#0F766E"],
-            "button_color": [TOOLBOX_THEME["primary"], "#115E59"],
-            "hover_color": [TOOLBOX_THEME["accent_hover"], "#14B8A6"],
+            "fg_color": [accent, accent],
+            "button_color": [primary, primary],
+            "button_hover_color": [accent_h, "#0D9488"],
             "text_color": ["#FFFFFF", "#F1F5F9"],
+            "text_color_disabled": [muted, "#64748B"],
         },
         "CTkProgressBar": {
             "corner_radius": 6,
-            "fg_color": [TOOLBOX_THEME["page_bg"], "#1E293B"],
-            "progress_color": [TOOLBOX_THEME["accent"], "#0F766E"],
+            "border_width": 0,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [page_bg_l, page_bg_d],
+            "progress_color": [accent, accent],
         },
         "CTkSwitch": {
             "corner_radius": 12,
+            "border_width": 0,
+            "button_length": 0,
             "fg_color": [TOOLBOX_THEME["muted"], "#475569"],
-            "progress_color": [TOOLBOX_THEME["accent"], "#0F766E"],
+            "progress_color": [accent, accent],
             "button_color": ["#FFFFFF", "#E2E8F0"],
             "button_hover_color": ["#F1F5F9", "#CBD5E1"],
+            "text_color": [text_l, text_d],
+            "text_color_disabled": [muted, "#64748B"],
+        },
+        "CTkSlider": {
+            "corner_radius": 6,
+            "button_corner_radius": 6,
+            "border_width": 0,
+            "button_length": 0,
+            "fg_color": [page_bg_l, page_bg_d],
+            "progress_color": [accent, accent],
+            "button_color": [accent, accent],
+            "button_hover_color": [accent_h, "#0D9488"],
+        },
+        "CTkComboBox": {
+            "corner_radius": 6,
+            "border_width": 1,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [page_bg_l, page_bg_d],
+            "button_color": [primary, primary],
+            "button_hover_color": [accent_h, "#0D9488"],
+            "text_color": [text_l, text_d],
+            "text_color_disabled": [muted, "#64748B"],
+        },
+        "CTkCheckBox": {
+            "corner_radius": 6,
+            "border_width": 0,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [page_bg_l, page_bg_d],
+            "hover_color": [accent_h, "#0D9488"],
+            "checkmark_color": ["#FFFFFF", "#F1F5F9"],
+            "text_color": [text_l, text_d],
+            "text_color_disabled": [muted, "#64748B"],
+        },
+        "CTkRadioButton": {
+            "corner_radius": 6,
+            "border_width_checked": 3,
+            "border_width_unchecked": 3,
+            "fg_color": [page_bg_l, page_bg_d],
+            "border_color": [accent, accent],
+            "hover_color": [accent_h, "#0D9488"],
+            "text_color": [text_l, text_d],
+            "text_color_disabled": [muted, "#64748B"],
+        },
+        "CTkSegmentedButton": {
+            "corner_radius": 6,
+            "border_width": 0,
+            "fg_color": [page_bg_l, page_bg_d],
+            "selected_color": [accent, accent],
+            "selected_hover_color": [accent_h, "#0D9488"],
+            "unselected_color": [card_bg_l, card_bg_d],
+            "unselected_hover_color": [TOOLBOX_THEME["card_border"], "#475569"],
+            "text_color": [text_l, text_d],
+            "text_color_disabled": [muted, "#64748B"],
+        },
+        "CTkTextbox": {
+            "corner_radius": 6,
+            "border_width": 0,
+            "border_color": [card_bd, card_bd_d],
+            "fg_color": [card_bg_l, card_bg_d],
+            "text_color": [text_l, text_d],
+            "scrollbar_button_color": [primary, primary],
+            "scrollbar_button_hover_color": [accent_h, "#0D9488"],
+        },
+        "CTkScrollableFrame": {
+            "label_fg_color": [accent, accent],
+        },
+        "CTkScrollbar": {
+            "corner_radius": 6,
+            "border_spacing": 6,
+            "fg_color": [page_bg_l, page_bg_d],
+            "button_color": [card_bd, card_bd_d],
+            "button_hover_color": [accent_h, "#0D9488"],
+        },
+        "DropdownMenu": {
+            "fg_color": [card_bg_l, card_bg_d],
+            "hover_color": [accent_h, "#0D9488"],
+            "text_color": [text_l, text_d],
+        },
+        "CTkFont": {
+            "macOS": {"family": "SF Pro", "size": 13},
+            "Windows": {"family": "Segoe UI", "size": 13},
+            "Linux": {"family": "Ubuntu", "size": 13},
         },
     }
 

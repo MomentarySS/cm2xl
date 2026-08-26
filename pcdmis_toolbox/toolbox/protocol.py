@@ -26,6 +26,8 @@ class ModuleProtocol(Protocol):
         """模块版本号"""
         ...
 
+    shell: "ShellProtocol"  # Shell 在 mount 时注入，模块通过它更新状态栏
+
     def mount(self, parent: ctk.CTkFrame) -> None:
         """挂载到壳的内容区。"""
         ...
