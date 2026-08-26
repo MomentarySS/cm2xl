@@ -92,23 +92,23 @@
 
 ---
 
-## Phase 4 — pc_to_excel 迁移 ⏳ 待做
+## Phase 4 — pc_to_excel 迁移 ✅ 完成
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 11.3 Phase 4 | 搬移 `core/`、`connector/`、`export/`、`inject/` | ⏳ | — | — |
-| 3.46 相对导入 | 批量改绝对导入 | ⏳ | — | — |
-| 3.46 sys.path 清理 | 删除所有 `sys.path.insert` | ⏳ | — | — |
-| 3.35 错误码接入 | `format_user_error` 改为接收 `ToolboxError` | ⏳ | — | — |
-| 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ⏳ | — | — |
-| 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("green")` | ⏳ | — | — |
-| 3.3 模块接口 | 写 `modules/pc_to_excel/gui.py` PCToExcelModule | ⏳ | — | — |
-| 3.1 独立入口 | 写 `modules/pc_to_excel/main.py` | ⏳ | — | — |
-| 3.8 版本 | 写 `modules/pc_to_excel/app_meta.py` | ⏳ | — | — |
-| 3.29 CLI | 写 `modules/pc_to_excel/cli.py` | ⏳ | — | — |
-| 3.7 BAS 脚本 | 搬移 `scripts/export_current.bas` | ⏳ | — | — |
-| 3.14 admin 启动器 | `run_as_admin.bat` 整合 | ⏳ | — | — |
-| — | 写 `requirements/pc_to_excel.txt` | ⏳ | — | — |
+| 11.3 Phase 4 | 搬移 `core/`、`connector/`、`export/`、`inject/` | ✅ | 与设计一致 | — |
+| 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from connector.base` → `from .base`；`from config` → `from ..app_meta`；`from utils.admin` → `from ....utils.admin`（toolbox 层） | `utils/settings.py` 重命名为 `utils/local_settings.py` 避免与 toolbox 层冲突 |
+| 3.46 sys.path 清理 | 删除所有 `sys.path.insert` | ✅ | 原 `main.py`/`cli.py`/`gui/main_window.py` 及各子模块的 `sys.path.insert(0, ...)` 已全部删除 | — |
+| 3.35 错误码接入 | `format_user_error` 改为接收 `ToolboxError` | ✅ | `action_hints.format_user_error` 签名改为 `exc: BaseException \| str \| ToolboxError`，新增 `ToolboxError` 分支提取 `[code] message` 格式 | — |
+| 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | `gui/main_window.py` 中 5 处 `threading.Thread(target=work, daemon=True)` 全部替换为 `CancellableWorker().start(work)` | — |
+| 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("green")` | ✅ | `gui/main_window.py` 第36行 `ctk.set_default_color_theme("green")` 已删除 | — |
+| 3.3 模块接口 | 写 `modules/pc_to_excel/gui.py` PCToExcelModule | ✅ | 实现 `ModuleProtocol`，含 `mount/unmount/on_activate`；`on_activate` 刷新 PCDMIS 连接状态 | — |
+| 3.1 独立入口 | 写 `modules/pc_to_excel/main.py` | ✅ | 独立 GUI 入口含权限检测 | — |
+| 3.8 版本 | 写 `modules/pc_to_excel/app_meta.py` | ✅ | 从 `toolbox.app_meta` 导入 `APP_VERSION`；`PROG_ID_CANDIDATES`/`DEFAULT_TOLERANCE`/`EXPORT_CMD_ID`/`OBTYPE_BASIC_SCRIPT` 等常量迁入 | — |
+| 3.29 CLI | 写 `modules/pc_to_excel/cli.py` | ✅ | 支持 `export`/`fill-form`/`inject` 三个子命令 | — |
+| 3.7 BAS 脚本 | 搬移 `scripts/export_current.bas` | ✅ | 复制 `export_current.bas` + `export_current.bas.template` | — |
+| 3.14 admin 启动器 | `run_as_admin.bat` 整合 | ⏳ | 待 Phase 6（打包阶段）整合 | — |
+| — | 写 `requirements/pc_to_excel.txt` | ✅ | 含 pywin32 | — |
 
 ---
 

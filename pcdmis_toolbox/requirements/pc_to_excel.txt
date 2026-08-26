@@ -1,0 +1,5 @@
+# pc_to_excel 专用依赖（PCDMIS 数据提取 + 公差判定 + 报告导出）
+# 安装: pip install -r requirements/base.txt -r requirements/pc_to_excel.txt
+
+# Windows COM 连接（PCDMIS 通过 COM Automation 控制）
+pywin32>=306; platform_system=="Windows"
