@@ -1,0 +1,12 @@
+# CMMFiller 专用依赖（CMM 三坐标测量报告 OCR 识别 + Excel 自动填充）
+# 安装: pip install -r requirements/base.txt -r requirements/cmm_filler.txt
+
+# GUI 拖拽支持（文件夹/文件拖入输入框）
+tkinterdnd2>=0.4
+
+# PDF 渲染
+pymupdf==1.28.0
+
+# OCR 引擎 (PaddleOCR + PaddlePaddle CPU)
+paddlepaddle==2.6.2; platform_system=="Windows"
+paddleocr==2.10.0

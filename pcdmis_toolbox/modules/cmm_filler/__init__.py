@@ -1,6 +1,4 @@
-"""
-CMMFiller 模块 — Phase 1 存根，Phase 3 替换为完整实现
-"""
+"""CMMFiller 模块 — CMM 三坐标测量报告 OCR 识别 + Excel 自动填充"""
 
 from modules import register_module
 

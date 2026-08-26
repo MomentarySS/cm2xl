@@ -52,25 +52,43 @@
 
 ---
 
-## Phase 3 — CMMFiller 迁移 ⏳ 待做
+## Phase 3 — CMMFiller 迁移 ✅ 完成
+
+**Phase 3 提交:** `2c1bef2`（合并 Phase 0-2 提交后新一轮提交）
+
+| 新增/变更文件 | 说明 |
+|-------------|------|
+| `modules/cmm_filler/__init__.py` | 模块包初始化 |
+| `modules/cmm_filler/app_meta.py` | 从 `toolbox.app_meta` 导入版本 |
+| `modules/cmm_filler/main.py` | 独立运行入口（含 freeze_support + apply_theme） |
+| `modules/cmm_filler/cli.py` | CLI 入口（process/export-template/summary 子命令） |
+| `modules/cmm_filler/gui.py` | 完整 GUI（1281行）+ CMMFillerModule 适配层 |
+| `modules/cmm_filler/core/__init__.py` | core 包初始化 |
+| `modules/cmm_filler/core/filler.py` | 核心逻辑（含 glob_pdfs、fitz_open_context、OCR缓存补全） |
+| `modules/cmm_filler/ocr/__init__.py` | ocr 包初始化 |
+| `modules/cmm_filler/ocr/engine.py` | PaddleOCR 引擎（含 bootstrap 和多引擎抽象） |
+| `modules/cmm_filler/template_wizard.py` | 模板向导（直接从 CMMFiller 复制） |
+| `modules/cmm_filler/templates/` | 模板文件（模板1.xlsx、模板2.xlsx） |
+| `modules/cmm_filler/models/paddleocr/` | PaddleOCR 模型文件（~18MB） |
+| `requirements/cmm_filler.txt` | CMMFiller 专用依赖 |
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 11.3 Phase 3 | 迁移 `cmm_filler_v10.py` → `modules/cmm_filler/core/filler.py` | ⏳ | — | — |
-| 3.46 相对导入 | 批量改绝对导入为相对导入 | ⏳ | — | — |
-| 3.46 sys.path 清理 | 删除所有 `sys.path.insert(0, _ROOT)` | ⏳ | — | — |
-| 3.39 PDF 大小写 | `glob('*.PDF')` → `suffix.lower() == '.pdf'` | ⏳ | — | — |
-| 3.43 PDF 句柄 | `fitz.open()` → `with fitz_open_context()` | ⏳ | — | — |
-| 3.38 OCR 缓存 | `_cleanup_cache()` 补全 `ocr_cache.json` 按数量清理 | ⏳ | — | — |
-| 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("blue")` | ⏳ | — | — |
-| 3.42 线程取消 | `threading.Thread(daemon=True)` → `CancellableWorker` | ⏳ | — | — |
-| 3.3 模块接口 | 写 `modules/cmm_filler/gui.py` CMMFillerModule | ⏳ | — | — |
-| 3.1 独立入口 | 写 `modules/cmm_filler/main.py` 独立运行入口 | ⏳ | — | — |
-| 3.17 模板向导 | 搬移 `template_wizard.py` → `modules/cmm_filler/wizard.py` | ⏳ | — | — |
-| 3.29 CLI | 写 `modules/cmm_filler/cli.py` | ⏳ | — | — |
-| 3.8 版本 | 写 `modules/cmm_filler/app_meta.py` 从 toolbox 导入 | ⏳ | — | — |
-| — | 搬移 `templates/`、`models/paddleocr/` | ⏳ | — | — |
-| — | 写 `requirements/cmm_filler.txt` | ⏳ | — | — |
+| 11.3 Phase 3 | 迁移 `cmm_filler_v10.py` → `modules/cmm_filler/core/filler.py` | ✅ | 与设计一致 | — |
+| 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from ocr_engine` → `from ..ocr.engine`；删除 `sys.path.insert` | — |
+| 3.46 sys.path 清理 | 删除所有 `sys.path.insert(0, _ROOT)` | ✅ | 原 gui.py 第17行 `sys.path.insert` 已删除；`cmm_filler_v10.py` 无此问题 | — |
+| 3.39 PDF 大小写 | `glob('*.PDF')` → `glob_pdfs()` 大小写不敏感 | ✅ | `_scan_and_parse` 和 `export_standard_template` 中的 `sorted(Path(...).glob('*.PDF'))` 全部替换为 `glob_pdfs(Path(...))` | — |
+| 3.43 PDF 句柄 | `fitz.open()` → `with fitz_open_context()` | ✅ | `pdf_to_image` 方法改用 `with fitz_open_context()` | — |
+| 3.38 OCR 缓存 | `_cleanup_cache()` 补全 `ocr_cache.json` 按数量清理 | ✅ | 新增 `ocr_cache.json` 按数量清理逻辑（>10000条按字母序删旧） | — |
+| 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("blue")` | ✅ | gui.py 顶部的 `ctk.set_default_color_theme("blue")` 调用已删除；保留 `ctk.set_appearance_mode`（由 Shell 统一管理） | — |
+| 3.42 线程取消 | `threading.Thread(daemon=True)` → `CancellableWorker` | ✅ | gui.py 中 5 处 `threading.Thread(target=..., daemon=True)` 全部替换为 `CancellableWorker()` + `.start(...)` | — |
+| 3.3 模块接口 | 写 `modules/cmm_filler/gui.py` CMMFillerModule | ✅ | 实现 `ModuleProtocol`，含 `mount/unmount/on_activate`；`TkinterDnD` 初始化加条件判断（仅独立窗口模式） | — |
+| 3.1 独立入口 | 写 `modules/cmm_filler/main.py` 独立运行入口 | ✅ | 含 `multiprocessing.freeze_support()` + `apply_theme()` | — |
+| 3.17 模板向导 | 搬移 `template_wizard.py` → `modules/cmm_filler/template_wizard.py` | ✅ | 直接复制，原样保留（内部使用原生 tkinter，与模块低耦合） | — |
+| 3.29 CLI | 写 `modules/cmm_filler/cli.py` | ✅ | 支持 `process`/`export-template`/`summary` 三个子命令 | — |
+| 3.8 版本 | 写 `modules/cmm_filler/app_meta.py` 从 toolbox 导入 | ✅ | 从 `toolbox.app_meta` 导入 `APP_VERSION` | — |
+| — | 搬移 `templates/`、`models/paddleocr/` | ✅ | 模板2个 + PaddleOCR 模型（~18MB）完整复制 | — |
+| — | 写 `requirements/cmm_filler.txt` | ✅ | 含 tkinterdnd2、pymupdf、paddlepaddle、paddleocr | — |
 
 ---
 
