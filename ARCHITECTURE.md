@@ -260,6 +260,12 @@ TOOLBOX_THEME = {
 # 各模块必须引用这里的常量，避免硬编码颜色
 ```
 
+**实现细节**：CustomTkinter 对主题 JSON 字段要求严格（所有 key 必须存在），
+实际 `_build_theme_json()` 生成完整的 19-key 主题 JSON，基于 `customtkinter/assets/themes/green.json`
+字段表，包含 `border_width`、`text_color_disabled` 等 ARCH 初稿未注明的字段。
+`TOOLBOX_THEME` dict 保留供其他模块引用颜色常量。
+```
+
 ### 3.5 路径管理
 
 ```python
@@ -1424,7 +1430,7 @@ def save_settings_json_atomic(path: Path, data: dict) -> None:
 
 **现状**：双击 Toolbox 两次会同时读写 settings.json，可能损坏。
 
-**集成后策略**：`utils/file_lock.py`：
+**集成后策略**：`utils/settings.py`（FileLock 类）：
 
 ```python
 class FileLock:
@@ -2203,10 +2209,10 @@ python main.py
 #### Phase 2：模块注册机制（预计 1 小时）
 
 **任务清单**：
-1. 写 `modules/__init__.py`：模块注册表 `REGISTRY = {}`
-2. 写 `modules/cmm_filler/__init__.py`：注册
-3. 写 `modules/pc_to_excel/__init__.py`：注册
-4. 写 `modules/<name>/gui.py` 适配层骨架（暂不实现内容，仅占位）
+1. 写 `modules/__init__.py`：**pkgutil 自动发现** + `_discover_modules()` 加载 `modules/<name>/gui.py`，底部 import 执行 `register_module()`
+2. 写 `modules/cmm_filler/__init__.py`：空文件（注册在 gui.py 底部）
+3. 写 `modules/pc_to_excel/__init__.py`：空文件
+4. 写 `modules/<name>/gui.py` 适配层骨架（Phase 1 stub，Phase 3/4 替换为真实实现）
 
 **验收**：
 ```bash
