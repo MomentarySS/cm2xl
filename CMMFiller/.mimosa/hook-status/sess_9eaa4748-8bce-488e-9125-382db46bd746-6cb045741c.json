@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-08-22T05:52:21.514Z",
+  "sessionId": "sess_9eaa4748-8bce-488e-9125-382db46bd746",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "C:/Users/terence/.zcode/cli/memories/projects/20060710-1642-afb60c321cb3a85d/memory/cmmfiller-takeover-status.md",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 3,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

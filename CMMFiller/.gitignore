@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OCR 模型（打包前 download_ocr_models.py 下载，体积约 17-30 MB）
+models/paddleocr/
+
+# OCR 图片缓存
+cache/*.png
+cache/*.json
+
+# 程序输出
+outputs/
+*.xlsx
+!templates/*.xlsx
+
+# PyInstaller 构建产物
+dist/
+final_build/
+installer/output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# 临时文件
+test_ocr.png
+ocr_result_*.txt
+parse_result_*.txt
+
+# 系统文件
+Thumbs.db
+.DS_Store

@@ -1,0 +1,19 @@
+# CMM 三坐标测量报告自动填充工具 - 依赖清单
+# 安装命令: pip install -r requirements.txt
+# 注意: PaddlePaddle 为 CPU 版本，约 200MB，首次运行需下载 OCR 模型
+
+# GUI 界面
+customtkinter>=6.0
+
+# GUI 拖拽支持（文件夹/文件拖入输入框）
+tkinterdnd2>=0.4
+
+# PDF 渲染
+pymupdf==1.28.0
+
+# Excel 读写
+openpyxl==3.1.5
+
+# OCR 引擎 (PaddleOCR + PaddlePaddle CPU)
+paddlepaddle==2.6.2
+paddleocr==2.10.0

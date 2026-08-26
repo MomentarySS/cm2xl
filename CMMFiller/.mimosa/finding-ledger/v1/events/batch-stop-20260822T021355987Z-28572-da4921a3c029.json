@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260822T021355987Z-28572-da4921a3c029",
+  "runId": "20260822T021355987Z-28572-da4921a3c029",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "c2991ad16ee58aa79a931e3b18ad03c27bd6ca74d9b1b571c3961508a4284d89",
+  "rulesVersion": "unavailable",
+  "sessionHash": "6cb045741c1f91e32e3d55a6ed8d37e6cb8efe80c03491051e4f2474276ed9c2",
+  "reportRef": ".mimosa/reports/task-review-sess_9eaa4748-8bce-488e-9125-382db46bd746-20260822T021355987Z-28572-da4921a3c029.json",
+  "events": [
+    {
+      "eventId": "hook-f2eee2fc551294bcebbaa705650efda1",
+      "findingId": "mimosa-cbd49622b40815b8a00c2b2b",
+      "type": "finding_observed",
+      "at": "2026-08-22T02:13:55.987Z",
+      "identity": {
+        "projectRelativeFile": "requirements.txt",
+        "ruleId": "mimosa.supply.unpinned-python-dependency",
+        "codeEvidenceHash": "c4316ae89817040a02e3b15e9797d9f6332a21cf4518f952a88f5f35eb6fcc06",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 9,
+      "endLine": 9,
+      "reasonCode": "observe",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "c4316ae89817040a02e3b15e9797d9f6332a21cf4518f952a88f5f35eb6fcc06"
+      },
+      "sequence": 0
+    }
+  ],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-08-22T02:13:56.316Z"
+}

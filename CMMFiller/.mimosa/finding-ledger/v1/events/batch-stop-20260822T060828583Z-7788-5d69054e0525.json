@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260822T060828583Z-7788-5d69054e0525",
+  "runId": "20260822T060828583Z-7788-5d69054e0525",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "5f3508209a460fc6766b30637b5227b8fb2cacccb4c46b085ffdb570129e0ab8",
+  "rulesVersion": "unavailable",
+  "sessionHash": "75c86c1f658d72c3e1a664aa810d762f368bbf6272276f8b35795bb02dc73834",
+  "reportRef": ".mimosa/reports/task-review-sess_039ac53e-67fd-41d5-b223-b671d024a311-20260822T060828583Z-7788-5d69054e0525.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-ba07154c0b5fcefe2d495d94",
+    "mimosa-cafb4a5c7a6bf7b6f41a9f6c"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "cmm_filler_v10.py",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "cmm_filler_gui.py",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "test_summary_export.py",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "fix_dist.py",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-08-22T06:08:28.984Z"
+}

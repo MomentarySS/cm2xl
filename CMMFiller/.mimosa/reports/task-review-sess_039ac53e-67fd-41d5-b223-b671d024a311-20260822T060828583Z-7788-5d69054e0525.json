@@ -1,0 +1,233 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260822T060828583Z-7788-5d69054e0525",
+  "run_status": "completed",
+  "errors": [],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "complete",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 17,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 5
+    },
+    "change_tracking": {
+      "touched_observed": 4,
+      "touched_retained": 4,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 5,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 5,
+      "selected_files": 5,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 4,
+      "scanned_files": 4,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 1,
+      "project_checks_completed": 1
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {},
+    "reasons": [],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-08-22T06:08:28.583Z",
+  "session_id": "sess_039ac53e-67fd-41d5-b223-b671d024a311",
+  "target": ".",
+  "revision": null,
+  "rules_version": "unavailable",
+  "diff_hash": "5f3508209a460fc6766b30637b5227b8fb2cacccb4c46b085ffdb570129e0ab8",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 5,
+    "changed_files": [
+      {
+        "file": "CLAUDE.md",
+        "ranges": [
+          {
+            "start": 36,
+            "end": 39
+          },
+          {
+            "start": 42,
+            "end": 43
+          },
+          {
+            "start": 77,
+            "end": 85
+          },
+          {
+            "start": 106,
+            "end": 108
+          }
+        ],
+        "before_hash": "7888ade4dc32053c86405367539968d9a47cab3469e5783b806e717e9d17758b",
+        "after_hash": "0afcfaf488d499da5f9f4fb28394ad7686852c33cd2b4caef12451adb6ab879c"
+      },
+      {
+        "file": "cmm_filler_gui.py",
+        "ranges": [
+          {
+            "start": 78,
+            "end": 78
+          },
+          {
+            "start": 136,
+            "end": 136
+          },
+          {
+            "start": 140,
+            "end": 140
+          },
+          {
+            "start": 239,
+            "end": 368
+          },
+          {
+            "start": 471,
+            "end": 473
+          },
+          {
+            "start": 701,
+            "end": 701
+          },
+          {
+            "start": 703,
+            "end": 703
+          },
+          {
+            "start": 982,
+            "end": 1093
+          },
+          {
+            "start": 1200,
+            "end": 1200
+          }
+        ],
+        "before_hash": "49edd18430d06da4f9fa5242abd2f5a206c4dca25287a63dac9afbe7941802b0",
+        "after_hash": "2e5c69d720db445433cfb3f314f4e7179ff6f9d6aaf2fdfe0e37d6e3d54e4428"
+      },
+      {
+        "file": "cmm_filler_v10.py",
+        "ranges": [
+          {
+            "start": 29,
+            "end": 29
+          },
+          {
+            "start": 186,
+            "end": 202
+          },
+          {
+            "start": 627,
+            "end": 632
+          },
+          {
+            "start": 634,
+            "end": 634
+          },
+          {
+            "start": 1041,
+            "end": 1172
+          }
+        ],
+        "before_hash": "9ec71d1b39404c05080fdde794d7e8acff4e8cdd23383b58ce9825d2118e8ef6",
+        "after_hash": "cbb095f5ce6dd0af63fdaf85bc6b1221d5d9e7ef8243d998f009572a766c1981"
+      },
+      {
+        "file": "fix_dist.py",
+        "ranges": [
+          {
+            "start": 213,
+            "end": 215
+          },
+          {
+            "start": 220,
+            "end": 220
+          }
+        ],
+        "before_hash": "9e1d47df8087c978060ac2254f691bd5050608325a4f0120a5cfe3e33aea318d",
+        "after_hash": "beeb8536ea0d4bc66c39f14a0d6f658a6a678012e0c7219298bf278baa761ce0"
+      },
+      {
+        "file": "test_summary_export.py",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 148
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "adb35a7d7c61b2c09c597c3dc81699efeee8d9277e441fac5b5bf21e5048cd67"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-08-22T06:08:26.941Z",
+    "completed_at": "2026-08-22T06:08:28.583Z",
+    "duration_ms": 1642,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "complete",
+    "latencyMs": 1642,
+    "peakMemoryBytes": 143663104,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 4,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_039ac53e-67fd-41d5-b223-b671d024a311-20260822T060828583Z-7788-5d69054e0525.json",
+    "latest_report": ".mimosa/reports/task-review-sess_039ac53e-67fd-41d5-b223-b671d024a311.json",
+    "history_summary": ".mimosa/history/run-20260822T060828583Z-7788-5d69054e0525.json"
+  }
+}

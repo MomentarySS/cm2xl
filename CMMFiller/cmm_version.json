@@ -1,0 +1,6 @@
+{
+  "name": "CMMFiller",
+  "version": "1.0.0",
+  "app_title": "CMM 三坐标测量报告自动填充工具",
+  "description": "CMM PDF 报告 OCR 识别 + Excel 模板自动填充"
+}

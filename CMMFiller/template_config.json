@@ -1,0 +1,23 @@
+{
+  "template_path": "模板2.xlsx",
+  "sheet_name": "FAI",
+  "data_start_row": 10,
+  "sample_row": 9,
+  "columns": {
+    "serial": "B",
+    "spec": "C",
+    "upper_tol": "D",
+    "lower_tol": "E"
+  },
+  "sample_cols": {
+    "1#": "H",
+    "2#": "I",
+    "3#": "J",
+    "4#": "K",
+    "5#": "L"
+  },
+  "field_locations": {
+    "part_name": "D5",
+    "date": "A2"
+  }
+}
