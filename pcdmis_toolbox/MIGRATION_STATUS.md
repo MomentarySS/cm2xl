@@ -142,6 +142,7 @@
 | 3.45 主题统一 | Shell 主入口调一次 `set_default_color_theme`，模块内删除 | ✅ | Phase 0-1 已落地 | — |
 | 3.42 atexit | `atexit.register(cleanup_on_exit)` | ✅ | Phase 0 已落地（main.py 清理 *.tmp.pdf + logging.shutdown） | — |
 | 3.6 日志落盘 | CMMFiller logger 接文件 handler | ✅ | 2026-08-26：`main.py` + `cmm_filler/main.py` 初始化 `setup_logging("CMMFiller")`；gui.py「查看日志」路径对齐大小写 `CMMFiller.log`（原 `cmm_filler.log` 读不到，日志文件实际按 `{module_name}.log` 生成） | — |
+| 3.36 审计日志分离 | audit logger 不冒泡 + 普通 logger 不挂 audit handler | ✅ | 2026-08-26：`setup_logging` 移除 TimedRotatingFileHandler（不再给普通 logger 挂 `{name}.audit.log`，该文件名误导实际装的是普通日志按天副本）；`setup_audit_logging` 独立挂专用 handler（写 `toolbox.audit.audit.log`）+ 设 `propagate=False`。效果：audit() 只写专用 audit 文件；普通日志不混入 audit；CMMFiller 日志不污染 toolbox 日志 | — |
 
 ---
 

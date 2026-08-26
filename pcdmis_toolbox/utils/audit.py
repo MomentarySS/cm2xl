@@ -1,6 +1,7 @@
 """
 PCDMIS Toolbox 2.0 — 审计日志
 所有用户可见操作必须调用 audit() 记录，格式固定为 [时间] action | k=v。
+audit logger 独立写入专用 audit 文件（按天切分 × 30 天），不混入主日志。
 """
 
 import logging
@@ -24,14 +25,38 @@ def audit(action: str, **fields) -> None:
 
 
 def setup_audit_logging(log_dir=None) -> logging.Logger:
-    """为审计日志单独配置（由 main.py 调用）。"""
-    from utils.logging import setup_logging
+    """为审计日志单独配置（独立写入专用 audit 文件，不冒泡到主 logger）。"""
+    logger = logging.getLogger(AUDIT_LOG_NAME)
+    logger.setLevel(logging.INFO)
 
-    return setup_logging(
-        AUDIT_LOG_NAME,
-        log_dir,
-        level=logging.INFO,
-        max_bytes=5 * 1024 * 1024,
-        backup_count=30,
-        when="midnight",
+    # 防冒泡：audit 消息只写专用文件，不混入 toolbox.log
+    logger.propagate = False
+
+    if logger.handlers:
+        return logger
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+    # 1. 控制台（开发模式可见）
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    if log_dir:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        # 专用 audit 文件（按天切分），不与主日志混淆
+        ah = logging.handlers.TimedRotatingFileHandler(
+            log_dir / f"{AUDIT_LOG_NAME}.audit.log",
+            when="midnight",
+            backupCount=30,
+            encoding="utf-8",
+        )
+        ah.setLevel(logging.INFO)
+        ah.setFormatter(formatter)
+        logger.addHandler(ah)
+
+    return logger

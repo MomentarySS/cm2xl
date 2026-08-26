@@ -1,6 +1,8 @@
 """
 PCDMIS Toolbox 2.0 — 统一日志系统
-控制台 + 按大小轮转主日志 + 按天切分审计日志 + GUI Handler。
+控制台 + 按大小轮转主日志（按 logger 命名）+ 审计日志 Handler。
+
+每个 logger 只挂主日志（{name}.log）；audit 日志由独立 audit logger 处理。
 """
 
 import logging
@@ -16,15 +18,12 @@ def setup_logging(
     level: int = logging.DEBUG,
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 3,
-    audit_backup_count: int = 30,
-    when: str = "midnight",
 ) -> logging.Logger:
     """
-    统一日志配置：控制台 + 按大小轮转主日志 + 按天切分审计日志。
+    统一日志配置：控制台 + 按大小轮转主日志。
 
     日志目录: {data_dir}/logs/
     主日志:   {module_name}.log          (5MB × 3)
-    审计日志: {module_name}.audit.log   (每天切 × 30天)
     """
     logger = logging.getLogger(module_name)
     logger.setLevel(level)
@@ -55,17 +54,6 @@ def setup_logging(
         fh.setLevel(level)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-
-        # 3. 审计日志：按天切分
-        ah = TimedRotatingFileHandler(
-            log_dir / f"{module_name}.audit.log",
-            when=when,
-            backupCount=audit_backup_count,
-            encoding="utf-8",
-        )
-        ah.setLevel(logging.INFO)
-        ah.setFormatter(formatter)
-        logger.addHandler(ah)
 
     return logger
 
