@@ -52,6 +52,7 @@ from utils.error_codes import format_user_error
 # ── 日志初始化 ─────────────────────────────────────────────────────────────
 logger = setup_logging("toolbox", paths.log_dir)
 audit_logger = setup_audit_logging(paths.log_dir)
+setup_logging("CMMFiller", paths.log_dir)  # CMMFiller 日志落盘，供 gui.py「查看日志」读取
 
 logger.info(f"{APP_TITLE} {APP_VERSION} 启动中...")
 audit("app_start", version=APP_VERSION, frozen=paths.is_frozen())

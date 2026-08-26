@@ -97,14 +97,13 @@
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
 | 11.3 Phase 4 | 搬移 `core/`、`connector/`、`export/`、`inject/` | ✅ | 与设计一致 | — |
-| 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from connector.base` → `from .base`；`from config` → `from ..app_meta`；`from utils.admin` → `from ....utils.admin`（toolbox 层） | `utils/settings.py` 重命名为 `utils/local_settings.py` 避免与 toolbox 层冲突 |
+| 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from connector.base` → `from .base`；`from config` → `from ..app_meta`；`from utils.admin` → 相对导入（4 连点 `....utils.*` 后被复查统一为 0 连点，见下一行） | `utils/settings.py` 重命名为 `utils/local_settings.py` 避免与 toolbox 层冲突 |
 | 3.46 相对导入（复查） | — | ✅ | — | **2026-08-26 修复 9 处迁移后导入缺陷**：`connector/base.py:8`（`from core.models` 绝对导入，阻塞全部测试收集）、`com_detector.py:13/180/192`（`from app_meta`/`from utils.admin`，权限检测被 try/except 吞掉静默失效）、`main_window.py:30`（`...utils.admin` 三连点指向 `modules.utils`）、`cmm_filler/gui.py:16/17/18`（`..core.filler`/`..app_meta` 层级错、`utils.settings` 无 load_settings）、`cmm_filler/cli.py:14`、5 个文件 4 连点导入（`....utils.*`）与全树 0 连点约定互斥 → 全部改为相对导入 |
 | 3.3 模块接口 | 写 `modules/pc_to_excel/gui.py` PCToExcelModule | ✅ | 实现 `ModuleProtocol`，含 `mount/unmount/on_activate`；`on_activate` 刷新 PCDMIS 连接状态 | **2026-08-26 修复**：适配层 `gui.py` 与 `gui/` 包同名冲突（包优先），`PCToExcelModule` 成死代码、pc_to_excel 永不注册进 Shell → 适配层改名 `module.py`，`modules/__init__.py` 发现逻辑支持 `gui.py`/`module.py` 双入口；`on_activate` 改为静默刷新（原直接 `_connect` 每次切模块弹"连接失败"框） |
 | 3.46 sys.path 清理 | 删除所有 `sys.path.insert` | ✅ | 原 `main.py`/`cli.py`/`gui/main_window.py` 及各子模块的 `sys.path.insert(0, ...)` 已全部删除 | — |
 | 3.35 错误码接入 | `format_user_error` 改为接收 `ToolboxError` | ✅ | `action_hints.format_user_error` 签名改为 `exc: BaseException \| str \| ToolboxError`，新增 `ToolboxError` 分支提取 `[code] message` 格式 | — |
 | 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | `gui/main_window.py` 中 5 处 `threading.Thread(target=work, daemon=True)` 全部替换为 `CancellableWorker().start(work)` | — |
 | 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("green")` | ✅ | `gui/main_window.py` 第36行 `ctk.set_default_color_theme("green")` 已删除 | — |
-| 3.3 模块接口 | 写 `modules/pc_to_excel/gui.py` PCToExcelModule | ✅ | 实现 `ModuleProtocol`，含 `mount/unmount/on_activate`；`on_activate` 刷新 PCDMIS 连接状态 | — |
 | 3.1 独立入口 | 写 `modules/pc_to_excel/main.py` | ✅ | 独立 GUI 入口含权限检测 | — |
 | 3.8 版本 | 写 `modules/pc_to_excel/app_meta.py` | ✅ | 从 `toolbox.app_meta` 导入 `APP_VERSION`；`PROG_ID_CANDIDATES`/`DEFAULT_TOLERANCE`/`EXPORT_CMD_ID`/`OBTYPE_BASIC_SCRIPT` 等常量迁入 | — |
 | 3.29 CLI | 写 `modules/pc_to_excel/cli.py` | ✅ | 支持 `export`/`fill-form`/`inject` 三个子命令 | — |
@@ -124,13 +123,13 @@
 | 3.9 基础迁移 | `migrate_settings_if_needed()` 首次启动时调用 | ✅ | 2026-08-26 接线：cmm_filler 路径统一到 `config_dir/cmm_filler`（settings.json + template_config.json 旧路径 `data/cmm_filler` 自动迁移，旧文件改 `.bak`）；template_wizard 残留的 `%LOCALAPPDATA%/CMMFiller` 路径同步清理 | — |
 | 3.9.1 版本升级 | 所有 settings.json 加 `_version` 字段 | ✅ | 2026-08-26：main.py 启动时 `_migrate_module_settings()` 调用 `load_and_migrate_settings` 写入 | — |
 | 3.9.1 迁移函数 | `migrate_cmm_filler_1_0_to_2_0()` + `migrate_pc_to_excel_1_4_to_2_0()` | ✅ | 2026-08-26 实现并注册；迁移链改为「每个 from_version 一次性升到当前 schema」（原 `_next_version` 末段+1 步进在缺中间版本时抛 RuntimeError） | — |
-| 3.9.1 迁移主流程 | `load_and_migrate_settings()` 含备份 + 升级 | ✅ | 无 `_version` 字段的旧文件按模块默认旧版本（1.0.0 / 1.4.5）走迁移；备份 `.v{from}.bak`（with_suffix 替换原后缀：cmm.json → cmm.v1.0.0.bak） | — |
+| 3.9.1 迁移主流程 | `load_and_migrate_settings()` 含备份 + 升级 | ✅ | 无 `_version` 字段的旧文件按模块默认旧版本（1.0.0 / 1.4.5）走迁移；备份 `.v{from}.bak`（with_suffix 替换原后缀：cmm.json → cmm.v1.0.0.bak） | **2026-08-26 修复**：迁移函数缺失时抛裸 `RuntimeError` → `ToolboxError(ErrorCode.CONFIG_MIGRATION_FAIL, E6002)` |
 | 3.9.2 降级导出 | `export_legacy_settings()` | ✅ | 2026-08-26：Shell 顶栏「导出旧版配置」按钮，每模块导出单独文件（legacy_settings_{module}.json）；cmm_filler 分支改为按顶层字段导出 | — |
 | — | 合并 `toolbox/app_meta.py` 和 `utils/theme.py` 的 `TOOLBOX_THEME` 重复定义 | ✅ | 2026-08-26：app_meta.py 改为 `from utils.theme import TOOLBOX_THEME`，utils/theme.py 为唯一定义点 | — |
 
 ---
 
-## Phase 5.5 — 应用层修复 🟡 大部分完成（2026-08-26）
+## Phase 5.5 — 应用层修复 ✅ 完成（2026-08-26）
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
@@ -142,6 +141,7 @@
 | 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | 2026-08-26：filler 4 处取消点（cancel_check 回调）+ GUI 5 处 worker 引用维护、关闭/卸载时 `request_cancel`+`wait(5)` | — |
 | 3.45 主题统一 | Shell 主入口调一次 `set_default_color_theme`，模块内删除 | ✅ | Phase 0-1 已落地 | — |
 | 3.42 atexit | `atexit.register(cleanup_on_exit)` | ✅ | Phase 0 已落地（main.py 清理 *.tmp.pdf + logging.shutdown） | — |
+| 3.6 日志落盘 | CMMFiller logger 接文件 handler | ✅ | 2026-08-26：`main.py` + `cmm_filler/main.py` 初始化 `setup_logging("CMMFiller")`；gui.py「查看日志」路径对齐大小写 `CMMFiller.log`（原 `cmm_filler.log` 读不到，日志文件实际按 `{module_name}.log` 生成） | — |
 
 ---
 
@@ -149,7 +149,7 @@
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 3.0 依赖拆分 | 创建 `requirements/cmm_filler.txt` + `requirements/pc_to_excel.txt` | ⏳ | — | — |
+| 3.0 依赖拆分 | 创建 `requirements/cmm_filler.txt` + `requirements/pc_to_excel.txt` | ✅ | 已于 Phase 3/4 创建（base.txt / cmm_filler.txt / pc_to_excel.txt） | — |
 | 3.10 PyInstaller spec | 合并 spec | ⏳ | — | — |
 | 3.11 fix_dist.py | 搬移 `fix_dist.py` → `build/`，加 `PATCH_MARKER` | ⏳ | — | — |
 | 3.13 自定义 Hooks | 搬移 `hooks/` → `build/hooks/` | ⏳ | — | — |

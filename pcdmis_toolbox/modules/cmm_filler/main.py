@@ -20,9 +20,14 @@ os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
 import customtkinter as ctk
 from utils.theme import apply_theme
+from utils.logging import setup_logging
+from utils.paths import paths
 
 # 设置青绿主题（独立模式也需要统一外观）
 apply_theme()
+
+# CMMFiller 日志落盘（独立运行也写 cmm_filler.log，供「查看日志」读取）
+setup_logging("CMMFiller", paths.log_dir)
 
 from .gui import CMMFillerGUI
 

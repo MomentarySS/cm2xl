@@ -429,7 +429,7 @@ class CMMFillerGUI:
         messagebox.showinfo('已复制', f'输出文件夹路径已复制到剪贴板:\n{folder}\n\n可粘贴到资源管理器地址栏打开。')
 
     def _show_log_window(self):
-        log_path = str(paths.log_dir / 'cmm_filler.log')
+        log_path = str(paths.log_dir / 'CMMFiller.log')
         win = ctk.CTkoplevel(self.root.winfo_toplevel())
         win.title('运行日志')
         win.geometry('720x480')
@@ -648,7 +648,7 @@ class CMMFillerGUI:
         self._log('首次配置完成！点击「开始处理」即可开始识别。')
 
     def _show_about(self):
-        log_path = str(paths.log_dir / 'cmm_filler.log')
+        log_path = str(paths.log_dir / 'CMMFiller.log')
         data_dir = str(paths.config_dir / 'cmm_filler')
         win = ctk.CTkToplevel(self.root.winfo_toplevel())
         win.title('关于 CMMFiller')

@@ -22,6 +22,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+from utils.error_codes import ErrorCode, ToolboxError
+
 # 配置 schema 版本（与 toolbox.app_meta.APP_VERSION 同步）
 CONFIG_SCHEMA_VERSION = "2.0.0"
 
@@ -224,8 +226,9 @@ def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
 
     while current_version != CONFIG_SCHEMA_VERSION:
         if current_version not in migrations:
-            raise RuntimeError(
-                f"{module_name}: 没有从 v{current_version} 升级的迁移函数"
+            raise ToolboxError(
+                ErrorCode.CONFIG_MIGRATION_FAIL,
+                f"{module_name}: 没有从 v{current_version} 升级的迁移函数",
             )
         migration = migrations[current_version]
         try:
