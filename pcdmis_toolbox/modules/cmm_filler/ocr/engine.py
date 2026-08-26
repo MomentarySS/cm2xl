@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 from abc import ABC, abstractmethod
 
+from utils.error_codes import ErrorCode, ToolboxError
+
 
 def _resolve_bundled_model_base() -> Path | None:
     """定位项目或打包内置的 PaddleOCR 模型目录"""
@@ -121,12 +123,13 @@ class PaddleOCREngine(OCREngine):
             # 内置模型缺失时禁止 PaddleOCR 联网下载（工厂内网不通会直接失败，
             # 且报错是英文堆栈，现场无法自查），改为明确的人话提示
             logger.error(f'未找到内置 OCR 模型（查找位置: {model_base or "未设置"}）')
-            raise RuntimeError(
+            raise ToolboxError(
+                ErrorCode.MODEL_MISSING,
                 'OCR 模型文件缺失，无法离线识别。\n'
                 '请重新复制完整的 CMMFiller 文件夹\n'
                 f'（需包含 {"_internal\\" if getattr(sys, "frozen", False) else ""}models\\paddleocr 子目录，约 18 MB），\n'
-                '或联系软件提供者重新获取完整安装包。'
-            )
+                '或联系软件提供者重新获取完整安装包。',
+            ) from None
         logger.info(f'初始化 PaddleOCR 引擎 (lang={lang}) ...')
         self._ocr = PaddleOCR(lang=lang, show_log=False)
         logger.info('PaddleOCR 引擎就绪')

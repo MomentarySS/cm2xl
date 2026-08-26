@@ -112,7 +112,7 @@
 | — | 写 `requirements/pc_to_excel.txt` | ✅ | 含 pywin32 | — |
 | — | 挂载生命周期修复 | ✅ | — | **2026-08-26 修复**：`MainWindow._on_close` 无守卫 `root.destroy()`，挂载模式切模块会关掉整个 Shell → 加 `if self._owns_root` 守卫（保存设置/断开 COM 保留） |
 | 3.7 BAS 部署 | 搬移 `scripts/` | ✅ | — | **2026-08-26 修复**：`deploy_bas_script` 部署到 `.../scripts/scripts/` 双重目录（`paths.bas_deploy_dir` 已含 scripts 段）→ 去掉重复段；`_bundled_bas_source` dev 模式搜 `root/scripts` 找不到（脚本在 `modules/pc_to_excel/scripts/`）→ 补搜索根 |
-| 3.35 错误码接入（补充） | 裸 `RuntimeError` → `ToolboxError` | ✅ | 2026-08-26 补充：`pcdmis_connector`（E2001/E2002/E2004）、`com_detector.dispatch_pcdmis`（E2002）、`command_injector` 占位符缺失（E5001）、main_window 导出/填入 0 条（E2004）替换为 ToolboxError；`data_extractor` 内部保留（核心 pipeline，由 connector 捕获后包装）；root `utils/error_codes.format_user_error` 补关键字回退 | — |
+| 3.35 错误码接入（补充） | 裸 `RuntimeError` → `ToolboxError` | ✅ | 2026-08-26 补充：`pcdmis_connector`（E2001/E2002/E2004）、`com_detector.dispatch_pcdmis`（E2002）、`command_injector` 占位符缺失（E5001）、main_window 导出/填入 0 条（E2004）替换为 ToolboxError；`data_extractor` 内部保留（核心 pipeline，由 connector 捕获后包装）；root `utils/error_codes.format_user_error` 补关键字回退；`cmm_filler/ocr/engine.py` 模型缺失（E1003） | — |
 
 ---
 
