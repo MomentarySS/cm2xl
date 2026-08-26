@@ -46,9 +46,9 @@ class PCToExcelModule(ModuleProtocol):
             self._container = None
 
     def on_activate(self) -> None:
-        """模块被选中时调用 — 刷新连接状态"""
+        """模块被选中时调用 — 静默刷新连接状态（不弹框）"""
         if self._instance and hasattr(self._instance, "connector"):
-            self._instance.root.after(0, self._instance._connect)
+            self._instance.root.after(0, self._instance._refresh_conn_status)
 
 
 # 模块注册（由 modules/__init__.py 的 pkgutil 自动发现）

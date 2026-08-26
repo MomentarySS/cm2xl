@@ -91,9 +91,69 @@ def _cleanup_on_exit():
 
 atexit.register(_cleanup_on_exit)
 
+# ── 配置迁移 + 实例锁 ───────────────────────────────────────────────────────
+
+def _migrate_module_settings() -> None:
+    """启动时对两个模块执行配置迁移：
+    1) 基础位置迁移：旧路径 → 新路径（复制 + 旧文件改 .bak，见 ARCH 3.9）
+    2) 版本升级链：补 _version 字段 + 迁移函数 + 备份（见 ARCH 3.9.1）
+    """
+    from utils.settings import load_and_migrate_settings, migrate_settings_if_needed
+
+    # 1) cmm_filler：旧路径 data/cmm_filler → 新路径 config_dir/cmm_filler
+    cmm_cfg = paths.config_dir / "cmm_filler"
+    for name in ("settings.json", "template_config.json"):
+        old = paths.data_dir / "cmm_filler" / name
+        new = cmm_cfg / name
+        if old.exists() and not new.exists():
+            try:
+                migrate_settings_if_needed("cmm_filler", old, new)
+            except Exception as e:
+                logger.warning(f"[settings] {name} 位置迁移跳过: {e}")
+
+    # 2) 版本升级链
+    targets = (
+        ("cmm_filler", cmm_cfg / "settings.json"),
+        ("pc_to_excel", paths.config_dir / "pc_to_excel" / "settings.json"),
+    )
+    for module_name, config_path in targets:
+        try:
+            load_and_migrate_settings(module_name, config_path)
+        except Exception as e:
+            logger.warning(f"[settings] {module_name} 配置迁移跳过: {e}")
+
+
+def _acquire_instance_lock():
+    """检测是否已有 Toolbox 实例（FileLock 超时 5s 则弹窗询问）。
+
+    拿到锁的实例持有锁直到进程退出；用户选择"仍启动"则放弃锁继续运行。
+    """
+    from utils.settings import FileLock
+
+    lock = FileLock(paths.data_dir / "toolbox.lock", timeout=5.0)
+    locked = lock.__enter__()
+    if not locked:
+        from tkinter import messagebox
+
+        again = messagebox.askyesno(
+            "已有实例在运行",
+            "检测到已有 PCDMIS Toolbox 在运行。\n\n"
+            "是否仍要启动第二个实例？\n"
+            "（两个实例会共用同一份配置文件）",
+        )
+        if not again:
+            sys.exit(0)
+        return None
+    # 持有锁直到进程退出
+    atexit.register(lambda: lock.__exit__(None, None, None))
+    return lock
+
+
 # ── Shell 入口 ──────────────────────────────────────────────────────────────
 def main():
     logger.info("初始化 Shell...")
+    _acquire_instance_lock()
+    _migrate_module_settings()
     try:
         from toolbox.shell import Shell
 

@@ -29,7 +29,14 @@ CONFIG_SCHEMA_VERSION = "2.0.0"
 Migration = Callable[[dict], dict]
 
 # 迁移函数注册表：module_name -> {from_version: migration_fn}
+# 约定：每个 from_version 的迁移函数一次性升级到 CONFIG_SCHEMA_VERSION。
 _MIGRATIONS: dict[str, dict[str, Migration]] = {}
+
+# 无 _version 字段的旧文件（file_version 视为 0.0.0）按模块默认旧版本走迁移
+_LEGACY_DEFAULT_VERSION: dict[str, str] = {
+    "cmm_filler": "1.0.0",
+    "pc_to_excel": "1.4.5",
+}
 
 
 def register_migration(module: str, from_ver: str, to_ver: str | None = None):
@@ -196,16 +203,24 @@ def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
     if file_version == CONFIG_SCHEMA_VERSION:
         return data
 
+    # 无版本字段的旧文件：按模块默认旧版本走迁移链
+    if file_version == "0.0.0":
+        file_version = _LEGACY_DEFAULT_VERSION.get(module_name, "0.0.0")
+
+    if file_version == CONFIG_SCHEMA_VERSION:
+        return data
+
     # 升级前先备份
     backup_path = config_path.with_suffix(f".v{file_version}.bak")
     if not backup_path.exists():
         shutil.copy2(config_path, backup_path)
         logger.info(f"[settings] backup {config_path} → {backup_path}")
 
-    # 沿迁移链逐步升级
+    # 执行迁移（每个 from_version 的迁移函数一次性升到当前 schema）
     migrations = _MIGRATIONS.get(module_name, {})
     current = data
     current_version = file_version
+    migrated = False
 
     while current_version != CONFIG_SCHEMA_VERSION:
         if current_version not in migrations:
@@ -215,16 +230,18 @@ def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
         migration = migrations[current_version]
         try:
             current = migration(current)
-            current["_version"] = _next_version(current_version)
+            current["_version"] = CONFIG_SCHEMA_VERSION
             current["_updated_at"] = datetime.now().isoformat()
             current_version = current["_version"]
+            migrated = True
             logger.info(f"[settings] {module_name} 升级 → v{current_version}")
         except Exception as e:
             logger.error(f"[settings] 迁移失败: {e}，从备份恢复")
             current = load_json(backup_path)
             break
 
-    save_settings_json_atomic(config_path, current)
+    if migrated:
+        save_settings_json_atomic(config_path, current)
     return current
 
 
@@ -237,6 +254,36 @@ def _default_settings(module_name: str) -> dict:
     }
 
 
+# ── 模块迁移函数（旧 1.x → 当前 schema）────────────────────────────────────
+
+def migrate_cmm_filler_1_0_to_2_0(old: dict) -> dict:
+    """CMMFiller 1.0.0 → 2.0.0：路径记忆字段原样带入 + 版本字段。"""
+    new = _default_settings("cmm_filler")
+    for key in ("template_path", "pdf_folder", "output_folder"):
+        if key in old:
+            new[key] = old[key]
+    return new
+
+
+def migrate_pc_to_excel_1_4_to_2_0(old: dict) -> dict:
+    """pc to excel 1.4.5 → 2.0.0：顶层字段 + tolerance/form_fill 原样带入。"""
+    new = _default_settings("pc_to_excel")
+    for key in ("export_dir", "filename_pattern", "export_scope", "require_marked"):
+        if key in old:
+            new[key] = old[key]
+    if "tolerance" in old:
+        new["tolerance"] = old["tolerance"]
+    if "form_fill" in old:
+        new["form_fill"] = old["form_fill"]
+    return new
+
+
+_MIGRATIONS.update({
+    "cmm_filler": {"1.0.0": migrate_cmm_filler_1_0_to_2_0},
+    "pc_to_excel": {"1.4.5": migrate_pc_to_excel_1_4_to_2_0},
+})
+
+
 # ── 降级导出 ───────────────────────────────────────────────────────────────
 
 def export_legacy_settings(module_name: str, target_path: Path, current_data: dict) -> None:
@@ -245,17 +292,17 @@ def export_legacy_settings(module_name: str, target_path: Path, current_data: di
     详见 ARCHITECTURE.md 3.9.2。
     """
     if module_name == "cmm_filler":
+        # 当前 2.0 schema 为顶层路径字段（与 filler.py load_settings 一致）
         legacy = {
-            k: v for k, v in current_data.get("paths", {}).items()
-            if k in ("template", "pdf_folder", "output")
+            k: v for k, v in current_data.items()
+            if k in ("template_path", "pdf_folder", "output_folder")
         }
     elif module_name == "pc_to_excel":
         legacy = {k: v for k, v in current_data.items() if not k.startswith("_")}
     else:
         legacy = {}
 
-    target_path.write_text(
-        json.dumps(legacy, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    from utils.file_io import atomic_write_text
+
+    atomic_write_text(target_path, json.dumps(legacy, ensure_ascii=False, indent=2))
     logger.info(f"[settings] exported legacy settings for {module_name} → {target_path}")

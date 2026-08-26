@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from contextlib import contextmanager
 
-from app_meta import PROG_ID_CANDIDATES
+from ..app_meta import PROG_ID_CANDIDATES
+from utils.error_codes import ErrorCode, ToolboxError
 
 SEARCH_TERMS = ["PCDLRN", "PC-DMIS", "PCDMIS", "Hexagon"]
 REGISTRY_PATHS = [
@@ -177,7 +178,7 @@ def is_pcdmis_elevated() -> bool | None:
     if pid is None:
         return None
     try:
-        from utils.admin import is_process_elevated
+        from ..utils.admin import is_process_elevated
 
         return is_process_elevated(pid)
     except Exception:
@@ -189,7 +190,7 @@ def check_elevation_match() -> tuple[bool, str]:
     pcd_elev = is_pcdmis_elevated()
     tool_elev = False
     try:
-        from utils.admin import admin_required_hint, is_admin, normal_launch_hint
+        from ..utils.admin import admin_required_hint, is_admin, normal_launch_hint
 
         tool_elev = is_admin()
         if pcd_elev is None:
@@ -234,7 +235,10 @@ def dispatch_pcdmis(prog_id: str):
             return factory()
         except Exception as exc:
             errors.append(f"{label}: {exc}")
-    raise RuntimeError(f"无法绑定 {prog_id}\n" + "\n".join(errors))
+    raise ToolboxError(
+        ErrorCode.PCDMIS_CONNECT_FAIL,
+        f"无法绑定 {prog_id}\n" + "\n".join(errors),
+    )
 
 
 def get_active_part_program(app) -> object | None:

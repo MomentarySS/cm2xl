@@ -133,6 +133,26 @@ class ToolboxError(Exception):
         return ToolboxError(self.code, self.message, hint=hint)
 
 
+def _hint_for_text(text: str) -> str:
+    """关键字匹配回退：非 ToolboxError 异常按消息内容给出处理建议。"""
+    raw = text or ""
+    low = raw.lower()
+
+    if "权限" in raw or "elevation" in low or "管理员" in raw:
+        return "工具与 PCDMIS 须同级运行（都普通用户或都管理员）。"
+    if "无法连接" in raw or ("connect" in low and "pcd" in low) or "dispatch" in low:
+        return "请先启动 PCDMIS 并打开含实测数据的 .PRG；确认权限一致。"
+    if "未打开" in raw or "没有打开" in raw or "part program" in low:
+        return "请在 PCDMIS 中打开测量程序（.PRG）。"
+    if "未提取" in raw or "0 条" in raw or "无数据" in raw or "没有可导出" in raw:
+        return "请确认尺寸命令已 Mark 且已评价/含实测值。"
+    if "拒绝访问" in raw or "permission" in low or "access is denied" in low:
+        return "输出文件可能正被 Excel 占用，请关闭后重试。"
+    if "未找到脚本" in raw or ("script" in low and "not found" in low):
+        return "请先部署 BAS 脚本，再植入/更新导出命令。"
+    return ""
+
+
 def format_user_error(exc: BaseException) -> tuple[str, str]:
     """
     将异常格式化为 (标题消息, 操作提示)。
@@ -140,9 +160,9 @@ def format_user_error(exc: BaseException) -> tuple[str, str]:
     """
     if isinstance(exc, ToolboxError):
         title = f"[{exc.code}] {exc.message}"
-        hint = exc.hint
+        hint = exc.hint or _hint_for_text(exc.message)
     else:
         title = str(exc)
-        hint = ""
+        hint = _hint_for_text(title)
 
     return title, hint

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from core.models import FeatureRecord
+from ..core.models import FeatureRecord
 
 
 @dataclass

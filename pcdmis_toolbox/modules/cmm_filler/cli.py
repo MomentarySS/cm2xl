@@ -11,7 +11,7 @@ import sys
 import logging
 from pathlib import Path
 
-from ..app_meta import __version__
+from .app_meta import __version__
 from .core.filler import CMMReportFiller
 
 logger = logging.getLogger('CMMFiller')

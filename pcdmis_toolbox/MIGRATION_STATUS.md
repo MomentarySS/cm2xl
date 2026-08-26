@@ -78,7 +78,7 @@
 | 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from ocr_engine` → `from ..ocr.engine`；删除 `sys.path.insert` | — |
 | 3.46 sys.path 清理 | 删除所有 `sys.path.insert(0, _ROOT)` | ✅ | 原 gui.py 第17行 `sys.path.insert` 已删除；`cmm_filler_v10.py` 无此问题 | — |
 | 3.39 PDF 大小写 | `glob('*.PDF')` → `glob_pdfs()` 大小写不敏感 | ✅ | `_scan_and_parse` 和 `export_standard_template` 中的 `sorted(Path(...).glob('*.PDF'))` 全部替换为 `glob_pdfs(Path(...))` | — |
-| 3.43 PDF 句柄 | `fitz.open()` → `with fitz_open_context()` | ✅ | `pdf_to_image` 方法改用 `with fitz_open_context()` | — |
+| 3.43 PDF 句柄 | `fitz.open()` → `with fitz_open_context()` | ✅ | `pdf_to_image` 方法改用 `with fitz_open_context()` | **2026-08-26 修复**：`utils/file_io.fitz_open_context` 缺 `@contextmanager` 装饰器，`with` 语句实际抛 `TypeError: generator object does not support the context manager protocol`（每个 PDF 都会处理失败）→ 补装饰器 |
 | 3.38 OCR 缓存 | `_cleanup_cache()` 补全 `ocr_cache.json` 按数量清理 | ✅ | 新增 `ocr_cache.json` 按数量清理逻辑（>10000条按字母序删旧） | — |
 | 3.45 主题冲突 | 删除 `ctk.set_default_color_theme("blue")` | ✅ | gui.py 顶部的 `ctk.set_default_color_theme("blue")` 调用已删除；保留 `ctk.set_appearance_mode`（由 Shell 统一管理） | — |
 | 3.42 线程取消 | `threading.Thread(daemon=True)` → `CancellableWorker` | ✅ | gui.py 中 5 处 `threading.Thread(target=..., daemon=True)` 全部替换为 `CancellableWorker()` + `.start(...)` | — |
@@ -98,6 +98,8 @@
 |-------------------|------|------|------|---------|
 | 11.3 Phase 4 | 搬移 `core/`、`connector/`、`export/`、`inject/` | ✅ | 与设计一致 | — |
 | 3.46 相对导入 | 批量改绝对导入为相对导入 | ✅ | `from connector.base` → `from .base`；`from config` → `from ..app_meta`；`from utils.admin` → `from ....utils.admin`（toolbox 层） | `utils/settings.py` 重命名为 `utils/local_settings.py` 避免与 toolbox 层冲突 |
+| 3.46 相对导入（复查） | — | ✅ | — | **2026-08-26 修复 9 处迁移后导入缺陷**：`connector/base.py:8`（`from core.models` 绝对导入，阻塞全部测试收集）、`com_detector.py:13/180/192`（`from app_meta`/`from utils.admin`，权限检测被 try/except 吞掉静默失效）、`main_window.py:30`（`...utils.admin` 三连点指向 `modules.utils`）、`cmm_filler/gui.py:16/17/18`（`..core.filler`/`..app_meta` 层级错、`utils.settings` 无 load_settings）、`cmm_filler/cli.py:14`、5 个文件 4 连点导入（`....utils.*`）与全树 0 连点约定互斥 → 全部改为相对导入 |
+| 3.3 模块接口 | 写 `modules/pc_to_excel/gui.py` PCToExcelModule | ✅ | 实现 `ModuleProtocol`，含 `mount/unmount/on_activate`；`on_activate` 刷新 PCDMIS 连接状态 | **2026-08-26 修复**：适配层 `gui.py` 与 `gui/` 包同名冲突（包优先），`PCToExcelModule` 成死代码、pc_to_excel 永不注册进 Shell → 适配层改名 `module.py`，`modules/__init__.py` 发现逻辑支持 `gui.py`/`module.py` 双入口；`on_activate` 改为静默刷新（原直接 `_connect` 每次切模块弹"连接失败"框） |
 | 3.46 sys.path 清理 | 删除所有 `sys.path.insert` | ✅ | 原 `main.py`/`cli.py`/`gui/main_window.py` 及各子模块的 `sys.path.insert(0, ...)` 已全部删除 | — |
 | 3.35 错误码接入 | `format_user_error` 改为接收 `ToolboxError` | ✅ | `action_hints.format_user_error` 签名改为 `exc: BaseException \| str \| ToolboxError`，新增 `ToolboxError` 分支提取 `[code] message` 格式 | — |
 | 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | `gui/main_window.py` 中 5 处 `threading.Thread(target=work, daemon=True)` 全部替换为 `CancellableWorker().start(work)` | — |
@@ -109,34 +111,37 @@
 | 3.7 BAS 脚本 | 搬移 `scripts/export_current.bas` | ✅ | 复制 `export_current.bas` + `export_current.bas.template` | — |
 | 3.14 admin 启动器 | `run_as_admin.bat` 整合 | ⏳ | 待 Phase 6（打包阶段）整合 | — |
 | — | 写 `requirements/pc_to_excel.txt` | ✅ | 含 pywin32 | — |
+| — | 挂载生命周期修复 | ✅ | — | **2026-08-26 修复**：`MainWindow._on_close` 无守卫 `root.destroy()`，挂载模式切模块会关掉整个 Shell → 加 `if self._owns_root` 守卫（保存设置/断开 COM 保留） |
+| 3.7 BAS 部署 | 搬移 `scripts/` | ✅ | — | **2026-08-26 修复**：`deploy_bas_script` 部署到 `.../scripts/scripts/` 双重目录（`paths.bas_deploy_dir` 已含 scripts 段）→ 去掉重复段；`_bundled_bas_source` dev 模式搜 `root/scripts` 找不到（脚本在 `modules/pc_to_excel/scripts/`）→ 补搜索根 |
+| 3.35 错误码接入（补充） | 裸 `RuntimeError` → `ToolboxError` | ✅ | 2026-08-26 补充：`pcdmis_connector`（E2001/E2002/E2004）、`com_detector.dispatch_pcdmis`（E2002）、`command_injector` 占位符缺失（E5001）、main_window 导出/填入 0 条（E2004）替换为 ToolboxError；`data_extractor` 内部保留（核心 pipeline，由 connector 捕获后包装）；root `utils/error_codes.format_user_error` 补关键字回退 | — |
 
 ---
 
-## Phase 5 — 配置迁移 ⏳ 待做
+## Phase 5 — 配置迁移 ✅ 完成（2026-08-26）
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 3.9 基础迁移 | `migrate_settings_if_needed()` 首次启动时调用 | ⏳ | — | — |
-| 3.9.1 版本升级 | 所有 settings.json 加 `_version` 字段 | ⏳ | — | — |
-| 3.9.1 迁移函数 | `migrate_cmm_filler_1_0_to_2_0()` + `migrate_pc_to_excel_1_4_to_2_0()` | ⏳ | — | — |
-| 3.9.1 迁移主流程 | `load_and_migrate_settings()` 含备份 + 沿链升级 | ⏳ | — | — |
-| 3.9.2 降级导出 | `export_legacy_settings()` | ⏳ | — | — |
-| — | 合并 `toolbox/app_meta.py` 和 `utils/theme.py` 的 `TOOLBOX_THEME` 重复定义 | ⏳ | — | — |
+| 3.9 基础迁移 | `migrate_settings_if_needed()` 首次启动时调用 | ✅ | 2026-08-26 接线：cmm_filler 路径统一到 `config_dir/cmm_filler`（settings.json + template_config.json 旧路径 `data/cmm_filler` 自动迁移，旧文件改 `.bak`）；template_wizard 残留的 `%LOCALAPPDATA%/CMMFiller` 路径同步清理 | — |
+| 3.9.1 版本升级 | 所有 settings.json 加 `_version` 字段 | ✅ | 2026-08-26：main.py 启动时 `_migrate_module_settings()` 调用 `load_and_migrate_settings` 写入 | — |
+| 3.9.1 迁移函数 | `migrate_cmm_filler_1_0_to_2_0()` + `migrate_pc_to_excel_1_4_to_2_0()` | ✅ | 2026-08-26 实现并注册；迁移链改为「每个 from_version 一次性升到当前 schema」（原 `_next_version` 末段+1 步进在缺中间版本时抛 RuntimeError） | — |
+| 3.9.1 迁移主流程 | `load_and_migrate_settings()` 含备份 + 升级 | ✅ | 无 `_version` 字段的旧文件按模块默认旧版本（1.0.0 / 1.4.5）走迁移；备份 `.v{from}.bak`（with_suffix 替换原后缀：cmm.json → cmm.v1.0.0.bak） | — |
+| 3.9.2 降级导出 | `export_legacy_settings()` | ✅ | 2026-08-26：Shell 顶栏「导出旧版配置」按钮，每模块导出单独文件（legacy_settings_{module}.json）；cmm_filler 分支改为按顶层字段导出 | — |
+| — | 合并 `toolbox/app_meta.py` 和 `utils/theme.py` 的 `TOOLBOX_THEME` 重复定义 | ✅ | 2026-08-26：app_meta.py 改为 `from utils.theme import TOOLBOX_THEME`，utils/theme.py 为唯一定义点 | — |
 
 ---
 
-## Phase 5.5 — 应用层修复 ⏳ 待做
+## Phase 5.5 — 应用层修复 🟡 大部分完成（2026-08-26）
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 3.40 原子写 | 替换所有 `json.dump` 直接写 → `save_settings_json_atomic` | ⏳ | — | — |
-| 3.41 文件锁 | Shell 启动时检测并发（`FileLock`） | ⏳ | — | — |
-| 3.38 OCR 缓存 | 补全 `ocr_cache.json` 按数量清理 | ⏳ | — | — |
-| 3.39 PDF 大小写 | CMFiller `glob('*.PDF')` 修复 | ⏳ | — | — |
-| 3.43 PDF 句柄 | 所有 `fitz.open()` 改 `with` 形式 | ⏳ | — | — |
-| 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ⏳ | — | — |
-| 3.45 主题统一 | Shell 主入口调一次 `set_default_color_theme`，模块内删除 | ⏳ | — | — |
-| 3.42 atexit | `atexit.register(cleanup_on_exit)` | ⏳ | — | — |
+| 3.40 原子写 | 替换所有 `json.dump` 直接写 → `save_settings_json_atomic` | ✅ | 2026-08-26：filler.py×3、template_wizard、local_settings、command_injector×2、export_legacy_settings；新增 `utils/file_io.atomic_write_text` 通用原子文本写 | — |
+| 3.41 文件锁 | Shell 启动时检测并发（`FileLock`） | ✅ | 2026-08-26：main.py `_acquire_instance_lock()` 启动检测，超时 5s 弹窗询问是否启动第二个 | — |
+| 3.38 OCR 缓存 | 补全 `ocr_cache.json` 按数量清理 | ✅ | Phase 3 已落地（filler.py `_cleanup_cache` >10000 条按字母序删旧） | — |
+| 3.39 PDF 大小写 | CMFiller `glob('*.PDF')` 修复 | ✅ | Phase 3 已落地（glob_pdfs 大小写不敏感） | — |
+| 3.43 PDF 句柄 | 所有 `fitz.open()` 改 `with` 形式 | ✅ | Phase 3 已落地；2026-08-26 补 `@contextmanager` 装饰器使其真正可用 | — |
+| 3.42 线程取消 | 所有 `daemon=True` → `CancellableWorker` | ✅ | 2026-08-26：filler 4 处取消点（cancel_check 回调）+ GUI 5 处 worker 引用维护、关闭/卸载时 `request_cancel`+`wait(5)` | — |
+| 3.45 主题统一 | Shell 主入口调一次 `set_default_color_theme`，模块内删除 | ✅ | Phase 0-1 已落地 | — |
+| 3.42 atexit | `atexit.register(cleanup_on_exit)` | ✅ | Phase 0 已落地（main.py 清理 *.tmp.pdf + logging.shutdown） | — |
 
 ---
 
@@ -192,3 +197,6 @@
 | 3.6 日志 | GuiLogHandler 设计 | 与设计一致 | — |
 | 3.3 协议 | ModuleProtocol + ShellProtocol | 补充 `shell` 属性到 ModuleProtocol | 代码审查发现接口不完整 |
 | 11.2 模块注册 | 各模块显式调用 `register_module` | pkgutil 自动发现 + import 执行注册 | 更自动化，减少模块维护负担 |
+| 六 适配层命名 | `modules/pc_to_excel/gui.py` 适配层 + `gui/` 子包 | 适配层改名 `module.py`，发现逻辑支持双入口 | `gui.py` 与 `gui/` 包同名冲突，包优先导致适配层死代码、模块永不注册（2026-08-26 发现并修复） |
+| 3.9.1 迁移链 | `_next_version` 末段+1 链式步进 | 每个 from_version 一次性升到当前 schema | 链式依赖注册表连续键，缺中间版本抛 RuntimeError（2026-08-26 调整） |
+| 3.46 导入根 | `....utils.*` 指向 toolbox 层 | 统一 0 连点（`from utils.paths import paths`） | 4 连点在 `modules` 为顶级包时越界，与 `main.py`/`cmm_filler` 的 0 连点约定互斥（2026-08-26 统一） |

@@ -16,7 +16,9 @@ from ..connector.pcdlrn_constants import get_const
 from .save_helper import check_save_preflight, try_save_part_program
 
 # Resolve paths from utils.paths
-from ....utils.paths import paths
+from utils.paths import paths
+from utils.file_io import atomic_write_text
+from utils.error_codes import ErrorCode, ToolboxError
 
 BAS_FILENAME = "export_current.bas"
 BAS_TEMPLATE_FILENAME = "export_current.bas.template"
@@ -33,7 +35,10 @@ class InjectResult:
 
 
 def _bundled_bas_source() -> Path:
-    search_roots = (_BUNDLE_DIR, paths.root)
+    # 搜索根：
+    #   frozen → sys._MEIPASS（spec 的 datas 把脚本放进 _internal/scripts/）
+    #   dev    → modules/pc_to_excel/（脚本在模块目录下），最后回退项目根
+    search_roots = (_BUNDLE_DIR, paths.root / "modules" / "pc_to_excel", paths.root)
     for root in search_roots:
         for name in (BAS_TEMPLATE_FILENAME, BAS_FILENAME):
             bundled = root / "scripts" / name
@@ -62,27 +67,34 @@ def _verify_bas_deployed(bas_path: Path) -> None:
 
 
 def deploy_bas_script(target_dir: Path | None = None) -> Path:
-    """将 export_current.bas 部署到 scripts 目录并写入 export_config.txt。"""
-    dest_dir = target_dir or paths.bas_deploy_dir / "scripts"
+    """将 export_current.bas 部署到脚本目录并写入 export_config.txt。
+
+    目标目录：paths.bas_deploy_dir（LocalAppData/PCDMIS_ExcelExporter/scripts），
+    该目录已含 scripts 段，不要再拼一层。
+    """
+    dest_dir = target_dir or paths.bas_deploy_dir
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / BAS_FILENAME
 
     csv_path = paths.pc_excel_reports / "pcdmis_partial_export.csv"
     paths.pc_excel_reports.mkdir(parents=True, exist_ok=True)
     config_path = dest_dir / "export_config.txt"
-    config_path.write_text(
+    atomic_write_text(
+        config_path,
         f"{csv_path.resolve()}\nYES\n",
-        encoding="utf-8",
     )
 
     source_text = _bundled_bas_source().read_text(encoding="utf-8")
     if "@@CONFIG_PATH@@" not in source_text:
-        raise RuntimeError("BAS 模板缺少 @@CONFIG_PATH@@ 占位符")
+        raise ToolboxError(
+            ErrorCode.BAS_NOT_DEPLOYED,
+            "BAS 模板缺少 @@CONFIG_PATH@@ 占位符，请重新部署或检查安装包完整性。",
+        )
     source_text = source_text.replace(
         "@@CONFIG_PATH@@",
         str(config_path.resolve()).replace("\\", "\\\\"),
     )
-    dest.write_text(source_text, encoding="utf-8")
+    atomic_write_text(dest, source_text)
     _verify_bas_deployed(dest)
     return dest
 
@@ -239,6 +251,6 @@ def check_export_command(app) -> InjectResult:
                 False,
                 f"PRG 中的脚本路径无效（PC-DMIS 会报「未找到脚本文件」）:\n{path}\n\n"
                 f"请依次点击：\n1. 部署 BAS 脚本\n2. 植入/更新导出命令\n3. Ctrl+S 保存 PRG\n\n"
-                f"脚本应部署到:\n{paths.bas_deploy_dir / 'scripts' / BAS_FILENAME}",
+                f"脚本应部署到:\n{paths.bas_deploy_dir / BAS_FILENAME}",
             )
         return InjectResult(True, f"已存在导出命令（索引 {_idx}）\n脚本: {path}", bas_path=path, already_exists=True)

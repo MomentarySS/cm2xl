@@ -13,10 +13,10 @@ from tkinter import filedialog, messagebox
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from pathlib import Path
 
-from ..core.filler import CMMReportFiller
-from ..app_meta import __version__, APP_TITLE, APP_DESCRIPTION
-from utils.settings import load_settings, save_settings
+from .core.filler import CMMReportFiller, load_settings, save_settings
+from .app_meta import __version__, APP_TITLE, APP_DESCRIPTION
 from utils.paths import paths
+from utils.audit import audit
 from utils.threading_utils import CancellableWorker
 from toolbox.protocol import ModuleProtocol
 
@@ -76,6 +76,7 @@ class CMMFillerGUI:
 
         self.filler = None
         self.processing = False
+        self._worker = None                 # 当前工作线程（供关闭时取消）
         self._preview_widgets = []          # [(stem, num, BooleanVar)]
         self._preview_window = None
         self._summary_files = []            # 汇总导出选中的 PDF（list[Path]，保序）
@@ -87,7 +88,7 @@ class CMMFillerGUI:
 
     # ── 配置 / 设置 ─────────────────────────────
     def _load_config(self):
-        config_path = str(paths.data_dir / 'cmm_filler' / 'template_config.json')
+        config_path = str(paths.config_dir / 'cmm_filler' / 'template_config.json')
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
@@ -104,6 +105,8 @@ class CMMFillerGUI:
         })
 
     def _on_close(self):
+        if self.processing:
+            self._cancel_worker()
         if not self.processing:
             self._save_paths()
         if self._owns_root:
@@ -646,7 +649,7 @@ class CMMFillerGUI:
 
     def _show_about(self):
         log_path = str(paths.log_dir / 'cmm_filler.log')
-        data_dir = str(paths.data_dir / 'cmm_filler')
+        data_dir = str(paths.config_dir / 'cmm_filler')
         win = ctk.CTkToplevel(self.root.winfo_toplevel())
         win.title('关于 CMMFiller')
         win.geometry('440x300')
@@ -696,15 +699,31 @@ class CMMFillerGUI:
             return
         template, pdf_folder, output_folder = valid_paths
         self._save_paths()
+        audit("cmm_process_start", mode="preview" if self.preview_switch.get() else "batch", pdf_folder=pdf_folder)
 
         self._begin_work()
 
         if self.preview_switch.get():
-            worker = CancellableWorker()
-            worker.start(self._run_analyze, template, pdf_folder)
+            self._start_worker(self._run_analyze, template, pdf_folder)
         else:
-            worker = CancellableWorker()
-            worker.start(self._run_batch, template, pdf_folder, output_folder, None)
+            self._start_worker(self._run_batch, template, pdf_folder, output_folder, None)
+
+    # ── 工作线程管理（取消支持）──────────────────
+    def _start_worker(self, target, *args, **kwargs):
+        """启动可取消工作线程，并保存引用供关闭/卸载时取消。"""
+        self._worker = CancellableWorker()
+        self._worker.start(target, *args, **kwargs)
+
+    def _is_worker_cancelled(self) -> bool:
+        """查询当前工作线程是否已请求取消。"""
+        return bool(self._worker and self._worker.is_cancelled())
+
+    def _cancel_worker(self):
+        """请求取消工作线程并等待退出（最多 5 秒）。"""
+        if self._worker and self._worker.is_running:
+            self._worker.request_cancel()
+            self._worker.wait(5)
+        self._worker = None
 
     def _begin_work(self):
         self.processing = True
@@ -724,15 +743,21 @@ class CMMFillerGUI:
             from ..core.filler import set_gui_logger
             set_gui_logger(gui)
             gui.filler = CMMReportFiller(template, dpi=300)
+            gui.filler.cancel_check = gui._is_worker_cancelled
             gui.root.after(0, lambda: gui._log('正在识别 PDF（只识别不写入，完成后弹预览，可剔除误识别项）...'))
             items = gui.filler.analyze_pdfs(
                 pdf_folder,
                 progress_callback=lambda c, t, m: gui._update_progress(c, t, m),
             )
+            if gui._is_worker_cancelled():
+                gui.root.after(0, lambda: gui._log('已取消处理'))
+                gui.root.after(0, gui._processing_done)
+                return
             if not items:
                 gui.root.after(0, lambda: messagebox.showwarning('提示', '未找到可识别的 PDF 文件'))
                 gui.root.after(0, gui._processing_done)
                 return
+            audit("cmm_analyze", count=len(items), pdf_folder=pdf_folder)
             gui.root.after(0, lambda: (gui._show_preview(items), gui._processing_done()))
         except Exception as exc:
             err_msg = str(exc)
@@ -910,8 +935,7 @@ class CMMFillerGUI:
                 pass
         if excluded:
             self._log(f'将剔除 {sum(len(v) for v in excluded.values())} 项误识别数据')
-        worker = CancellableWorker()
-        worker.start(self._run_batch, template, pdf_folder, output_folder, dict(excluded))
+        self._start_worker(self._run_batch, template, pdf_folder, output_folder, dict(excluded))
 
     # ── 批量处理阶段 ─────────────────────────────
     def _run_batch(self, template, pdf_folder, output_folder, excluded_measures):
@@ -921,11 +945,20 @@ class CMMFillerGUI:
             set_gui_logger(gui)
             if gui.filler is None:
                 gui.filler = CMMReportFiller(template, dpi=300)
+            gui.filler.cancel_check = gui._is_worker_cancelled
             summary = gui.filler.batch_process_by_date(
                 pdf_folder, output_folder,
                 progress_callback=lambda c, t, m: gui._update_progress(c, t, m),
                 excluded_measures=excluded_measures,
             )
+
+            if gui._is_worker_cancelled():
+                gui.root.after(0, lambda: gui._log('已取消处理'))
+                gui.root.after(0, lambda: gui._set_status('已取消'))
+                return
+
+            audit("cmm_process_done", processed=summary.get("processed_pdfs", 0),
+                  failed=len(summary.get("failed_pdfs", [])), pdf_folder=pdf_folder)
 
             gui.root.after(0, lambda: gui._log('=' * 50))
             gui.root.after(0, lambda: gui._log('处理完成'))
@@ -956,10 +989,20 @@ class CMMFillerGUI:
             from ..core.filler import set_gui_logger
             set_gui_logger(gui)
             gui.filler = CMMReportFiller(template, dpi=300)
+            gui.filler.cancel_check = gui._is_worker_cancelled
             summary = gui.filler.export_standard_template(
                 pdf_folder, output_folder,
                 progress_callback=lambda c, t, m: gui._update_progress(c, t, m),
             )
+
+            if gui._is_worker_cancelled():
+                gui.root.after(0, lambda: gui._log('已取消导出'))
+                gui.root.after(0, lambda: gui._set_status('已取消'))
+                return
+
+            audit("cmm_export_template_done",
+                  processed=summary.get("processed_pdfs", 0),
+                  failed=len(summary.get("failed_pdfs", [])), pdf_folder=pdf_folder)
 
             summary_text = gui._format_export_summary(summary)
             gui.root.after(0, lambda: gui._log('导出完成'))
@@ -986,12 +1029,12 @@ class CMMFillerGUI:
             return
         template, pdf_folder, output_folder = export_paths
         self._save_paths()
+        audit("cmm_export_template", pdf_folder=pdf_folder)
 
         self._begin_work()
         self._log('导出标准模板...')
         self._set_status('正在导出模板...', processing=True)
-        worker = CancellableWorker()
-        worker.start(self._run_export, template or str(paths.data_dir / 'cmm_filler' / 'template.xlsx'), pdf_folder, output_folder)
+        self._start_worker(self._run_export, template or str(paths.data_dir / 'cmm_filler' / 'template.xlsx'), pdf_folder, output_folder)
 
     # ── 汇总导出（多 PDF → 单 Excel，每 PDF 一个 Sheet）──
     def _summary_start(self):
@@ -1010,11 +1053,11 @@ class CMMFillerGUI:
                 return
         self._save_paths()
         pdf_paths = [str(f) for f in self._summary_files]
+        audit("cmm_summary_export", count=len(pdf_paths), output_folder=output_folder)
         self._begin_work()
         self._log(f'汇总导出：共 {len(pdf_paths)} 个 PDF，每个 PDF 生成一个 Sheet...')
         self._set_status('正在汇总导出...', processing=True)
-        worker = CancellableWorker()
-        worker.start(self._run_summary_export, pdf_paths, output_folder)
+        self._start_worker(self._run_summary_export, pdf_paths, output_folder)
 
     def _run_summary_export(self, pdf_paths, output_folder):
         gui = self
@@ -1023,10 +1066,19 @@ class CMMFillerGUI:
             set_gui_logger(gui)
             if gui.filler is None:
                 gui.filler = CMMReportFiller(gui.template_var.get().strip() or str(paths.data_dir / 'cmm_filler' / 'template.xlsx'), dpi=300)
+            gui.filler.cancel_check = gui._is_worker_cancelled
             summary = gui.filler.export_summary_workbook(
                 pdf_paths, output_folder,
                 progress_callback=lambda c, t, m: gui._update_summary_progress(c, t, m),
             )
+
+            if gui._is_worker_cancelled():
+                gui.root.after(0, lambda: gui._log('已取消汇总导出'))
+                gui.root.after(0, lambda: gui._set_status('已取消'))
+                return
+
+            audit("cmm_summary_done", sheets=summary.get("sheet_count", 0),
+                  ng=summary.get("ng_count", 0), output_folder=output_folder)
 
             summary_text = gui._format_summary_text(summary)
             gui.root.after(0, lambda: gui._log('=' * 50))
@@ -1196,7 +1248,7 @@ class CMMFillerGUI:
             self._set_status('就绪')
 
     def _refresh_template_path(self):
-        config_path = str(paths.data_dir / 'cmm_filler' / 'template_config.json')
+        config_path = str(paths.config_dir / 'cmm_filler' / 'template_config.json')
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
@@ -1258,6 +1310,11 @@ class CMMFillerModule(ModuleProtocol):
         """从 Shell 内容区卸载"""
         if self._instance:
             self._instance._owns_root = False  # 避免 root.destroy() 退出整个进程
+            # 取消正在运行的工作线程
+            try:
+                self._instance._cancel_worker()
+            except Exception:
+                pass
             # 触发保存设置
             if hasattr(self._instance, '_save_paths'):
                 try:

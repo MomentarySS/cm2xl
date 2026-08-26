@@ -15,6 +15,7 @@ from .com_detector import (
     quick_connect,
 )
 from ..core.models import FeatureRecord
+from utils.error_codes import ErrorCode, ToolboxError
 
 ProgressCallback = Callable[[int, int, str], None]
 
@@ -41,7 +42,7 @@ class PcdmisConnector(MeasurementConnector):
 
     def _bind_app(self):
         if not self._active_prog_id:
-            raise RuntimeError("未连接 PCDMIS")
+            raise ToolboxError(ErrorCode.PCDMIS_NOT_RUNNING, "未连接 PCDMIS")
         return dispatch_pcdmis(self._active_prog_id)
 
     def connect(self) -> ConnectionInfo:
@@ -196,7 +197,7 @@ class PcdmisConnector(MeasurementConnector):
     ) -> list[FeatureRecord]:
         info = self.ensure_session()
         if not info.connected:
-            raise RuntimeError(info.message)
+            raise ToolboxError(ErrorCode.PCDMIS_CONNECT_FAIL, info.message)
 
         last_exc: Exception | None = None
         for attempt in range(2):
@@ -217,9 +218,14 @@ class PcdmisConnector(MeasurementConnector):
                 self._connected = False
                 retry = self.connect()
                 if not retry.connected or attempt >= 1:
-                    raise RuntimeError(str(exc)) from exc
+                    raise ToolboxError(
+                        ErrorCode.PCDMIS_CONNECT_FAIL, str(exc)
+                    ) from exc
         else:
-            raise RuntimeError(str(last_exc) if last_exc else "提取失败")
+            raise ToolboxError(
+                ErrorCode.PCDMIS_CONNECT_FAIL,
+                str(last_exc) if last_exc else "提取失败",
+            )
 
         if not records:
             scope_hint = (
@@ -228,8 +234,9 @@ class PcdmisConnector(MeasurementConnector):
                 if scope == "report"
                 else "未提取到任何特征/尺寸数据。"
             )
-            raise RuntimeError(
-                f"{scope_hint}\n请确认 PCDMIS 中已打开含实测数据的测量程序。"
+            raise ToolboxError(
+                ErrorCode.PCDMIS_NO_DATA,
+                f"{scope_hint}\n请确认 PCDMIS 中已打开含实测数据的测量程序。",
             )
         self._last_features = records
         return list(records)

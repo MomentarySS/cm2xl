@@ -6,7 +6,7 @@ import ctypes
 import sys
 from ctypes import wintypes
 
-from ....utils.paths import paths
+from utils.paths import paths
 
 
 def is_admin() -> bool:

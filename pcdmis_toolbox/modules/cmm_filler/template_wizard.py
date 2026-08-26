@@ -9,17 +9,17 @@ from tkinter import ttk, filedialog, messagebox
 import openpyxl
 from openpyxl.utils import get_column_letter, column_index_from_string
 from pathlib import Path
+from utils.settings import save_settings_json_atomic
+from utils.paths import paths
 
 def _get_appdata_dir():
-    appdata = os.environ.get('LOCALAPPDATA') or os.environ.get('APPDATA')
-    if appdata:
-        path = Path(appdata) / 'CMMFiller'
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-            return str(path)
-        except OSError:
-            pass
-    return str(Path(__file__).resolve().parent)
+    """统一配置目录：{data}/config/cmm_filler（与 gui.py/filler.py 一致，ARCH 3.9）"""
+    path = paths.config_dir / 'cmm_filler'
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return str(path)
+    except OSError:
+        return str(Path(__file__).resolve().parent)
 
 CONFIG_PATH = os.path.join(_get_appdata_dir(), 'template_config.json')
 
@@ -428,9 +428,8 @@ class TemplateWizard:
             messagebox.showwarning('提示', '请至少配置一列映射')
             return
 
-        # 保存到文件
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
+        # 保存到文件（原子写，避免中断留下半截配置文件）
+        save_settings_json_atomic(Path(CONFIG_PATH), config)
 
         messagebox.showinfo('成功', f'配置已保存到:\n{CONFIG_PATH}')
         self.root.destroy()

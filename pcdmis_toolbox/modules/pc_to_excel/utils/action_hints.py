@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 
-from ....utils.error_codes import ToolboxError
+from utils.error_codes import ToolboxError
 
 
 def hint_for_message(text: str) -> str:

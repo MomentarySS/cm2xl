@@ -3,6 +3,8 @@ PCDMIS Toolbox 2.0 — 统一版本与元数据
 所有模块必须从这里导入版本常量，禁止硬编码。
 """
 
+from utils.theme import TOOLBOX_THEME  # noqa: F401  # 唯一主题定义点，兼容旧引用
+
 APP_TITLE = "PCDMIS Toolbox"
 APP_VERSION = "2.0.0"
 APP_BUILD = "1"
@@ -19,20 +21,3 @@ PCDLRN_PROGIDS = [
     "PCDLRN.Application.20.0",  # 2022.2
     "PCDLRN.Application.19.1",  # 2022.1
 ]
-
-# 测房友好青绿主色调（与 utils/theme.py 保持一致）
-TOOLBOX_THEME = {
-    "accent": "#0F766E",
-    "accent_hover": "#14B8A6",
-    "primary": "#115E59",
-    "primary_hover": "#0F766E",
-    "ok": "#15803D",
-    "warn": "#C2410C",
-    "bad": "#B91C1C",
-    "muted": "#64748B",
-    "card_bg": "#FFFFFF",
-    "card_border": "#E2E8F0",
-    "page_bg": "#F1F5F9",
-    "text": "#1E293B",
-    "text_muted": "#64748B",
-}

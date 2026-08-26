@@ -31,6 +31,7 @@ from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from ..ocr.engine import OCREngine, PaddleOCREngine
 from utils.file_io import glob_pdfs, fitz_open_context
 from utils.paths import paths
+from utils.settings import save_settings_json_atomic
 
 # ── 日志 ──────────────────────────────────────────────
 logger = logging.getLogger('CMMFiller')
@@ -88,7 +89,7 @@ def _get_base_dir() -> Path:
 
 BASE_DIR = _get_base_dir()
 
-APP_DATA_DIR = str(paths.data_dir / 'cmm_filler')
+APP_DATA_DIR = str(paths.config_dir / 'cmm_filler')  # 统一到 {data}/config/cmm_filler（ARCH 3.9）
 Path(APP_DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 CACHE_DIR = paths.cache_dir
@@ -121,11 +122,10 @@ def load_settings() -> dict:
 
 
 def save_settings(data: dict):
-    """保存 GUI 路径记忆"""
+    """保存 GUI 路径记忆（原子写，避免中断留下半截文件）"""
     try:
         Path(APP_DATA_DIR).mkdir(parents=True, exist_ok=True)
-        with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        save_settings_json_atomic(Path(SETTINGS_PATH), data)
     except OSError as e:
         logger.warning(f'保存设置失败: {e}')
 
@@ -203,6 +203,10 @@ class CMMReportFiller:
         self.ocr = ocr_engine or PaddleOCREngine()
         self.cache = self._load_cache()
         self._cleanup_cache()
+
+        # 取消检查回调（由 GUI 注入，如 CancellableWorker.is_cancelled）：
+        # 循环内检测到 True 时提前退出，返回结构带 cancelled=True
+        self.cancel_check = None
 
         # 加载配置后智能合并（自动检测模板结构补全缺失项）
         raw_config = self._load_config()
@@ -395,8 +399,7 @@ class CMMReportFiller:
         return {}
 
     def _save_cache(self):
-        with open(CACHE_PATH, 'w', encoding='utf-8') as f:
-            json.dump(self.cache, f, ensure_ascii=False, indent=2)
+        save_settings_json_atomic(Path(CACHE_PATH), self.cache)
 
     def _safe_save(self, wb, path, backup=True):
         """保存工作簿，带文件锁检测和自动备份"""
@@ -491,8 +494,7 @@ class CMMReportFiller:
                     remove_count = len(sorted_keys) - keep_count
                     for key in sorted_keys[:remove_count]:
                         del cache_data[key]
-                    with open(cache_file, 'w', encoding='utf-8') as f:
-                        json.dump(cache_data, f, ensure_ascii=False, indent=2)
+                    save_settings_json_atomic(cache_file, cache_data)
                     logger.info(f'清理了 {remove_count} 条过期 OCR 缓存记录')
         except (OSError, json.JSONDecodeError):
             pass
@@ -693,8 +695,13 @@ class CMMReportFiller:
 
         infos = []
         failed = []
+        cancelled = False
         total = len(filtered)
         for idx, pdf in enumerate(filtered, start=1):
+            if self.cancel_check and self.cancel_check():
+                logger.info('用户已取消处理')
+                cancelled = True
+                break
             _report(idx - 1, total, f'OCR 识别: {pdf.name}')
             try:
                 img_path = self.pdf_to_image(str(pdf))
@@ -711,7 +718,8 @@ class CMMReportFiller:
                 logger.error(f'[处理失败] {pdf.name}: {e}')
                 failed.append({'file': pdf.name, 'error': str(e)})
 
-        return {'infos': infos, 'skipped': skipped, 'failed': failed, 'scanned_total': total}
+        return {'infos': infos, 'skipped': skipped, 'failed': failed,
+                'scanned_total': total, 'cancelled': cancelled}
 
     def analyze_pdfs(self, pdf_folder, progress_callback=None):
         """只做 OCR+解析（不写 Excel），返回供 GUI 预览的结构化列表。
@@ -762,6 +770,7 @@ class CMMReportFiller:
             'output_files': [],
             'date_groups': 0,
             'ng_count': 0,
+            'cancelled': False,
         }
 
         def _report(current, total, message):
@@ -802,6 +811,10 @@ class CMMReportFiller:
 
         # 3. 处理每个日期组
         for date, items in sorted(date_groups.items()):
+            if self.cancel_check and self.cancel_check():
+                logger.info('用户已取消处理')
+                summary['cancelled'] = True
+                break
             logger.info(f'\n=== 日期组: {date} ({len(items)} 个样品) ===')
 
             # 按文件名排序，顺序分配样品编号
@@ -965,6 +978,7 @@ class CMMReportFiller:
             'processed_pdfs': 0,
             'failed_pdfs': [],
             'output_file': None,
+            'cancelled': False,
         }
 
         def _report(current, total, message):
@@ -997,6 +1011,10 @@ class CMMReportFiller:
         seen_keys = set()
         total = len(filtered_pdfs)
         for idx, pdf in enumerate(filtered_pdfs, start=1):
+            if self.cancel_check and self.cancel_check():
+                logger.info('用户已取消导出')
+                summary['cancelled'] = True
+                break
             _report(idx - 1, total, f'提取规格: {pdf.name}')
             try:
                 img_path = self.pdf_to_image(str(pdf))
@@ -1061,6 +1079,7 @@ class CMMReportFiller:
             'output_file': None,
             'ng_count': 0,
             'sheet_count': 0,
+            'cancelled': False,
         }
 
         def _report(current, total, message):
@@ -1076,6 +1095,10 @@ class CMMReportFiller:
         infos = []
         total = len(pdfs)
         for idx, pdf in enumerate(pdfs, start=1):
+            if self.cancel_check and self.cancel_check():
+                logger.info('用户已取消汇总导出')
+                summary['cancelled'] = True
+                break
             _report(idx - 1, total, f'汇总提取: {pdf.name}')
             try:
                 img_path = self.pdf_to_image(str(pdf))

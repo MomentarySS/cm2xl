@@ -15,7 +15,9 @@ from pathlib import Path
 
 from ..app_meta import DEFAULT_TOLERANCE
 
-from ....utils.paths import paths
+from utils.paths import paths
+
+from utils.settings import save_settings_json_atomic
 
 from ..export.inspection_form_fill import FormFillConfig
 
@@ -144,7 +146,7 @@ def save_settings(settings: AppSettings) -> None:
 
     payload["form_fill"] = settings.form_fill.to_dict()
 
-    settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    save_settings_json_atomic(settings_file, payload)
 
 
 

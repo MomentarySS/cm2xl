@@ -27,9 +27,10 @@ from ..export.inspection_form_fill import (
 from ..export.template_report import export_report
 from ..inject.command_injector import check_export_command, deploy_bas_script, inject_export_command
 from ..utils.action_hints import format_user_error
-from ...utils.admin import admin_status_text, is_admin
+from ..utils.admin import admin_status_text, is_admin
 from ..utils.local_settings import build_export_filename, ensure_default_dirs, load_settings, save_settings
 from utils.threading_utils import CancellableWorker
+from utils.audit import audit
 
 # 测房友好：青绿主色，避免默认紫系
 ctk.set_appearance_mode("System")
@@ -56,7 +57,7 @@ _C = {
 }
 
 # For REPORTS_DIR reference
-from ....utils.paths import paths
+from utils.paths import paths
 
 
 class MainWindow:
@@ -579,6 +580,12 @@ class MainWindow:
     def _on_connected(self, info) -> None:
         self._set_busy(False)
         self.perm_var.set(self._perm_text())
+        audit(
+            "pcdmis_connect",
+            connected=info.connected,
+            prog_id=self.connector.prog_id,
+            version=self.connector.version,
+        )
         if info.connected:
             self.conn_var.set(f"{info.source} · {info.version}")
             self.part_var.set(self.connector.get_active_part_name() or "—")
@@ -595,6 +602,7 @@ class MainWindow:
 
     def _disconnect(self) -> None:
         self.connector.disconnect()
+        audit("pcdmis_disconnect")
         self.conn_var.set("未连接")
         self.part_var.set("—")
         self.status_var.set("已断开")
@@ -779,8 +787,11 @@ class MainWindow:
                     require_marked=require_marked,
                 )
                 if not records:
-                    raise RuntimeError(
-                        "未提取到可填入的测量数据（0 条）。"
+                    from utils.error_codes import ErrorCode, ToolboxError
+
+                    raise ToolboxError(
+                        ErrorCode.PCDMIS_NO_DATA,
+                        "未提取到可填入的测量数据（0 条）。",
                     )
                 tol = ToleranceConfig.from_dict(self.settings.tolerance)
                 apply_tolerance(records, tol)
@@ -859,6 +870,7 @@ class MainWindow:
     def _on_fill_ok(self, result, extract_count: int) -> None:
         self._set_busy(False)
         self.status_var.set(f"已填入 {result.filled} 格")
+        audit("pcdmis_form_fill", filled=result.filled, output=str(result.output_path))
         self.settings.form_fill.last_fill_output = str(result.output_path)
         self.last_fill_var.set(self._format_last_fill(str(result.output_path)))
         save_settings(self.settings)
@@ -939,7 +951,12 @@ class MainWindow:
                     require_marked=self.settings.require_marked,
                 )
                 if not records:
-                    raise RuntimeError("未提取到可导出的测量数据（0 条）。")
+                    from utils.error_codes import ErrorCode, ToolboxError
+
+                    raise ToolboxError(
+                        ErrorCode.PCDMIS_NO_DATA,
+                        "未提取到可导出的测量数据（0 条）。",
+                    )
                 tol = ToleranceConfig.from_dict(self.settings.tolerance)
                 apply_tolerance(records, tol)
                 header = self.connector.get_report_header_info()
@@ -967,12 +984,14 @@ class MainWindow:
     def _on_export_ok(self, path: Path, count: int) -> None:
         self._set_busy(False)
         self.status_var.set(f"已导出 {count} 条")
+        audit("pcdmis_export", count=count, path=str(path))
         self._refresh_connection_ui()
         messagebox.showinfo("导出完成", f"共 {count} 条数据\n\n{path}")
 
     def _deploy_bas(self) -> None:
         try:
             path = deploy_bas_script()
+            audit("pcdmis_bas_deploy", path=str(path))
             messagebox.showinfo("部署完成", f"脚本已更新:\n{path}")
         except Exception as exc:
             messagebox.showerror("部署失败", format_user_error("部署失败", exc))
@@ -1008,6 +1027,7 @@ class MainWindow:
 
     def _on_inject_done(self, result) -> None:
         self._set_busy(False)
+        audit("pcdmis_inject", success=result.success, already_exists=result.already_exists)
         if result.success:
             self.status_var.set("命令已植入")
             messagebox.showinfo("植入完成", result.message)
@@ -1042,10 +1062,27 @@ class MainWindow:
         # msg 可能已是 format_user_error 结果
         messagebox.showerror(title, msg if msg.startswith("【") else format_user_error(title, msg))
 
+    def _refresh_conn_status(self) -> None:
+        """模块激活时静默刷新连接状态（不弹错误框）。
+
+        已连接但 COM 会话失效（测第二件常见）时标记断开；
+        未连接时保持现状，由用户点「连接」或导出时自动重连。
+        """
+        if self.connector.is_connected():
+            if not self.connector.session_alive():
+                self.connector.disconnect()
+                self.conn_var.set("未连接")
+                self.part_var.set("—")
+                self._set_conn_visual("idle")
+                return
+        self._refresh_connection_ui()
+
     def _on_close(self) -> None:
         self._save_settings_from_ui()
         self.connector.disconnect()
-        self.root.destroy()
+        # 挂载模式下 root 属于 Shell，不能 destroy；独立运行时才关窗
+        if self._owns_root:
+            self.root.destroy()
 
     def run(self) -> None:
         ok, msg = check_elevation_match()

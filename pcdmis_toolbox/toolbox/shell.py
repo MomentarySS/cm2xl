@@ -5,6 +5,7 @@ PCDMIS Toolbox 2.0 — 壳主窗口
 
 import sys
 import logging
+from pathlib import Path
 from typing import Optional
 
 import customtkinter as ctk
@@ -65,6 +66,14 @@ class Shell:
             font=("Microsoft YaHei", 14, "bold"),
             text_color="white",
         ).pack(side="left", padx=16, pady=0)
+
+        ctk.CTkButton(
+            self._header, text="导出旧版配置", width=110, height=28,
+            font=("Microsoft YaHei", 11),
+            fg_color="transparent", border_width=1, border_color="white",
+            text_color="white",
+            command=self._export_legacy_settings,
+        ).pack(side="right", padx=12, pady=10)
 
         # 主区域：左侧导航 + 内容
         self._body = ctk.CTkFrame(root, corner_radius=0, fg_color="transparent")
@@ -210,6 +219,40 @@ class Shell:
             self.update_status(f"加载失败: {e}", "error")
 
     # ── 状态栏接口（ShellProtocol 实现）───────────────────────────────────
+
+    @staticmethod
+    def _module_config_path(module_name: str) -> Path:
+        """模块配置文件路径（ARCH 3.9：统一在 config_dir 下）。"""
+        return paths.config_dir / module_name / "settings.json"
+
+    def _export_legacy_settings(self) -> None:
+        """导出 1.x 格式配置给旧工具使用（ARCH 3.9.2，不自动降级）。"""
+        from tkinter import filedialog, messagebox
+        from utils.settings import export_legacy_settings, load_and_migrate_settings
+
+        path = filedialog.asksaveasfilename(
+            title="导出旧版配置",
+            defaultextension=".json",
+            initialfile="legacy_settings.json",
+            filetypes=[("JSON 文件", "*.json")],
+        )
+        if not path:
+            return
+        base = Path(path)
+        try:
+            for module_name in ("cmm_filler", "pc_to_excel"):
+                config = load_and_migrate_settings(
+                    module_name, self._module_config_path(module_name)
+                )
+                target = base.with_name(f"{base.stem}_{module_name}{base.suffix}")
+                export_legacy_settings(module_name, target, config)
+            audit("export_legacy_settings", path=path)
+            messagebox.showinfo(
+                "已导出", f"旧版配置已导出（每模块一个文件）：\n{base.parent}"
+            )
+        except Exception as e:
+            logger.exception(f"导出旧版配置失败: {e}")
+            messagebox.showerror("导出失败", f"导出旧版配置失败：\n{e}")
 
     def update_status(self, text: str, level: str = "info"):
         """
