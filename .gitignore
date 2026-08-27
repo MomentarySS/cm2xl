@@ -34,3 +34,16 @@ pcdmis_toolbox/build/*.toc
 pcdmis_toolbox/build/warn*.txt
 pcdmis_toolbox/build/*.pyz
 pcdmis_toolbox/build/*.manifest
+
+# PyInstaller output
+pcdmis_toolbox/dist/
+pcdmis_toolbox/dist/cm2xl/
+
+# Inno Setup installer output
+pcdmis_toolbox/installer/output/
+
+# ZCode workspace
+.zcode/
+
+# Junk files
+pcdmis_toolbox/nul
