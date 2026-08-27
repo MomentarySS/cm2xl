@@ -16,14 +16,14 @@ TOOLBOX_THEME = {
     "ok": "#15803D",
     "warn": "#C2410C",
     "bad": "#B91C1C",
-    # 界面色
+    # 界面色（避开纯白 #FFFFFF，改用低饱和暖白，护眼）
     "muted": "#64748B",
-    "card_bg": "#FFFFFF",
-    "card_border": "#E2E8F0",
-    "page_bg": "#F1F5F9",
+    "card_bg": "#FAFAF7",        # 暖灰白，避开纯白刺眼
+    "card_border": "#E5E7EB",
+    "page_bg": "#F5F4EF",         # 暖灰背景，避免纯灰冷感
     # 文字
-    "text": "#1E293B",
-    "text_muted": "#64748B",
+    "text": "#1F2937",
+    "text_muted": "#6B7280",
 }
 
 TOOLBOX_THEME_JSON_PATH = Path(__file__).parent / "theme.json"
@@ -34,19 +34,24 @@ def _build_theme_json(dest: Path | None = None) -> None:
     生成 CustomTkinter 自定义主题 JSON，写入 dest 或默认 theme.json。
     使用青绿主色，基于 green 主题完整字段表，避免默认紫/蓝/绿切换时的颜色跳变。
     完整字段参考：customtkinter/assets/themes/green.json
+
+    配色策略：
+    - 浅色：用暖灰白避开纯白刺眼（card_bg=#FAFAF7 / page_bg=#F5F4EF）
+    - 深色：用低饱和深石板，避免纯黑冷感
+    - CTkLabel fg_color 设为 transparent，避免文字后出现灰色色块
     """
     accent = TOOLBOX_THEME["accent"]
     accent_h = TOOLBOX_THEME["accent_hover"]
     primary = TOOLBOX_THEME["primary"]
     page_bg_l = TOOLBOX_THEME["page_bg"]
-    page_bg_d = "#0F172A"
+    page_bg_d = "#1A1F2B"           # 深石板（非纯黑）
     card_bg_l = TOOLBOX_THEME["card_bg"]
-    card_bg_d = "#1E293B"
+    card_bg_d = "#252B3A"           # 深石板卡片
     card_bd = TOOLBOX_THEME["card_border"]
-    card_bd_d = "#334155"
+    card_bd_d = "#374151"
     text_l = TOOLBOX_THEME["text"]
-    text_d = "#F1F5F9"
-    muted = "#94A3B8"
+    text_d = "#E8E6E1"              # 暖白文字（非冷蓝白）
+    muted = "#9CA3AF"
 
     theme = {
         "CTk": {"fg_color": [page_bg_l, page_bg_d]},
@@ -71,7 +76,9 @@ def _build_theme_json(dest: Path | None = None) -> None:
         "CTkLabel": {
             "corner_radius": 0,
             "border_width": 0,
-            "fg_color": [page_bg_l, page_bg_d],
+            # 默认透明 —— 否则 CustomTkinter 会画一个 page_bg 色矩形在文字后面，
+            # 浅色模式下会出现一块灰色色块。
+            "fg_color": "transparent",
             "border_color": [card_bd, card_bd_d],
             "text_color": [text_l, text_d],
         },
@@ -185,9 +192,9 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color": [text_l, text_d],
         },
         "CTkFont": {
-            "macOS": {"family": "SF Pro", "size": 13},
-            "Windows": {"family": "Segoe UI", "size": 13},
-            "Linux": {"family": "Ubuntu", "size": 13},
+            "macOS": {"family": "SF Pro", "size": 13, "weight": "normal"},
+            "Windows": {"family": "Segoe UI", "size": 13, "weight": "normal"},
+            "Linux": {"family": "Ubuntu", "size": 13, "weight": "normal"},
         },
     }
 

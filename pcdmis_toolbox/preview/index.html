@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PCDMIS Toolbox 2.0 — UI 预览</title>
+<style>
+  :root {
+    --accent: #0F766E;
+    --accent-hover: #14B8A6;
+    --primary: #115E59;
+    --card-bg: #FFFFFF;
+    --page-bg: #F1F5F9;
+    --text: #1E293B;
+    --text-muted: #64748B;
+    --ok: #15803D;
+    --warn: #C2410C;
+    --bad: #B91C1C;
+    --border: #E2E8F0;
+  }
+  body[data-theme="dark"] {
+    --card-bg: #1E293B;
+    --page-bg: #0F172A;
+    --text: #F1F5F9;
+    --text-muted: #94A3B8;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    transition: background 0.2s, color 0.2s;
+  }
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; gap: 16px; align-items: center;
+  }
+  .toolbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .toolbar .spacer { flex: 1; }
+  .seg {
+    display: inline-flex; border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .seg button {
+    background: var(--card-bg); color: var(--text);
+    border: 0; padding: 6px 14px; cursor: pointer; font: inherit;
+  }
+  .seg button.active {
+    background: var(--accent); color: #fff;
+  }
+
+  .section-title {
+    margin: 24px 24px 8px; font-size: 13px; color: var(--text-muted);
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .compare-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    padding: 0 24px 16px;
+  }
+  .label {
+    font-size: 11px; color: var(--text-muted);
+    margin-bottom: 6px; text-align: center;
+  }
+
+  /* ── Shell window ─────────────────────────────────────────────── */
+  .window {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--page-bg);
+    display: flex; flex-direction: column;
+    height: 540px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  .header {
+    height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+  }
+  .header .title { font-size: 14px; font-weight: 700; }
+  .header .btn-export {
+    border: 0; border-radius: 6px; padding: 6px 14px;
+    font: inherit; cursor: pointer; height: 28px; min-width: 120px;
+  }
+  .body { display: flex; flex: 1; min-height: 0; }
+  .nav {
+    width: 180px;
+    display: flex; flex-direction: column; padding: 8px 0;
+  }
+  .nav-btn {
+    background: transparent; border: 0; text-align: left;
+    padding: 12px 16px; font: inherit; cursor: pointer;
+    border-left: 3px solid transparent;
+  }
+  .nav-btn.active { border-left-color: var(--accent); font-weight: 600; }
+  .content {
+    flex: 1; padding: 20px;
+    background: var(--card-bg);
+    border-left: 1px solid var(--border);
+    overflow: auto;
+  }
+  .content h2 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+  .content .sub { color: var(--text-muted); font-size: 12px; margin-bottom: 16px; }
+  .segmented {
+    display: inline-flex; border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border); margin-bottom: 12px;
+  }
+  .segmented button {
+    background: var(--card-bg); color: var(--text);
+    border: 0; padding: 6px 14px; cursor: pointer; font: inherit;
+  }
+  .segmented button.active {
+    background: var(--accent); color: #fff;
+  }
+  .statusbar {
+    height: 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+
+  /* ── BEFORE (问题版本) ─────────────────────────────────────────── */
+  .before .header {
+    background: #115E59; /* 顶栏深青绿 */
+    color: #fff;
+  }
+  .before .header .title { color: #fff; }
+  .before .header .btn-export {
+    background: transparent;
+    border: 1px solid #fff;
+    color: #fff;
+  }
+  .before .nav { background: #FFFFFF; color: #1E293B; }
+  .before .nav-btn { color: #1E293B; }
+  .before .nav-btn.active {
+    background: #0F766E; color: #fff;
+    border-left-color: #0F766E;
+  }
+  .before .content { background: #FFFFFF; }
+  .before .segmented button.active { background: #0F766E; color: #fff; }
+  .before .statusbar { background: #64748B; color: #fff; }
+  .before .statusbar .err { color: #FCA5A5; }
+
+  body[data-theme="dark"] .before .nav { background: #1E293B; color: #F1F5F9; }
+  body[data-theme="dark"] .before .nav-btn { color: #F1F5F9; }
+  body[data-theme="dark"] .before .content { background: #1E293B; }
+  body[data-theme="dark"] .before .segmented button { background: #1E293B; color: #F1F5F9; }
+
+  /* ── AFTER (修复版本) ─────────────────────────────────────────── */
+  .after .header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .after .header .title { color: var(--text); }
+  .after .header .btn-export {
+    background: var(--accent); color: #fff;
+    border: 0;
+  }
+  .after .nav { background: var(--card-bg); }
+  .after .nav-btn { color: var(--text); }
+  .after .nav-btn.active {
+    background: var(--accent-hover);
+    color: #fff;
+    border-left-color: var(--accent);
+  }
+  .after .content { background: var(--card-bg); }
+  .after .segmented button.active { background: var(--accent); color: #fff; }
+  .after .statusbar {
+    background: var(--page-bg);
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+  }
+  .after .statusbar .ok { color: var(--text); }
+
+  /* ── Fix summary card ─────────────────────────────────────────── */
+  .fix-list {
+    margin: 16px 24px 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .fix-list h3 { margin: 0 0 12px; font-size: 14px; }
+  .fix-list ul { margin: 0; padding-left: 20px; }
+  .fix-list li { margin: 6px 0; }
+  .fix-list code {
+    background: var(--page-bg); padding: 1px 6px; border-radius: 4px;
+    font-family: "Consolas", "Microsoft YaHei", monospace;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body data-theme="light">
+  <div class="toolbar">
+    <h1>PCDMIS Toolbox 2.0 — UI 修复预览</h1>
+    <span class="spacer"></span>
+    <span>外观：</span>
+    <div class="seg" id="theme-seg">
+      <button data-mode="light" class="active">浅色</button>
+      <button data-mode="dark">深色</button>
+    </div>
+  </div>
+
+  <div class="section-title">对比：修复前 vs 修复后</div>
+  <div class="compare-row">
+    <!-- BEFORE -->
+    <div>
+      <div class="label">❌ 修复前（你刚才看到的截图）</div>
+      <div class="window before">
+        <div class="header">
+          <div class="title">PCDMIS Toolbox 2.0.0</div>
+          <button class="btn-export">导出旧版配置</button>
+        </div>
+        <div class="body">
+          <div class="nav">
+            <!-- 仅一个模块可见，另一个 mount 失败被吞 -->
+            <button class="nav-btn active">📐 PCDMIS导出</button>
+            <!-- CMM 报告填充 因为 weight KeyError 被吞了，没渲染 -->
+          </div>
+          <div class="content">
+            <h2>PCDMIS 按需 Excel 测量报告</h2>
+            <div class="sub">v2.0.0 · 测到一半也能出表 · 出货表按序号填入</div>
+            <div class="segmented">
+              <button>浅色</button>
+              <button>深色</button>
+              <button class="active">系统</button>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>PC-DMIS: 未连接</span>
+          <span class="err">加载失败: 'weight'</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div>
+      <div class="label">✅ 修复后（新版本）</div>
+      <div class="window after">
+        <div class="header">
+          <div class="title">PCDMIS Toolbox 2.0.0</div>
+          <button class="btn-export">导出旧版配置</button>
+        </div>
+        <div class="body">
+          <div class="nav">
+            <button class="nav-btn">📊 CMM报告填充</button>
+            <button class="nav-btn active">📐 PCDMIS导出</button>
+          </div>
+          <div class="content">
+            <h2>PCDMIS 按需 Excel 测量报告</h2>
+            <div class="sub">v2.0.0 · 测到一半也能出表 · 出货表按序号填入</div>
+            <div class="segmented">
+              <button>浅色</button>
+              <button>深色</button>
+              <button class="active">系统</button>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span class="ok">PC-DMIS: 未连接</span>
+          <span class="ok">就绪</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fix-list">
+    <h3>本轮修复清单</h3>
+    <ul>
+      <li><b>P1 关键：</b><code>utils/theme.py</code> — CTkFont 三个平台段都补 <code>"weight": "normal"</code>，根除 <code>KeyError('weight')</code>。</li>
+      <li><b>P1 关键：</b><code>modules/cmm_filler/gui.py</code> — <code>TkinterDnD._require()</code> 提到 <code>if/else</code> 之外，挂载模式也能正常初始化拖拽。</li>
+      <li><b>P1 关键：</b><code>pcdmis_toolbox.spec</code> — 把 <code>utils/theme.json</code> 加入 <code>datas</code>，避免打包后冷启动重新生成。</li>
+      <li><b>P1 关键：</b><code>toolbox/shell.py</code> — <code>on_close()</code> 加 2 秒 watchdog，超时强制 <code>root.destroy()</code>，保证窗口一定关得掉。</li>
+      <li><b>P2 清晰度：</b>顶栏由深青绿 <code>#115E59</code> 改为中性 surface（白/暗石板），白字改为跟随主题。</li>
+      <li><b>P2 清晰度：</b>"导出旧版配置" 按钮去掉显式白边，改用 <code>accent</code> 填充色，与系统一致。</li>
+      <li><b>P2 清晰度：</b>侧边栏选中态从饱和 <code>#0F766E</code> 改为更柔和的 <code>#14B8A6</code>（accent_hover）。</li>
+      <li><b>P2 清晰度：</b>状态栏背景从灰色 <code>#64748B</code> 改为 <code>page_bg</code>，文字跟主题，无红字错误。</li>
+      <li><b>P3 清理：</b><code>cmm_filler._worker.wait(5)</code> → <code>wait(1.5)</code>，关窗更快。</li>
+      <li><b>P3 清理：</b><code>main_window.py</code> 删冗余 <code>set_appearance_mode()</code>，<code>_C</code> 调色板与 <code>TOOLBOX_THEME</code> 保持一致。</li>
+    </ul>
+  </div>
+
+<script>
+  // 浅色 / 深色切换
+  const seg = document.getElementById('theme-seg');
+  seg.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.body.dataset.theme = btn.dataset.mode;
+  });
+</script>
+</body>
+</html>

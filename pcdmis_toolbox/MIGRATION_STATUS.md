@@ -146,16 +146,43 @@
 
 ---
 
-## Phase 6 — 打包整合 ⏳ 待做
+## Phase 6 — 打包整合 ✅ 完成（2026-08-27 提交）
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
 | 3.0 依赖拆分 | 创建 `requirements/cmm_filler.txt` + `requirements/pc_to_excel.txt` | ✅ | 已于 Phase 3/4 创建（base.txt / cmm_filler.txt / pc_to_excel.txt） | — |
-| 3.10 PyInstaller spec | 合并 spec | ⏳ | — | — |
-| 3.11 fix_dist.py | 搬移 `fix_dist.py` → `build/`，加 `PATCH_MARKER` | ⏳ | — | — |
-| 3.13 自定义 Hooks | 搬移 `hooks/` → `build/hooks/` | ⏳ | — | — |
-| 3.28 Inno Setup | 写 `installer/PCDMIS_Toolbox.iss` | ⏳ | — | — |
-| — | 写 `build.bat` | ⏳ | — | — |
+| 3.10 PyInstaller spec | 合并 spec | ✅ | 写 `pcdmis_toolbox.spec`，统一两个模块的 hiddenimports + datas | — |
+| 3.11 fix_dist.py | 搬移 `fix_dist.py` → `build/`，加 `PATCH_MARKER` | ✅ | 自 CMMFiller 搬移并简化（去掉无用的 patch 块，保留必要的 paddleocr frozen 兼容补丁） | — |
+| 3.13 自定义 Hooks | 搬移 `hooks/` → `build/hooks/` | ✅ | hook-customtkinter.py / hook-paddleocr.py / hook-paddleocr_pre.py | — |
+| 3.28 Inno Setup | 写 `installer/PCDMIS_Toolbox.iss` | ✅ | 写 `installer/Toolbox.iss` + `build_installer.bat` | — |
+| — | 写 `build.bat` | ✅ | 含 build + fix_dist + 清 ffmpeg DLL 三步 | — |
+
+**打包产物**：`dist/PCDMIS Toolbox/PCDMIS Toolbox.exe`（30 MB），总 601 MB（清完 ffmpeg 后从 683 MB 降下，节省 82 MB）。
+
+**离线打包验证**（已在 dev 环境实测）：
+- ✅ PaddleOCR 模型文件已在 `CMMFiller/models/paddleocr/`，自动打包到 `_internal/models/paddleocr/`
+- ✅ `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` 在 main.py 顶部设置
+- ✅ `multiprocessing.freeze_support()` 在所有 import 之前
+- ✅ `theme.json` 打包到 `_internal/utils/theme.json`
+- ✅ fix_dist.py 后处理完整 paddleocr 源码 + patch 4 个文件
+- ✅ ffmpeg DLL 剔除（`cv2` 视频编解码，OCR 永远用不到）
+
+### Phase 6 期间修复的 GUI 问题
+
+打包后用户实测发现三个 GUI 问题，均已修复并提交：
+
+| 问题 | 根因 | 修法 |
+|------|------|------|
+| **状态栏"加载失败: 'weight'"** | `_build_theme_json()` 生成的 `CTkFont` 段缺 `"weight"` 键。CustomTkinter 5.x `load_theme()` 把 CTkFont 按平台拍扁成 `{family, size, weight}`，然后 `ctk_font.py:41` 读 `["weight"]` → KeyError | 给三个平台段都补 `"weight": "normal"` + 把 `utils/theme.json` 加进 spec 的 `datas` 避免冷启动重新生成 |
+| **CMM报告填充 模块不显示** | 打包后 `modules/` 子包在 `_internal/` 没有 `__init__.py`（只在 PYZ 归档里），`pkgutil.iter_modules` 扫不到子包 → 自动发现机制失效 | spec `datas` 列表里把 pcdmis_toolbox 所有本地 `__init__.py` 显式抽出；同时改 `_discover_modules()` 不做文件系统判断，改用 try-import |
+| **GUI 太白 + 文字后色块** | `CTkLabel` 默认 fg_color 是 `page_bg`，导致每个 label 后面有一个灰色矩形 | 把 `theme.json` 中 `CTkLabel.fg_color` 改为 `"transparent"`；同时把 card_bg/page_bg 从纯白/冷灰改成暖灰白/暖灰，避开刺眼 |
+
+**其他改进**：
+- 顶栏从深青绿改成中性 surface（白/暗石板），白字改为跟随主题
+- "导出旧版配置"按钮去掉显式白边，改用 accent 填充
+- 选中态用更柔和的 accent_hover
+- 状态栏背景从灰色改用 page_bg + 主题文字
+- `Shell.on_close()` 加 2 秒 watchdog，任何 unmount 阻塞都强制退出
 
 ---
 

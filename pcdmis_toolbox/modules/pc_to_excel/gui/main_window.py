@@ -36,27 +36,34 @@ from utils.threading_utils import CancellableWorker
 from utils.audit import audit
 
 # 测房友好：青绿主色，避免默认紫系
-ctk.set_appearance_mode("System")
+# 主题由 main.py 中的 apply_theme() 统一设置，本模块只补充 (light, dark) 双值
 
-# 界面色板（浅色 / 深色）— 青绿 + 石板灰，偏测房工作台
+# 界面色板（浅色 / 深色）— 与 utils.theme.TOOLBOX_THEME 保持一致；额外补充
+# 模块内独有的 hover / subtle 等派生色。
+def _lp(light: str, dark: str) -> tuple[str, str]:
+    """构造 CustomTkinter (light, dark) 配对。"""
+    return (light, dark)
+
 _C = {
-    "accent": ("#0F766E", "#14B8A6"),
-    "accent_hover": ("#0D9488", "#2DD4BF"),
-    "primary": ("#115E59", "#0F766E"),
-    "primary_hover": ("#0F766E", "#14B8A6"),
-    "muted": ("#64748B", "#475569"),
-    "muted_hover": ("#475569", "#334155"),
-    "warn": ("#C2410C", "#EA580C"),
-    "warn_hover": ("#EA580C", "#F97316"),
-    "subtle": ("#64748B", "#94A3B8"),
-    "ok": ("#15803D", "#4ADE80"),
-    "idle": ("#94A3B8", "#64748B"),
-    "bad": ("#B91C1C", "#F87171"),
-    "card": ("#FFFFFF", "#1E293B"),
-    "card_border": ("#E2E8F0", "#334155"),
-    "page": ("#F1F5F9", "#0F172A"),
-    "stripe": ("#0F766E", "#14B8A6"),
-    "hint_bg": ("#F0FDFA", "#134E4A"),
+    # 与 TOOLBOX_THEME 同步
+    "accent": _lp("#0F766E", "#14B8A6"),
+    "accent_hover": _lp("#0D9488", "#2DD4BF"),
+    "primary": _lp("#115E59", "#0F766E"),
+    "primary_hover": _lp("#0F766E", "#14B8A6"),
+    "ok": _lp("#15803D", "#4ADE80"),
+    "warn": _lp("#C2410C", "#EA580C"),
+    "warn_hover": _lp("#EA580C", "#F97316"),
+    "bad": _lp("#B91C1C", "#F87171"),
+    "card_border": _lp("#E2E8F0", "#334155"),
+    # 仅 pc_to_excel 使用
+    "muted": _lp("#64748B", "#475569"),
+    "muted_hover": _lp("#475569", "#334155"),
+    "subtle": _lp("#64748B", "#94A3B8"),
+    "idle": _lp("#94A3B8", "#64748B"),
+    "card": _lp("#FAFAF7", "#252B3A"),
+    "page": _lp("#F5F4EF", "#1A1F2B"),
+    "stripe": _lp("#0F766E", "#14B8A6"),
+    "hint_bg": _lp("#F0FDFA", "#134E4A"),
 }
 
 # For REPORTS_DIR reference

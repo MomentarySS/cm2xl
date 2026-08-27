@@ -1,30 +1,30 @@
 {
   "CTk": {
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ]
   },
   "CTkToplevel": {
     "fg_color": [
-      "#FFFFFF",
-      "#1E293B"
+      "#FAFAF7",
+      "#252B3A"
     ]
   },
   "CTkFrame": {
     "corner_radius": 8,
     "border_width": 0,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#FFFFFF",
-      "#1E293B"
+      "#FAFAF7",
+      "#252B3A"
     ],
     "top_fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ]
   },
   "CTkButton": {
@@ -51,43 +51,40 @@
       "#F1F5F9"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
   "CTkLabel": {
     "corner_radius": 0,
     "border_width": 0,
-    "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
-    ],
+    "fg_color": "transparent",
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ]
   },
   "CTkEntry": {
     "corner_radius": 6,
     "border_width": 1,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "placeholder_text_color": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -110,7 +107,7 @@
       "#F1F5F9"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -118,12 +115,12 @@
     "corner_radius": 6,
     "border_width": 0,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "progress_color": [
       "#0F766E",
@@ -151,11 +148,11 @@
       "#CBD5E1"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -165,8 +162,8 @@
     "border_width": 0,
     "button_length": 0,
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "progress_color": [
       "#0F766E",
@@ -185,12 +182,12 @@
     "corner_radius": 6,
     "border_width": 1,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "button_color": [
       "#115E59",
@@ -201,11 +198,11 @@
       "#0D9488"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -213,12 +210,12 @@
     "corner_radius": 6,
     "border_width": 0,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "hover_color": [
       "#14B8A6",
@@ -229,11 +226,11 @@
       "#F1F5F9"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -242,8 +239,8 @@
     "border_width_checked": 3,
     "border_width_unchecked": 3,
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "border_color": [
       "#0F766E",
@@ -254,11 +251,11 @@
       "#0D9488"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -266,8 +263,8 @@
     "corner_radius": 6,
     "border_width": 0,
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "selected_color": [
       "#0F766E",
@@ -278,19 +275,19 @@
       "#0D9488"
     ],
     "unselected_color": [
-      "#FFFFFF",
-      "#1E293B"
+      "#FAFAF7",
+      "#252B3A"
     ],
     "unselected_hover_color": [
-      "#E2E8F0",
+      "#E5E7EB",
       "#475569"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "text_color_disabled": [
-      "#94A3B8",
+      "#9CA3AF",
       "#64748B"
     ]
   },
@@ -298,16 +295,16 @@
     "corner_radius": 6,
     "border_width": 0,
     "border_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "fg_color": [
-      "#FFFFFF",
-      "#1E293B"
+      "#FAFAF7",
+      "#252B3A"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ],
     "scrollbar_button_color": [
       "#115E59",
@@ -328,12 +325,12 @@
     "corner_radius": 6,
     "border_spacing": 6,
     "fg_color": [
-      "#F1F5F9",
-      "#0F172A"
+      "#F5F4EF",
+      "#1A1F2B"
     ],
     "button_color": [
-      "#E2E8F0",
-      "#334155"
+      "#E5E7EB",
+      "#374151"
     ],
     "button_hover_color": [
       "#14B8A6",
@@ -342,30 +339,33 @@
   },
   "DropdownMenu": {
     "fg_color": [
-      "#FFFFFF",
-      "#1E293B"
+      "#FAFAF7",
+      "#252B3A"
     ],
     "hover_color": [
       "#14B8A6",
       "#0D9488"
     ],
     "text_color": [
-      "#1E293B",
-      "#F1F5F9"
+      "#1F2937",
+      "#E8E6E1"
     ]
   },
   "CTkFont": {
     "macOS": {
       "family": "SF Pro",
-      "size": 13
+      "size": 13,
+      "weight": "normal"
     },
     "Windows": {
       "family": "Segoe UI",
-      "size": 13
+      "size": 13,
+      "weight": "normal"
     },
     "Linux": {
       "family": "Ubuntu",
-      "size": 13
+      "size": 13,
+      "weight": "normal"
     }
   }
 }

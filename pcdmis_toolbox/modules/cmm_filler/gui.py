@@ -39,16 +39,16 @@ class CMMFillerGUI:
             self.root.title(f'{APP_TITLE} v{__version__}')
             self.root.geometry('980x740')
             self.root.minsize(900, 660)
-            # 挂载模式下（Toplevel 内部处理拖拽），不在根窗口初始化 Tkdnd
-            if self._owns_root:
-                try:
-                    self.root.TkdndVersion = TkinterDnD._require(self.root)
-                except Exception:
-                    pass  # tkinterdnd2 不可用时降级
             self._container = self.root
         else:
             self.root = parent.winfo_toplevel()   # 供 Toplevel 子窗口定位用
             self._container = parent               # 所有 UI 构建目标
+        # 两种模式都必须初始化 Tkdnd（_require 注册 tkdnd::drop_target 等命令），
+        # 挂载模式错过此步会导致任何 drop_target_register 抛 TclError。
+        try:
+            self.root.TkdndVersion = TkinterDnD._require(self.root)
+        except Exception:
+            pass  # tkinterdnd2 不可用时降级
 
         config = self._load_config()
         settings = load_settings()
@@ -719,10 +719,10 @@ class CMMFillerGUI:
         return bool(self._worker and self._worker.is_cancelled())
 
     def _cancel_worker(self):
-        """请求取消工作线程并等待退出（最多 5 秒）。"""
+        """请求取消工作线程并等待退出（最多 1.5 秒，避免窗口关闭卡顿）。"""
         if self._worker and self._worker.is_running:
             self._worker.request_cancel()
-            self._worker.wait(5)
+            self._worker.wait(1.5)
         self._worker = None
 
     def _begin_work(self):

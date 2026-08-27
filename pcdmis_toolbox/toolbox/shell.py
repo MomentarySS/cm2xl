@@ -55,22 +55,26 @@ class Shell:
     def _build_layout(self):
         root = self.root
 
-        # 顶栏
+        # 顶栏 — 改用中性 surface 色（白/暗石板），把青绿留给 accent
         self._header = ctk.CTkFrame(root, height=48, corner_radius=0)
         self._header.pack(fill="x", side="top")
-        self._header.configure(fg_color=[TOOLBOX_THEME["primary"], "#0F766E"])
+        self._header.configure(
+            fg_color=[TOOLBOX_THEME["card_bg"], "#252B3A"]
+        )
 
         ctk.CTkLabel(
             self._header,
             text=f"{APP_TITLE} {APP_VERSION}",
             font=("Microsoft YaHei", 14, "bold"),
-            text_color="white",
+            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
         ).pack(side="left", padx=16, pady=0)
 
+        # "导出旧版配置" 按钮：去掉白边，用 accent 填充色与系统一致
         ctk.CTkButton(
-            self._header, text="导出旧版配置", width=110, height=28,
+            self._header, text="导出旧版配置", width=120, height=28,
             font=("Microsoft YaHei", 11),
-            fg_color="transparent", border_width=1, border_color="white",
+            fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
+            hover_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
             text_color="white",
             command=self._export_legacy_settings,
         ).pack(side="right", padx=12, pady=10)
@@ -83,24 +87,24 @@ class Shell:
         self._nav = ctk.CTkFrame(self._body, width=self.NAV_WIDTH, corner_radius=0)
         self._nav.pack(fill="y", side="left", padx=0, pady=0)
         self._nav.pack_propagate(False)
-        self._nav.configure(fg_color=[TOOLBOX_THEME["card_bg"], "#1E293B"])
+        self._nav.configure(fg_color=[TOOLBOX_THEME["card_bg"], "#252B3A"])
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
         self._content_frame = ctk.CTkFrame(self._body, corner_radius=0)
         self._content_frame.pack(fill="both", expand=True, side="left")
 
-        # 状态栏
+        # 状态栏 — 改用 page_bg（柔和灰/深蓝），文字跟随主题
         self._statusbar = ctk.CTkFrame(root, height=28, corner_radius=0)
         self._statusbar.pack(fill="x", side="bottom")
         self._statusbar.configure(
-            fg_color=[TOOLBOX_THEME["muted"], "#475569"]
+            fg_color=[TOOLBOX_THEME["page_bg"], "#1A1F2B"]
         )
 
         self._pcdmis_label = ctk.CTkLabel(
             self._statusbar,
             text="PC-DMIS: 未连接",
             font=("Microsoft YaHei", 11),
-            text_color="white",
+            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
         )
         self._pcdmis_label.pack(side="left", padx=(12, 24))
 
@@ -108,7 +112,7 @@ class Shell:
             self._statusbar,
             text="",
             font=("Microsoft YaHei", 11),
-            text_color="white",
+            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
         )
         self._module_label.pack(side="left", padx=0)
 
@@ -116,7 +120,7 @@ class Shell:
             self._statusbar,
             text="就绪",
             font=("Microsoft YaHei", 11),
-            text_color="#94A3B8",
+            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
         )
         self._msg_label.pack(side="right", padx=12)
 
@@ -125,7 +129,7 @@ class Shell:
             self._content_frame,
             text="未选择模块",
             font=("Microsoft YaHei", 16),
-            text_color=[TOOLBOX_THEME["text_muted"], "#94A3B8"],
+            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
         )
         self._placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -153,7 +157,7 @@ class Shell:
             anchor="w",
             fg_color="transparent",
             hover_color=[TOOLBOX_THEME["accent_hover"], "#0D9488"],
-            text_color=[TOOLBOX_THEME["text"], "#F1F5F9"],
+            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
             command=lambda n=name: self._activate_module(n),
         )
         btn.pack(fill="x", pady=0, padx=0)
@@ -184,17 +188,17 @@ class Shell:
             except Exception as e:
                 logger.exception(f"unmount {old_name} 失败: {e}")
 
-        # 切换高亮
+        # 切换高亮 — 选中态用更柔和的 accent_hover/primary 浅色
         for n, btn in self._nav_buttons.items():
             if n == name:
                 btn.configure(
-                    fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
+                    fg_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
                     text_color="white",
                 )
             else:
                 btn.configure(
                     fg_color="transparent",
-                    text_color=[TOOLBOX_THEME["text"], "#F1F5F9"],
+                    text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
                 )
 
         # 清空内容区
@@ -260,12 +264,12 @@ class Shell:
         level: 'info' | 'ok' | 'warn' | 'error'
         """
         color_map = {
-            "info": "#94A3B8",
+            "info": "#9CA3AF",
             "ok": TOOLBOX_THEME["ok"],
             "warn": TOOLBOX_THEME["warn"],
             "error": TOOLBOX_THEME["bad"],
         }
-        self._msg_label.configure(text=text, text_color=color_map.get(level, "#94A3B8"))
+        self._msg_label.configure(text=text, text_color=color_map.get(level, "#9CA3AF"))
 
     def update_pcdmis_status(self, connected: bool, version: str | None = None):
         """更新 PCDMIS 连接状态。"""
@@ -278,22 +282,37 @@ class Shell:
         else:
             self._pcdmis_label.configure(
                 text="PC-DMIS: 未连接",
-                text_color="#94A3B8",
+                text_color="#9CA3AF",
             )
 
     # ── 关闭处理 ──────────────────────────────────────────────────────────
 
     def on_close(self, root):
-        """窗口关闭回调：请求取消工作线程 → 断开 PCDMIS → 退出。"""
+        """窗口关闭回调：请求取消工作线程 → 断开 PCDMIS → 退出。
+
+        加 2 秒 watchdog：任何阻塞的 unmount 步骤（OCR worker cancel / COM
+        disconnect）超过 2 秒则强制销毁窗口，避免用户面对假死的窗口。
+        """
         self._running = False
         audit("app_close")
+
+        # watchdog：2 秒后若仍未销毁则强制 root.destroy()
+        watchdog = root.after(2000, lambda: (
+            logger.error("on_close 超时，强制退出"),
+            root.destroy(),
+        ))
 
         # 卸载当前模块
         if self._active_module is not None:
             try:
                 self._active_module.unmount()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"unmount 异常: {e}")
 
+        # 正常退出路径：取消 watchdog 后销毁
+        try:
+            root.after_cancel(watchdog)
+        except Exception:
+            pass
         logger.info("Shell 关闭")
         root.destroy()

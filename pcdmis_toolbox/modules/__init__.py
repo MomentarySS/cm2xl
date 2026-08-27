@@ -14,18 +14,27 @@ REGISTRY: dict = {}
 
 
 def _discover_modules():
-    """遍历当前包的所有子包，加载 gui.py（或 module.py）并执行注册。"""
+    """遍历当前包的所有子包，加载 module.py（优先，含 register_module）+ gui。
+
+    不再做文件系统检查（PyInstaller 打包后子包文件可能只在 PYZ 归档里）。
+    优先 module.py —— 它是适配层（含 register_module 调用），然后再加载
+    gui.py/gui/ 子包作为 GUI 实现。
+    """
     pkg_path = Path(__file__).parent
     for _, name, is_pkg in pkgutil.iter_modules([str(pkg_path)]):
-        if is_pkg:
-            # 适配层入口：优先 gui.py；存在 gui/ 子包时（与 gui.py 同名冲突），
-            # 适配层在 module.py（见 modules/pc_to_excel/module.py）
-            entry = "gui" if (pkg_path / name / "gui.py").is_file() else "module"
+        if not is_pkg:
+            continue
+        # 优先 module.py（适配层 + register_module），再尝试 gui.py / gui/（GUI 类）
+        for entry in ("module", "gui"):
             try:
                 importlib.import_module(f"modules.{name}.{entry}")
+            except ModuleNotFoundError:
+                # 该入口不存在（cmm_filler 没有 module.py，pc_to_excel 没有 gui.py），
+                # 静默跳过。
+                continue
             except Exception as e:
                 logger.error(
-                    f"模块 '{name}' 加载失败，已跳过。请检查依赖是否安装。({e})"
+                    f"模块 '{name}' 入口 '{entry}' 加载失败: {e}"
                 )
 
 

@@ -770,6 +770,18 @@ a = Analysis(
 
 **关键**：测量房无网环境，paddlepaddle（含 PaddleOCR 模型文件）必须全部打包进 exe 或同目录的 `_internal` 文件夹，打包完成后整个目录可离线使用。
 
+**Phase 6 实际实现（2026-08-27）**：
+- spec 文件：`pcdmis_toolbox/pcdmis_toolbox.spec`（统一两个模块的 hiddenimports + datas）
+- hooks：`pcdmis_toolbox/build/hooks/`（hook-paddleocr_pre.py / hook-paddleocr.py / hook-customtkinter.py）
+- 后处理：`pcdmis_toolbox/build/fix_dist.py`（从 CMMFiller 搬移并简化）
+- build 脚本：`pcdmis_toolbox/build.bat`（含 fix_dist + 清 ffmpeg DLL）
+- 安装包：`pcdmis_toolbox/installer/Toolbox.iss` + `build_installer.bat`
+- BAS 脚本：`pcdmis_toolbox/scripts/`（从 `pc to excel/scripts/` 复制）
+- theme.json：`pcdmis_toolbox/utils/theme.json` 打包到 `_internal/utils/`
+- 模块 `__init__.py`：全部加进 datas 列表，确保 `pkgutil.iter_modules` 在打包后能识别子包
+
+**打包实测**：总大小 601 MB（清完 ffmpeg 后从 683 MB 降下，节省 82 MB），exe 30 MB。两个模块均能正常加载和切换。
+
 **注意**：
 - `dist/CMMFiller/_internal/` 是早期 PyInstaller 缓存，**不要删除**，其内含 cv2/lmdb/lxml 等真实依赖，打包时应以其为准（用 `pyi-makespec --onefile` 生成后检查 collect-submodules）
 - BAS 脚本不直接写入 exe 同目录，而是通过 `install_helper.py` 在首次运行时部署到 `DEPLOY_DIR`
