@@ -21,7 +21,7 @@
 | **6** | 打包整合 | ✅ | `f108ba1` | `pcdmis_toolbox.spec`、`build/fix_dist.py`、`build/hooks/`、`installer/Toolbox.iss`、`build.bat` |
 | **7** | 保留独立入口 | ✅ | `c963bda` | 旧入口重定向脚本、`README.md`、`CLAUDE.md` |
 | **7.5** | 设置与关于对话框 | ✅ | `567ca07`, `5e5450c` | `toolbox/{settings_dialog,about_dialog}.py`、运行时外观/日志切换 |
-| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | `tests/phase8_smoke.py`（30 用例），**61 passed, 0 failed** |
+| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | `tests/phase8_smoke.py`（30 用例）＋ `tests/test_report_filter.py`（41 用例）＋ `tests/test_local_settings.py`（15 用例）＋ `tests/test_command_injector.py`（13 用例），**100 passed, 0 failed** |
 
 ### 打包产物
 

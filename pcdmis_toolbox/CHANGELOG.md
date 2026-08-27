@@ -6,6 +6,10 @@
 
 ## [未发布] — 2026-08-27
 
+### 整体
+
+- `.gitignore`: 新增 `pcdmis_toolbox/cm2xl_preview.png`（commit `0a358b4`）
+
 ### CMMFiller 模块
 
 **代码审查修复（2026-08-27）**
@@ -45,6 +49,7 @@
 - `export/inspection_form_fill.py` **P1**: `_resolve_target_col()` 列选择两条件优先级歧义 → 拆为两个独立循环，优先选**全空列**，再选**半数空列**，消除歧义
 - `core/report_filter.py` **P2**: `_is_cmd_marked()` 异常时默认返回 `True` → 改为默认返回 `False`（保守策略：新版 PCDMIS COM 若缺少 `Marked` 属性，不误将命令保留在报告中）
 - `core/tolerance.py` **P2**: `summarize_results()` 中 `total = len(judged)` 语义不明确 → 改为 `total = passed + failed`，加注释说明 NA 状态不计入合格率
+- `export/inspection_form_fill.py` **P0-2**: 多 sheet 出货表仅首 sheet 写入件号 → 新增 `piece_written` 标志位，`write_piece_id` 条件增加 `and not piece_written`，避免同一件号重复写入（commit `55f585b`）
 
 **架构重构（2026-08-27）**
 
