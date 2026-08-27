@@ -175,17 +175,16 @@ if __name__ == "__main__":
 
 ### 3.2 tkinterdnd2 挂载模式注意事项
 
-CMMFiller 使用 `tkinterdnd2` 实现文件拖拽。独立运行时 Toplevel 窗口本身支持拖拽，但挂载到 Shell 时有以下约束：
+CMMFiller 使用 `tkinterdnd2` 实现文件拖拽。`TkinterDnD._require()` 在两种模式（独立 + 挂载）下都必须调用；`self.root` 在两种模式下都指向 CTk window（挂载时 `parent.winfo_toplevel()`），保证 `.after()` / clipboard 等 API 行为一致。失败时写 WARNING 日志，不中断启动。
 
 ```python
-# 挂载模式下，禁止在 Shell 层初始化 TkdndVersion
-# 原因：TkinterDnD 在 parent=Frame 时行为不稳定
-# 正确做法：CMMFiller 模块自行在内部 Toplevel 窗口上处理拖拽
-if self._owns_root:
+try:
     self.root.TkdndVersion = TkinterDnD._require(self.root)
+except Exception as e:
+    logging.getLogger('CMMFiller').warning(f'TkinterDnD 初始化失败，拖放功能将不可用: {e}')
 ```
 
-**Shell 层**：不做任何 Tkdnd 初始化。CMMFiller 模块在 `mount()` 时检测是否为挂载模式，如果是则在内部创建临时 Toplevel 承载拖拽功能，或者在独立窗口模式下正常初始化。
+**Shell 层**：不做任何 Tkdnd 初始化。
 
 ---
 
@@ -816,14 +815,14 @@ copy /Y 用户手册.md dist\
 
 ### 3.12 PaddleOCR 环境变量与 bootstrap
 
-CMMFiller 使用 PaddleOCR 必须设置两个环境变量，否则会**触发联网下载模型**（测量房无网会失败）：
+CMMFiller 使用 PaddleOCR 必须设置 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION`，否则会**触发联网下载模型**（测量房无网会失败）：
 
 ```python
-# cmm_filler_v10.py 启动入口必须执行（早于 import paddleocr）：
-import os, multiprocessing
-multiprocessing.freeze_support()
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+# ocr/engine.py — PaddleOCREngine.__init__() 内部局部设置（不影响其他模块）：
+os.environ.setdefault('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', 'python')
 ```
+
+`multiprocessing.freeze_support()` 保留在 `core/filler.py` 模块顶层（PyInstaller 多进程必需）。
 
 ```python
 # ocr_engine.py 初始化时（早于 from paddleocr import PaddleOCR）：
@@ -864,8 +863,8 @@ def _bootstrap_paddleocr_for_frozen():
 ```
 
 **集成后约束**：
-- `main.py` 启动前必须设置 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` + `multiprocessing.freeze_support()`
-- 这两个调用属于**全局副作用**，必须放在 main.py 最早处，所有模块 import 之前
+- `main.py` 启动前必须调用 `multiprocessing.freeze_support()`（全局副作用，必须最早）
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `ocr/engine.py` 的 `PaddleOCREngine.__init__()` 局部设置（`setdefault`），各模块不再需要全局设置
 
 ---
 
@@ -1032,8 +1031,6 @@ def _start_status_watcher(self):
 # main.py
 import multiprocessing
 multiprocessing.freeze_support()  # 必须在最前
-import os
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
 # 此后才 import customtkinter / paddleocr 等
 import customtkinter as ctk
@@ -2156,7 +2153,7 @@ D:\AI\work\a1\
 | `CMMFiller/cmm_filler_gui.py` | `pcdmis_toolbox/modules/cmm_filler/main.py` | 改写为入口（重定向）|
 | `CMMFiller/cmm_filler_v10.py` | `pcdmis_toolbox/modules/cmm_filler/core/filler.py` | 搬移 |
 | `CMMFiller/ocr_engine.py` | `pcdmis_toolbox/modules/cmm_filler/ocr/engine.py` | 搬移 |
-| `CMMFiller/template_wizard.py` | `pcdmis_toolbox/modules/cmm_filler/wizard.py` | 搬移 |
+| `CMMFiller/template_wizard.py` | `pcdmis_toolbox/modules/cmm_filler/template_wizard.py` | 搬移 |
 | `CMMFiller/version.py` | `pcdmis_toolbox/modules/cmm_filler/app_meta.py` | 改写为从 toolbox 导入 |
 | `CMMFiller/templates/模板1.xlsx` | `pcdmis_toolbox/modules/cmm_filler/templates/模板1.xlsx` | 搬移 |
 | `CMMFiller/templates/模板2.xlsx` | 同上 | 搬移 |
@@ -2251,7 +2248,7 @@ python -c "from modules import REGISTRY; print(list(REGISTRY.keys()))"
    - 补全 `_cleanup_cache()` 清 ocr_cache.json（3.38）
 2. 搬移 `ocr_engine.py` → `modules/cmm_filler/ocr/engine.py`
    - 修 import 路径
-3. 搬移 `template_wizard.py` → `modules/cmm_filler/wizard.py`
+3. 搬移 `template_wizard.py` → `modules/cmm_filler/template_wizard.py`
 4. 搬移 `templates/`、`models/paddleocr/`（18MB）
 5. 写 `modules/cmm_filler/gui.py`：CMMFillerModule 实现 ModuleProtocol
 6. 写 `modules/cmm_filler/main.py`：独立运行入口

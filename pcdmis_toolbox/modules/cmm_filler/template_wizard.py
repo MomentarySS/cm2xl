@@ -362,11 +362,15 @@ class TemplateWizard:
 
             matched = False
             if self.ws:
-                sample_row = int(self.sample_row_var.get())
+                try:
+                    sample_row = int(self.sample_row_var.get())
+                except (ValueError, tk.TclError):
+                    sample_row = 5  # 回退默认值
                 for row in range(sample_row, min(sample_row+10, 35)):
                     for col in range(1, 27):
                         v = self.ws.cell(row=row, column=col).value
-                        if v and str(v).strip() in [str(i).zfill(3), str(i)]:
+                        # 与 filler.py _auto_detect_template 的匹配格式保持一致
+                        if v and str(v).strip() in [str(i).zfill(3), str(i), f'{i}#', f'NO.{i}', f'No.{i}', f'no.{i}']:
                             var.set(get_column_letter(col))
                             matched = True
                             break
@@ -382,7 +386,10 @@ class TemplateWizard:
                     col = var.get()
                     preview_var.set('')
                     if col and self.ws:
-                        sample_row = int(self.sample_row_var.get())
+                        try:
+                            sample_row = int(self.sample_row_var.get())
+                        except (ValueError, tk.TclError):
+                            sample_row = 5
                         for row in range(sample_row, min(sample_row+10, 35)):
                             for c in range(1, 27):
                                 if get_column_letter(c) == col:

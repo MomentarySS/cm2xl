@@ -170,10 +170,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 关键点：
 1. **打包后体积 600-700 MB**：PaddlePaddle ~200MB + cv2/lmdb/lxml ~150MB + PaddleOCR 模型 18MB
 2. **PaddleOCR 模型**：必须预下载到 `CMMFiller/models/paddleocr/`，打包进 `_internal/models/paddleocr/`
-3. **环境变量**（`main.py` 顶部）：
-   ```python
-   os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-   ```
+3. **环境变量**：`PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 局部设置（`setdefault`），无需在 main.py 顶部设置
 4. **multiprocessing.freeze_support()**：必须在所有 import 之前
 5. **PyInstaller 后处理**：`build/fix_dist.py` 复制完整 paddleocr + patch 4 个文件
 

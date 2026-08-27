@@ -161,7 +161,7 @@
 
 **离线打包验证**（已在 dev 环境实测）：
 - ✅ PaddleOCR 模型文件已在 `CMMFiller/models/paddleocr/`，自动打包到 `_internal/models/paddleocr/`
-- ✅ `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` 在 main.py 顶部设置
+- ✅ `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` 由 `ocr/engine.py` 局部 `setdefault` 设置（不影响其他模块）
 - ✅ `multiprocessing.freeze_support()` 在所有 import 之前
 - ✅ `theme.json` 打包到 `_internal/utils/theme.json`
 - ✅ fix_dist.py 后处理完整 paddleocr 源码 + patch 4 个文件

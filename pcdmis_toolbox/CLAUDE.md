@@ -25,11 +25,10 @@
 ### 启动顺序（`main.py` 顶部）
 ```python
 import multiprocessing
-multiprocessing.freeze_support()             # 1. PyInstaller 多进程必需
-import os
-os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"  # 2. PaddlePaddle
+multiprocessing.freeze_support()             # PyInstaller 多进程必需
 # 此后才 import customtkinter / paddleocr / tkinterdnd2
 ```
+`PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 的 `PaddleOCREngine.__init__()` 局部设置（`setdefault`），不再需要 main.py 全局设置。
 
 ### 主题
 - **`apply_theme()` 只在 `main.py` 启动最早处调用一次**
@@ -115,18 +114,17 @@ for entry in ("module", "gui"):
 ```
 
 ### 5. tkinterdnd2 必须显式 _require
-挂载到 Shell 时 `TkinterDnD._require(root)` **必须**调用，否则 `drop_target_register` 抛 `tkdnd::drop_target` 不存在。
+`TkinterDnD._require()` 在**两种模式**（独立 + 挂载）下都必须调用；失败时写 WARNING 日志，但不会中断启动。
 
 ```python
 # cmm_filler/gui.py
-def __init__(self, parent=None):
-    ...
-    try:
-        self.root.TkdndVersion = TkinterDnD._require(self.root)
-    except Exception:
-        pass
+try:
+    self.root.TkdndVersion = TkinterDnD._require(self.root)
+except Exception as e:
+    logging.getLogger('CMMFiller').warning(f'TkinterDnD 初始化失败，拖放功能将不可用: {e}')
 ```
-两种模式（独立 + 挂载）都需要调，不要写在外层 `if self._owns_root:` 里。
+
+> 注意：挂载模式下 `self.root` 必须指向 CTk window（`parent.winfo_toplevel()`），禁止在 Shell 层初始化。
 
 ### 6. theme.json 必须打包
 spec `datas` 列表里加：

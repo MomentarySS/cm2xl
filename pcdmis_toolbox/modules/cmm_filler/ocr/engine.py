@@ -156,7 +156,10 @@ class PaddleOCREngine(OCREngine):
 
     def __init__(self, lang: str = 'ch'):
         import logging
+        import os
         logger = logging.getLogger('CMMFiller')
+        # 局部设置，避免污染其他模块（PaddleOCR 依赖 protobuf）
+        os.environ.setdefault('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', 'python')
         _bootstrap_paddleocr_for_frozen()
         from paddleocr import PaddleOCR
 

@@ -14,13 +14,11 @@ import sys
 import time
 import multiprocessing
 multiprocessing.freeze_support()
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
 import re
 import json
 from pathlib import Path
 from collections import defaultdict
-from abc import ABC, abstractmethod
 
 import fitz
 import openpyxl
@@ -534,7 +532,7 @@ class CMMReportFiller:
 
     def _get_max_data_row(self):
         """数据区最后一行：优先配置 max_data_row，否则扫描模板规格列连续数据的末尾
-        （加 5 行缓冲），扫描不到时回退默认值。"""
+        （加 50 行缓冲，兼容新增测量项），扫描不到时回退默认值。"""
         configured = self.config.get('max_data_row')
         if configured:
             return int(configured)
@@ -551,10 +549,23 @@ class CMMReportFiller:
                     last_data_row = row
             wb.close()
             if last_data_row:
-                return min(last_data_row + 5, data_start + 200)
+                # 增大缓冲量：从 5 → 50，兼容一次性处理多份 PDF 新增大量测量项的场景
+                return min(last_data_row + 50, data_start + 200)
         except Exception:
             pass
         return default_max
+
+    def _compute_required_max_row(self, items):
+        """根据所有 PDF 解析出的最大测量编号，计算写入所需的最大行号。
+        用于 batch_process_by_date 动态扩展上限，避免固定 buffer 截断有效数据。"""
+        max_num = 0
+        for item in items:
+            for m in item['data'].get('measurements', []):
+                if m['num'] > max_num:
+                    max_num = m['num']
+        if max_num == 0:
+            return None
+        return self._get_data_start_row() - 1 + max_num
 
     def pdf_to_image(self, pdf_path):
         with fitz_open_context(pdf_path) as doc:
@@ -565,13 +576,18 @@ class CMMReportFiller:
             pix.save(img_path)
         return img_path
 
+    def _cache_key(self, img_path: str) -> str:
+        """生成缓存 key：完整路径的 MD5（避免同名 PDF 不同路径冲突）"""
+        import hashlib
+        return hashlib.md5(img_path.encode('utf-8')).hexdigest()[:16]
+
     def ocr_image(self, img_path):
-        img_name = os.path.basename(img_path)
-        if img_name in self.cache:
-            return self.cache[img_name]
+        cache_key = self._cache_key(img_path)
+        if cache_key in self.cache:
+            return self.cache[cache_key]
 
         lines = self._ocr_with_retry(img_path)
-        self.cache[img_name] = lines
+        self.cache[cache_key] = lines
         self._save_cache()
         return lines
 
@@ -587,12 +603,29 @@ class CMMReportFiller:
         else:
             warnings.append('未识别到零件名')
 
-        # 日期（中文格式转标准格式）
-        m = re.search(r'(一月|二月|三月|四月|五月|六月|七月|八月|九月|十月|十一月|十二月)\s*(\d{1,2}),?\s*(\d{4})', text)
-        if m:
-            month_num = month_cn_to_num(m.group(1))
-            data['date'] = f"{m.group(3)}-{month_num}-{m.group(2)}"
-        else:
+        # 日期（支持多种常见格式，按优先级尝试匹配）
+        date_parsed = False
+        # 格式1：ISO / 分隔符（2024-01-02、2024/01/02、2024.01.02）
+        for sep in ('-', '/', '.'):
+            m = re.search(rf'(\d{{4}})\{sep}(\d{{1,2}})\{sep}(\d{{1,2}})', text)
+            if m:
+                data['date'] = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+                date_parsed = True
+                break
+        # 格式2：中文年/月/日（2024年1月2日）
+        if not date_parsed:
+            m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', text)
+            if m:
+                data['date'] = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+                date_parsed = True
+        # 格式3：中文月份名（十二月 2, 2024）
+        if not date_parsed:
+            m = re.search(r'(一月|二月|三月|四月|五月|六月|七月|八月|九月|十月|十一月|十二月)\s*(\d{1,2}),?\s*(\d{4})', text)
+            if m:
+                month_num = month_cn_to_num(m.group(1))
+                data['date'] = f"{m.group(3)}-{month_num}-{m.group(2).zfill(2)}"
+                date_parsed = True
+        if not date_parsed:
             warnings.append('未识别到日期')
 
         # 测量项
@@ -637,8 +670,8 @@ class CMMReportFiller:
                         continue
                     try:
                         numbers.append(float(token))
-                    except:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f'[OCR 解析] 无法将 "{token}" 转为浮点数: {e}')
 
         if current and len(numbers) >= 4:
             upper = numbers[1]
@@ -795,6 +828,12 @@ class CMMReportFiller:
         if not pdf_info:
             logger.warning('过滤后无有效 PDF 文件')
             return summary
+
+        # 动态扩展上限：若所有 PDF 的测量编号所需行数超过模板扫描值，使用较大者
+        required_max = self._compute_required_max_row(pdf_info)
+        if required_max is not None and required_max > max_data_row:
+            logger.info(f'[数据区扩展] {max_data_row} → {required_max}（根据测量编号自动扩展）')
+            max_data_row = required_max
 
         excluded_measures = excluded_measures or {}
         total = scan['scanned_total']

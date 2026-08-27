@@ -39,16 +39,19 @@ class CMMFillerGUI:
             self.root.title(f'{APP_TITLE} v{__version__}')
             self.root.geometry('980x740')
             self.root.minsize(900, 660)
-            self._container = self.root
         else:
-            self.root = parent.winfo_toplevel()   # 供 Toplevel 子窗口定位用
-            self._container = parent               # 所有 UI 构建目标
+            # parent 是 CTkFrame（Shell 挂载点），self.root 在两种模式下
+            # 都必须指向 CTk window，以保持 .after() / clipboard_*/protocol 等
+            # API 的一致性；_container 才是真正的 UI 构建目标。
+            self.root = parent.winfo_toplevel()
+        self._container = parent if parent is not None else self.root
         # 两种模式都必须初始化 Tkdnd（_require 注册 tkdnd::drop_target 等命令），
         # 挂载模式错过此步会导致任何 drop_target_register 抛 TclError。
         try:
             self.root.TkdndVersion = TkinterDnD._require(self.root)
-        except Exception:
-            pass  # tkinterdnd2 不可用时降级
+        except Exception as e:
+            import logging
+            logging.getLogger('CMMFiller').warning(f'[CMMFiller] TkinterDnD 初始化失败，拖放功能将不可用: {e}')
 
         config = self._load_config()
         settings = load_settings()
