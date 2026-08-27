@@ -14,6 +14,10 @@ BAS_DEPLOY_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "PCDMIS_ExcelExporte
 class PathManager:
     """
     统一管理各模块的路径，区分 frozen / dev 模式。
+
+    - 开发模式：data/config/logs/cache 放在项目根目录下的 data/
+    - 打包模式：data/config/logs/cache 放在 %LOCALAPPDATA%/cm2xl/（可写，无需 admin）
+    - 资源文件（模型、模板等）：仍从 exe 所在目录或 _MEIPASS 加载
     """
 
     def __init__(self):
@@ -21,9 +25,12 @@ class PathManager:
         if self._frozen:
             self._bundle = Path(sys._MEIPASS)
             self._root = Path(sys.executable).resolve().parent
+            # 打包后用户数据放 LocalAppData，避免 Program Files 权限问题
+            self._user_data = Path(os.environ.get("LOCALAPPDATA", "")) / "cm2xl"
         else:
             self._bundle = Path(__file__).resolve().parent.parent
             self._root = self._bundle
+            self._user_data = self._root / "data"
 
     @property
     def root(self) -> Path:
@@ -38,7 +45,7 @@ class PathManager:
     @property
     def data_dir(self) -> Path:
         """用户数据目录（可写），不存在则创建"""
-        d = self._root / "data"
+        d = self._user_data
         d.mkdir(parents=True, exist_ok=True)
         return d
 
