@@ -671,15 +671,21 @@ class MainWindow:
 
     def _refresh_connection_ui(self) -> None:
         """导出/填入后刷新程序名与连接灯（多件连续测不必手点连接）。"""
-        self.perm_var.set(self._perm_text())
-        if self.connector.is_connected():
-            ver = self.connector.version or ""
-            pid = self.connector.prog_id or ""
-            self.conn_var.set(f"{self.connector.name} · {ver}" if ver else (pid or "已连接"))
-            self.part_var.set(self.connector.get_active_part_name() or "—")
-            self._set_conn_visual("ok")
-        else:
-            self._set_conn_visual("idle")
+        try:
+            self.perm_var.set(self._perm_text())
+            if self.connector.is_connected():
+                ver = self.connector.version or ""
+                pid = self.connector.prog_id or ""
+                self.conn_var.set(
+                    f"{self.connector.name} · {ver}" if ver else (pid or "已连接")
+                )
+                self.part_var.set(self.connector.get_active_part_name() or "—")
+                self._set_conn_visual("ok")
+            else:
+                self._set_conn_visual("idle")
+        except Exception:
+            # 连接状态刷新失败不影响主流程，仅记录日志
+            logger.exception("刷新连接状态 UI 失败")
 
     def _ensure_connected(self, *, action: str) -> bool:
         """导出/填入前自动保持会话；失效则静默重连，无需每件手点「连接」。"""
@@ -1013,7 +1019,7 @@ class MainWindow:
 
                 with com_apartment():
                     app = dispatch_pcdmis(self.connector.prog_id)
-                    result = inject_export_command(app)
+                    result = inject_export_command(app, prog_id=self.connector.prog_id)
                 self.root.after(0, lambda: self._on_inject_done(result))
             except Exception as exc:
                 logger.exception("植入失败: %s", exc)
@@ -1047,7 +1053,7 @@ class MainWindow:
 
             with com_apartment():
                 app = dispatch_pcdmis(self.connector.prog_id)
-                result = check_export_command(app)
+                result = check_export_command(app, prog_id=self.connector.prog_id)
             if result.success:
                 messagebox.showinfo("检查结果", result.message)
             else:

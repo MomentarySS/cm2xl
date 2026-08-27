@@ -93,11 +93,26 @@ class _FallbackConstants:
     SHOW_DETAILS = 5
 
 
-def load_pcdlrn_constants():
-    """尝试从本机 PCDLRN.tlb 加载常量，失败则返回回退对象（模块级缓存）。"""
-    global _CONSTANTS_SINGLETON
-    if _CONSTANTS_SINGLETON is not None:
-        return _CONSTANTS_SINGLETON
+# 按 ProgID 隔离常量缓存 — 不同 PCDMIS 版本（如 2024.1 vs 2025.1）的 typelib
+# 常量值可能不同，不能再共用一个全局单例。
+_CONSTANTS_BY_PROGID: dict[str, object] = {}
+_CONST_VALUE_CACHE: dict[tuple[str, str], int] = {}
+
+# 当前活动 ProgID — 由 connector 在 connect() 成功后写入，
+# 供未显式透传 prog_id 的调用方（如 data_extractor 内部）回退使用。
+_ACTIVE_PROG_ID: str = ""
+
+
+def set_active_prog_id(prog_id: str) -> None:
+    """记录当前活动 ProgID（connector connect 成功后调用）。"""
+    global _ACTIVE_PROG_ID
+    _ACTIVE_PROG_ID = prog_id or ""
+
+
+def load_pcdlrn_constants(prog_id: str):
+    """按 ProgID 隔离缓存：尝试从本机 PCDLRN.tlb 加载常量，失败则返回回退对象。"""
+    if prog_id in _CONSTANTS_BY_PROGID:
+        return _CONSTANTS_BY_PROGID[prog_id]
     try:
         import win32com.client.gencache as gencache
         from win32com.client import constants
@@ -108,26 +123,28 @@ def load_pcdlrn_constants():
         ):
             try:
                 gencache.EnsureModule(PCDLRN_TYPELIB, 0, major, minor)
-                _CONSTANTS_SINGLETON = constants
-                return _CONSTANTS_SINGLETON
+                _CONSTANTS_BY_PROGID[prog_id] = constants
+                return constants
             except Exception:
                 continue
     except Exception:
         pass
-    _CONSTANTS_SINGLETON = _FallbackConstants()
-    return _CONSTANTS_SINGLETON
+    _CONSTANTS_BY_PROGID[prog_id] = _FallbackConstants()
+    return _CONSTANTS_BY_PROGID[prog_id]
 
 
-_CONSTANTS_SINGLETON = None
-_CONST_VALUE_CACHE: dict[str, int] = {}
+def get_const(name: str, prog_id: str | None = None, default: int | None = None) -> int:
+    """按名称读取常量（按 ProgID + 名称二级缓存）。
 
-
-def get_const(name: str, default: int | None = None) -> int:
-    """按名称读取常量，不存在时返回 default 或回退值（名称级缓存）。"""
-    cached = _CONST_VALUE_CACHE.get(name)
+    prog_id 为 None 时回退到 set_active_prog_id() 记录的活动 ProgID。
+    不存在时返回 default 或回退值。
+    """
+    pid = prog_id if prog_id is not None else _ACTIVE_PROG_ID
+    key = (pid, name)
+    cached = _CONST_VALUE_CACHE.get(key)
     if cached is not None:
         return cached
-    c = load_pcdlrn_constants()
+    c = load_pcdlrn_constants(pid)
     if hasattr(c, name):
         val = int(getattr(c, name))
     else:
@@ -138,5 +155,5 @@ def get_const(name: str, default: int | None = None) -> int:
             val = default
         else:
             raise AttributeError(f"未知 PCDLRN 常量: {name}")
-    _CONST_VALUE_CACHE[name] = val
+    _CONST_VALUE_CACHE[key] = val
     return val

@@ -6,6 +6,7 @@ import traceback
 from typing import Callable
 
 from .base import ConnectionInfo, MeasurementConnector
+from .pcdlrn_constants import set_active_prog_id
 from .com_detector import (
     check_elevation_match,
     com_apartment,
@@ -60,6 +61,7 @@ class PcdmisConnector(MeasurementConnector):
         if ok and prog_id:
             self._connected = True
             self._active_prog_id = prog_id
+            set_active_prog_id(prog_id)
             self._version = version
             return ConnectionInfo(
                 connected=True,
@@ -81,6 +83,7 @@ class PcdmisConnector(MeasurementConnector):
     def disconnect(self) -> None:
         self._connected = False
         self._active_prog_id = ""
+        set_active_prog_id("")
         self._version = ""
         self._last_features = []
 

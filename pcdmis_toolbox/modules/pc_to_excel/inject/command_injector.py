@@ -109,7 +109,7 @@ def generate_command_text(bas_path: Path) -> str:
     )
 
 
-def _find_export_command(cmds) -> tuple[int, object] | None:
+def _find_export_command(cmds, prog_id: str = "") -> tuple[int, object] | None:
     count = int(cmds.Count)
     for idx in range(1, count + 1):
         try:
@@ -123,19 +123,21 @@ def _find_export_command(cmds) -> tuple[int, object] | None:
             continue
         try:
             if int(cmd.Type) == OBTYPE_BASIC_SCRIPT:
-                name = str(cmd.GetText(get_const("FILE_NAME", 1), 0) or "")
-                if BAS_FILENAME.lower() in name.lower():
+                name = str(cmd.GetText(get_const("FILE_NAME", prog_id, 1), 0) or "")
+                # 用 endswith 而非子串 in 匹配，避免 "export_current.bas" 被
+                # "export_current_backup.bas" 等文件名误匹配
+                if name.lower().endswith(BAS_FILENAME.lower()):
                     return idx, cmd
         except Exception:
             continue
     return None
 
 
-def _configure_script_command(cmd, bas_path: Path) -> None:
-    file_name = get_const("FILE_NAME", 1)
-    sub_name = get_const("SUB_NAME", 4)
-    show_details = get_const("SHOW_DETAILS", 5)
-    cmd_id = get_const("ID", 2)
+def _configure_script_command(cmd, bas_path: Path, prog_id: str = "") -> None:
+    file_name = get_const("FILE_NAME", prog_id, 1)
+    sub_name = get_const("SUB_NAME", prog_id, 4)
+    show_details = get_const("SHOW_DETAILS", prog_id, 5)
+    cmd_id = get_const("ID", prog_id, 2)
 
     cmd.PutText(EXPORT_CMD_ID, cmd_id, 0)
     cmd.PutText(_format_script_path(bas_path), file_name, 0)
@@ -150,7 +152,7 @@ def _configure_script_command(cmd, bas_path: Path) -> None:
         pass
 
 
-def inject_export_command(app, bas_path: Path | None = None) -> InjectResult:
+def inject_export_command(app, bas_path: Path | None = None, prog_id: str = "") -> InjectResult:
     """通过 COM 在 PRG 末尾插入或更新 BASIC SCRIPT 导出命令。"""
     try:
         bas = bas_path or deploy_bas_script()
@@ -169,11 +171,11 @@ def inject_export_command(app, bas_path: Path | None = None) -> InjectResult:
             save_note = f"\n\n【保存提示】{preflight_msg}"
 
         cmds = part.Commands
-        existing = _find_export_command(cmds)
+        existing = _find_export_command(cmds, prog_id)
 
         if existing:
             _idx, cmd = existing
-            _configure_script_command(cmd, bas)
+            _configure_script_command(cmd, bas, prog_id)
             part.RefreshPart()
             saved, save_msg = try_save_part_program(part, app)
             if saved:
@@ -202,7 +204,7 @@ def inject_export_command(app, bas_path: Path | None = None) -> InjectResult:
         except Exception as exc:
             return InjectResult(False, f"无法添加 BASIC SCRIPT 命令: {exc}")
 
-        _configure_script_command(script_cmd, bas)
+        _configure_script_command(script_cmd, bas, prog_id)
         try:
             script_cmd.ReDraw()
         except Exception:
@@ -232,17 +234,17 @@ def inject_export_command(app, bas_path: Path | None = None) -> InjectResult:
         return InjectResult(True, msg, bas_path=str(bas))
 
 
-def check_export_command(app) -> InjectResult:
+def check_export_command(app, prog_id: str = "") -> InjectResult:
     with com_apartment():
         part = get_active_part_program(app)
         if part is None:
             return InjectResult(False, "未打开测量程序")
-        existing = _find_export_command(part.Commands)
+        existing = _find_export_command(part.Commands, prog_id)
         if not existing:
             return InjectResult(False, "尚未植入导出命令")
         _idx, cmd = existing
         try:
-            path = str(cmd.GetText(get_const("FILE_NAME", 1), 0) or "")
+            path = str(cmd.GetText(get_const("FILE_NAME", prog_id, 1), 0) or "")
         except Exception:
             path = ""
         disk_path = Path(path.strip().strip('"'))

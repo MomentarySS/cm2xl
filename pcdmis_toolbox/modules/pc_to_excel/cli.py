@@ -254,7 +254,7 @@ def cmd_inject(args: argparse.Namespace) -> int:
 
         app = dispatch_pcdmis(connector.prog_id)
 
-        result = inject_export_command(app, bas_path=bas)
+        result = inject_export_command(app, bas_path=bas, prog_id=connector.prog_id)
 
     print(result.message)
 
