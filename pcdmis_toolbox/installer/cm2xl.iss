@@ -10,6 +10,9 @@
 #define MyAppExeName "cm2xl.exe"
 #define MyAppId "{{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
 
+; 旧版 PCDMIS Toolbox 的 AppId（用于检测旧版残留）
+#define OldAppId "{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
+
 [Setup]
 AppId={#MyAppId}
 AppName={#MyAppName}
@@ -51,3 +54,22 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function InitializeSetup(): Boolean;
+var
+  UninstallCmd: string;
+begin
+  // 检测旧版 PCDMIS Toolbox 是否已安装
+  if RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#OldAppId}', 'UninstallString', UninstallCmd) then
+  begin
+    if MsgBox('检测到旧版 PCDMIS Toolbox 已安装。' + #13#10 +
+              '安装 cm2xl 前请先卸载旧版，避免路径冲突。' + #13#10 + #13#10 +
+              '是否继续安装？', mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      exit;
+    end;
+  end;
+  Result := True;
+end;
