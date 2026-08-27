@@ -186,14 +186,14 @@
 
 ---
 
-## Phase 7 — 保留独立入口 ⏳ 待做
+## Phase 7 — 保留独立入口 ✅ 完成（2026-08-27 提交）
 
 | ARCHITECTURE 章节 | 任务 | 状态 | 偏差 | Bug/修复 |
 |-------------------|------|------|------|---------|
-| 4.4 独立入口兼容 | `CMMFiller/cmm_filler_gui.py` → 重定向到 `modules.cmm_filler` | ⏳ | — | — |
-| 4.4 独立入口兼容 | `pc to excel/main.py` → 重定向到 `modules.pc_to_excel` | ⏳ | — | — |
-| 3.18 用户文档 | 写 `pcdmis_toolbox/README.md` | ⏳ | — | — |
-| 3.31 CLAUDE.md | 写 `pcdmis_toolbox/CLAUDE.md` | ⏳ | — | — |
+| 4.4 独立入口兼容 | `CMMFiller/cmm_filler_gui.py` → 重定向到 `modules.cmm_filler` | ✅ | 改为"重定向脚本"模式：原文件保留，但内部 import `pcdmis_toolbox` 并调用 `modules.cmm_filler.main`；启动时 stderr 打印 `[DEPRECATED]` 提示，引导用户用新入口 | — |
+| 4.4 独立入口兼容 | `pc to excel/main.py` → 重定向到 `modules.pc_to_excel` | ✅ | 同上模式 | — |
+| 3.18 用户文档 | 写 `pcdmis_toolbox/README.md` | ✅ | 涵盖快速开始 / 目录结构 / 模块开发 / 离线部署 / 常见问题 / 迁移进度 | — |
+| 3.31 CLAUDE.md | 写 `pcdmis_toolbox/CLAUDE.md` | ✅ | 重点列 7 个高频踩坑点（CTkLabel transparent / CTkFont weight / __init__.py 打包 / 不用文件系统检查 / tkdnd _require / theme.json 打包 / status_bar 红色） | — |
 
 ---
 
