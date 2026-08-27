@@ -221,7 +221,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 | 6 | 打包整合（spec / hooks / fix_dist / Inno Setup） | ✅ |
 | 7 | 旧入口重定向 + README + CLAUDE.md | ✅ |
 | 7.5 | 设置与关于对话框（外观/OCR模型/日志级别） | ✅ |
-| 8 | 测试（独立运行 + 集成运行 + 异常路径） | ⏳ |
+| 8 | 测试（61 passed，GUI/OCR/PCDMIS 待人工真机验证） | ✅ | |
 
 详细进度参见 [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md)。
 

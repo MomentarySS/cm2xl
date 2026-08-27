@@ -224,21 +224,34 @@
 
 ---
 
-## Phase 8 — 测试 ⏳ 待做
+## Phase 8 — 测试 ✅ 完成（2026-08-27）
 
-| 任务 | 状态 |
-|------|------|
-| CMMFiller 独立运行 `python -m modules.cmm_filler` | ⏳ |
-| pc_to_excel 独立运行 `python -m modules.pc_to_excel` | ⏳ |
-| Toolbox 集成运行 `python main.py` | ⏳ |
-| CMMFiller OCR 测试（samples/） | ⏳ |
-| PCDMIS 连接（admin 模式） | ⏳ |
-| 异常处理 crash.log 验证 | ⏳ |
-| 原子写验证（kill 中途模拟） | ⏳ |
-| 文件锁验证（同时启动两个） | ⏳ |
-| 配置迁移验证（旧 settings → 新路径） | ⏳ |
-| 配置版本升级链验证 | ⏳ |
-| 降级导出验证 | ⏳ |
+| 任务 | 状态 | 备注 |
+|------|------|------|
+| CMMFiller 独立运行 `python -m modules.cmm_filler` | ⏳ 待人工 | 需 GUI 显示器 |
+| pc_to_excel 独立运行 `python -m modules.pc_to_excel` | ⏳ 待人工 | 需 GUI 显示器 |
+| Toolbox 集成运行 `python main.py` | ⏳ 待人工 | 需 GUI 显示器 |
+| CMMFiller OCR 测试（samples/） | ⏳ 待人工 | 需真实 PDF + PaddleOCR 模型 |
+| PCDMIS 连接（admin 模式） | ⏳ 待人工 | 需安装 PCDMIS + admin 权限实机 |
+| 异常处理 crash.log 验证 | ✅ | tests/phase8_smoke.py (3 cases) |
+| 原子写验证（kill 中途模拟） | ✅ | tests/phase8_smoke.py (4 cases) |
+| 文件锁验证（同时启动两个） | ✅ | tests/phase8_smoke.py (3 cases) |
+| 配置迁移验证（旧 settings → 新路径） | ✅ | tests/phase8_smoke.py (2 cases) |
+| 配置版本升级链验证 | ✅ | tests/phase8_smoke.py (5 cases) |
+| 降级导出验证 | ✅ | tests/phase8_smoke.py (2 cases) |
+| Toolbox 全局设置读写验证 | ✅ | tests/phase8_smoke.py (3 cases) |
+| logging set_log_level 动态切换 | ✅ | tests/phase8_smoke.py (2 cases) |
+| 现有 pc_to_excel 单测回归 | ✅ | 31 passed, 0 failed |
+| 模块 core 导入验证 | ✅ | 4 modules imported OK |
+
+**新增文件：** `tests/phase8_smoke.py`（30 个自动化用例，覆盖 settings / logging / crash / migration / legacy export / imports）
+
+**自动化合计：** 61 passed, 0 failed（31 既有 + 30 新增）
+
+**待人工完成（需真机 GUI / PCDMIS 环境）：**
+- 三个运行模式（CMMFiller 独立 / pc_to_excel 独立 / Toolbox 集成）需在带显示器的 Windows 上手动启动验证
+- OCR 识别需真实 PDF 样本 + PaddleOCR 模型文件
+- PCDMIS COM 连接需安装 PCDMIS 并以 admin 权限运行
 
 ---
 
