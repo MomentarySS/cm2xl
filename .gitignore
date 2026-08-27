@@ -45,5 +45,20 @@ pcdmis_toolbox/installer/output/
 # ZCode workspace
 .zcode/
 
+# Mimosa session/state files (Claude Code plugin state, not project source)
+.mimosa/
+
+# CMMFiller 子项目兜底（子目录 .gitignore 已覆盖主要项）
+CMMFiller/__pycache__/
+CMMFiller/build/
+CMMFiller/dist/
+CMMFiller/.pytest_cache/
+
+# pc to excel 子项目兜底
+pc to excel/__pycache__/
+pc to excel/.pytest_cache/
+pc to excel/build/
+pc to excel/dist/
+
 # Junk files
 pcdmis_toolbox/nul
