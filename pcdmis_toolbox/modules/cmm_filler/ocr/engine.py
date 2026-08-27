@@ -41,9 +41,28 @@ def _resolve_bundled_model_base() -> Path | None:
     return None
 
 
-_bundled_models = _resolve_bundled_model_base()
-if _bundled_models:
-    os.environ['PADDLE_OCR_BASE_DIR'] = str(_bundled_models)
+def _resolve_model_base(custom_dir: str = "") -> Path | None:
+    """
+    按优先级定位 PaddleOCR 模型目录：
+    1. 用户自定义路径（toolbox settings 中的 ocr_model_dir）
+    2. 打包内置 / 项目内置（fallback）
+
+    返回 None 表示都找不到（OCR 引擎启动时会抛清晰错误）。
+    """
+    if custom_dir:
+        p = Path(custom_dir)
+        if p.exists() and any(p.rglob('inference.pdmodel')):
+            return p
+    return _resolve_bundled_model_base()
+
+
+def _get_user_ocr_model_dir() -> str:
+    """从 toolbox settings 读取用户自定义 OCR 模型目录（空字符串表示用内置）。"""
+    try:
+        from utils.settings import load_toolbox_settings
+        return load_toolbox_settings().get("ocr_model_dir", "") or ""
+    except Exception:
+        return ""
 
 
 def _bootstrap_paddleocr_for_frozen():
@@ -116,18 +135,20 @@ class PaddleOCREngine(OCREngine):
         logger = logging.getLogger('CMMFiller')
         _bootstrap_paddleocr_for_frozen()
         from paddleocr import PaddleOCR
-        model_base = os.environ.get('PADDLE_OCR_BASE_DIR', '')
-        if model_base and Path(model_base).exists() and any(Path(model_base).rglob('inference.pdmodel')):
-            logger.info(f'使用内置 OCR 模型: {model_base}')
+        # 优先用 settings 中的自定义路径，否则回退到内置
+        custom_dir = _get_user_ocr_model_dir()
+        model_base = _resolve_model_base(custom_dir)
+        if model_base and any(Path(model_base).rglob('inference.pdmodel')):
+            os.environ['PADDLE_OCR_BASE_DIR'] = str(model_base)
+            logger.info(f'使用 OCR 模型: {model_base}')
         else:
-            # 内置模型缺失时禁止 PaddleOCR 联网下载（工厂内网不通会直接失败，
-            # 且报错是英文堆栈，现场无法自查），改为明确的人话提示
-            logger.error(f'未找到内置 OCR 模型（查找位置: {model_base or "未设置"}）')
+            logger.error(f'未找到 OCR 模型（自定义: "{custom_dir or "未设置"}"，内置查找位置: {"_internal/models/paddleocr" if getattr(sys, "frozen", False) else "modules/cmm_filler/models/paddleocr"}）')
             raise ToolboxError(
                 ErrorCode.MODEL_MISSING,
                 'OCR 模型文件缺失，无法离线识别。\n'
-                '请重新复制完整的 CMMFiller 文件夹\n'
-                f'（需包含 {"_internal\\" if getattr(sys, "frozen", False) else ""}models\\paddleocr 子目录，约 18 MB），\n'
+                '请在「设置 → OCR 模型」中指定模型目录，\n'
+                '或重新复制完整的 PCDMIS Toolbox 文件夹\n'
+                f'（需包含 {"_internal/" if getattr(sys, "frozen", False) else "modules/cmm_filler/"}models/paddleocr 子目录，约 18 MB），\n'
                 '或联系软件提供者重新获取完整安装包。',
             ) from None
         logger.info(f'初始化 PaddleOCR 引擎 (lang={lang}) ...')

@@ -190,6 +190,7 @@ python -c "from utils.theme import _build_theme_json; _build_theme_json()"
 |-------|------|
 | 0–6 | ✅ 完成 |
 | 7 | ✅ 完成（README + CLAUDE.md + 旧入口重定向） |
+| 7.5 | ✅ 完成（设置 + 关于对话框，外观/OCR模型/日志级别） |
 | 8 | ⏳ 测试待做 |
 
 详细参见 `MIGRATION_STATUS.md`。

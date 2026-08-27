@@ -309,3 +309,56 @@ def export_legacy_settings(module_name: str, target_path: Path, current_data: di
 
     atomic_write_text(target_path, json.dumps(legacy, ensure_ascii=False, indent=2))
     logger.info(f"[settings] exported legacy settings for {module_name} → {target_path}")
+
+
+# ── Toolbox 全局设置 ───────────────────────────────────────────────────────
+
+TOOLBOX_SETTINGS_VERSION = "1.0.0"
+
+TOOLBOX_DEFAULT_SETTINGS: dict = {
+    "_version": TOOLBOX_SETTINGS_VERSION,
+    "_schema": "toolbox.settings",
+    "appearance_mode": "system",   # "light" / "dark" / "system"
+    "ocr_model_dir": "",           # 空 = 用内置；非空 = 用户自定义路径
+    "log_level": "INFO",           # "DEBUG" / "INFO" / "WARNING"
+}
+
+
+def _toolbox_settings_path() -> Path:
+    """toolbox 全局配置路径：config_dir/toolbox/settings.json"""
+    from utils.paths import paths
+    return paths.config_dir / "toolbox" / "settings.json"
+
+
+def load_toolbox_settings() -> dict:
+    """
+    加载 toolbox 全局设置（外观模式 / OCR 模型目录 / 日志级别）。
+    文件缺失或损坏 → 返回默认值。
+    """
+    path = _toolbox_settings_path()
+    if not path.exists():
+        return dict(TOOLBOX_DEFAULT_SETTINGS)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # 用默认值补缺失字段（向前兼容）
+        merged = dict(TOOLBOX_DEFAULT_SETTINGS)
+        merged.update({k: v for k, v in data.items() if k in TOOLBOX_DEFAULT_SETTINGS})
+        return merged
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"[settings] toolbox settings 加载失败，使用默认值: {e}")
+        return dict(TOOLBOX_DEFAULT_SETTINGS)
+
+
+def save_toolbox_settings(data: dict) -> None:
+    """
+    原子写 toolbox 全局设置（外观模式 / OCR 模型目录 / 日志级别）。
+    自动补全字段，确保 schema 完整。
+    """
+    path = _toolbox_settings_path()
+    # 合并默认值（避免字段缺失）
+    payload = dict(TOOLBOX_DEFAULT_SETTINGS)
+    payload.update({k: v for k, v in data.items() if k in TOOLBOX_DEFAULT_SETTINGS})
+    payload["_version"] = TOOLBOX_SETTINGS_VERSION
+    save_settings_json_atomic(path, payload)
+    logger.info(f"[settings] toolbox settings 已保存 → {path}")

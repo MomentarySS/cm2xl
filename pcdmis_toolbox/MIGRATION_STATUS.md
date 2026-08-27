@@ -197,6 +197,33 @@
 
 ---
 
+## Phase 7.5 — 设置与关于对话框 ✅ 完成（2026-08-27）
+
+| 任务 | 状态 |
+|------|------|
+| 写 `toolbox/settings_dialog.py`（外观 / OCR模型 / 日志级别 / 兼容性） | ✅ |
+| 写 `toolbox/about_dialog.py`（版本 / 路径 / 版权） | ✅ |
+| Shell 顶栏「导出旧版配置」→「关于」+「设置」 | ✅ |
+| `utils/settings.py` 新增 toolbox 全局设置（load/save/原子写） | ✅ |
+| `utils/logging.py` 新增 `set_log_level()` 运行时切换 | ✅ |
+| OCR 引擎读取 `ocr_model_dir` settings（自定义 → 内置 fallback） | ✅ |
+| 启动时自动应用外观模式 + 日志级别 | ✅ |
+
+**改动文件：** `toolbox/shell.py`、`toolbox/settings_dialog.py`、`toolbox/about_dialog.py`、`utils/settings.py`、`utils/logging.py`、`modules/cmm_filler/ocr/engine.py`
+
+**设置面板功能：**
+- 外观模式：浅色 / 深色 / 系统（SegmentedButton，保存即生效）
+- OCR 模型目录：浏览文件夹 + 重置 + 实时状态校验（检测 `inference.pdmodel`），提示重启生效
+- 日志级别：DEBUG / INFO / WARNING（运行时切换）
+- 兼容性：导出旧版 1.x 配置（从 Shell 顶栏移入设置面板）
+
+**关于面板功能：**
+- 应用名 + 版本 + 功能简介
+- 配置目录 + 日志目录路径
+- 版权信息
+
+---
+
 ## Phase 8 — 测试 ⏳ 待做
 
 | 任务 | 状态 |

@@ -24,12 +24,11 @@ class Shell:
 
     布局：
     ┌──────────────────────────────────────────────────────────┐
-    │  PCDMIS Toolbox 2.0                       [版本] [_][□][X] │
+    │  PCDMIS Toolbox 2.0              [关于] [设置] [_][□][X]  │
     ├──────────┬─────────────────────────────────────────────┤
     │          │                                              │
     │  📊 CMM报告填充 │        模块内容区                      │
     │  📐 PCDMIS导出 │        (挂载当前模块的 GUI)             │
-    │  ⚙️ 设置   │                                              │
     │          │                                              │
     ├──────────┴─────────────────────────────────────────────┤
     │  状态栏: PCDMIS连接 | 当前模块 | 操作提示                │
@@ -45,10 +44,38 @@ class Shell:
         self._modules: dict[str, object] = {}
         self._running = True
 
+        self._apply_toolbox_settings()    # 启动时应用外观/日志设置
         self._build_layout()
         self._load_modules()
         self._select_first_module()
         logger.info("Shell 初始化完成")
+
+    def _apply_toolbox_settings(self) -> None:
+        """启动时应用 toolbox 全局设置：外观模式 + 日志级别（OCR 模型目录懒加载）。"""
+        try:
+            from utils.settings import load_toolbox_settings
+            settings = load_toolbox_settings()
+            # 外观模式（运行时立即生效）
+            mode = settings.get("appearance_mode", "system")
+            if mode in ("light", "dark", "system"):
+                ctk.set_appearance_mode(mode)
+            # 日志级别（运行时立即生效）
+            log_level = settings.get("log_level", "INFO")
+            from utils.logging import set_log_level
+            for name in ("CMMFiller", "pc_to_excel", "toolbox"):
+                set_log_level(name, log_level)
+        except Exception as e:
+            logger.warning(f"应用 toolbox 设置失败（用默认）: {e}")
+
+    def _show_settings(self) -> None:
+        """打开设置弹窗。"""
+        from toolbox.settings_dialog import SettingsDialog
+        SettingsDialog(self.root.winfo_toplevel(), self)
+
+    def _show_about(self) -> None:
+        """打开关于弹窗。"""
+        from toolbox.about_dialog import AboutDialog
+        AboutDialog(self.root.winfo_toplevel())
 
     # ── 布局 ────────────────────────────────────────────────────────────────
 
@@ -69,15 +96,24 @@ class Shell:
             text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
         ).pack(side="left", padx=16, pady=0)
 
-        # "导出旧版配置" 按钮：去掉白边，用 accent 填充色与系统一致
+        # 顶栏右侧：关于 + 设置（"导出旧版配置"已移入设置面板"兼容性"分组）
         ctk.CTkButton(
-            self._header, text="导出旧版配置", width=120, height=28,
+            self._header, text="关于", width=70, height=28,
             font=("Microsoft YaHei", 11),
             fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
             hover_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
             text_color="white",
-            command=self._export_legacy_settings,
-        ).pack(side="right", padx=12, pady=10)
+            command=self._show_about,
+        ).pack(side="right", padx=(6, 6), pady=10)
+
+        ctk.CTkButton(
+            self._header, text="设置", width=70, height=28,
+            font=("Microsoft YaHei", 11),
+            fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
+            hover_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
+            text_color="white",
+            command=self._show_settings,
+        ).pack(side="right", padx=(6, 12), pady=10)
 
         # 主区域：左侧导航 + 内容
         self._body = ctk.CTkFrame(root, corner_radius=0, fg_color="transparent")

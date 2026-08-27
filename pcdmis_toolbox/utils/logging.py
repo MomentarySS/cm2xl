@@ -87,3 +87,24 @@ class GuiLogHandler(logging.Handler):
             self._root_after(0, lambda m=msg: self._gui._log(m))
         except Exception:
             self.handleError(record)
+
+
+def set_log_level(name: str, level: str) -> None:
+    """
+    动态改指定 logger 的级别（影响已注册的所有 handler）。
+
+    用于"设置"面板运行时切换日志级别，无需重启。
+
+    Args:
+        name: logger 名（如 "CMMFiller"、"pc_to_excel"），传 None 表示根 logger
+        level: "DEBUG" / "INFO" / "WARNING" / "ERROR"
+    """
+    import logging as _logging
+    lvl = getattr(_logging, level.upper(), _logging.INFO)
+    if name is None:
+        logger = _logging.getLogger()
+    else:
+        logger = _logging.getLogger(name)
+    logger.setLevel(lvl)
+    for h in logger.handlers:
+        h.setLevel(lvl)
