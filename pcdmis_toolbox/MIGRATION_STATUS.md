@@ -59,6 +59,14 @@
 | **GUI 太白 + 文字后色块** | `CTkLabel` 默认 fg_color 是 `page_bg`，每个 label 后有灰色矩形 | `theme.json` 中 `CTkLabel.fg_color` 改为 `"transparent"`；`card_bg`/`page_bg` 改暖灰白/暖灰 |
 | **unmount 阻塞不退出** | Shell.on_close() 卡在模块 unmount | 加 2 秒 watchdog，任何 unmount 阻塞都强制退出 |
 
+### 2026-08-27 — pc_to_excel 架构重构（拆分 + 常量隔离 + 注册层解耦）
+
+| 问题 | 根因 | 修法 |
+|------|------|------|
+| **常量缓存不更新** | `pcdlrn_constants._CONSTANTS_SINGLETON` 全局单例首次加载后永不失效，不同 PCDMIS 版本 typelib 常量值冲突 | 改 `_CONSTANTS_BY_PROGID` 按 ProgID 隔离；`get_const` 增 prog_id；connector `connect()` 成功后 `set_active_prog_id()` |
+| **data_extractor god-file** | 1940 行 / 70+ 函数，五类职责耦合 | 拆 8 子模块（`_common`/`_command_cache`/`_dimension`/`_tolerance`/`feature`/`_datum`/`classification` + 入口 `data_extractor.py`），逻辑与函数名未变 |
+| **module.py 反向依赖 GUI** | 注册层 import 业务 GUI | `mount()` 改 `_create_window()` 工厂方法延迟 import（未加 `_create_connector`，因 `MainWindow` 内部自建 connector） |
+
 ---
 
 ## 三、ARCHITECTURE.md 偏差记录
@@ -76,6 +84,7 @@
 | **六 适配层命名** | `modules/pc_to_excel/gui.py` 适配层 + `gui/` 子包 | 适配层改名 `module.py`，发现逻辑支持双入口 | `gui.py` 与 `gui/` 包同名冲突，包优先导致适配层死代码、模块永不注册（2026-08-26 发现并修复） |
 | **3.9.1 迁移链** | `_next_version` 末段+1 链式步进 | 每个 from_version 一次性升到当前 schema | 链式依赖注册表连续键，缺中间版本抛 RuntimeError（2026-08-26 调整） |
 | **3.46 导入根** | `....utils.*` 指向 toolbox 层 | 统一 0 连点（`from utils.paths import paths`） | 4 连点在 `modules` 为顶级包时越界，与 `main.py`/`cmm_filler` 的 0 连点约定互斥（2026-08-26 统一） |
+| **3.50/11.2 data_extractor 单文件** | 1940 行 god-file「禁止重构核心逻辑」 | 拆为 8 子模块，入口 `data_extractor.py` 仅组合 + re-export | 五类职责耦合（2026-08-27 重构，核心逻辑未变，见 3.51） |
 
 ---
 

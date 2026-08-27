@@ -31,7 +31,7 @@
 - **3.38 OCR 缓存清理**（3.37 删除因重复） / **3.39 PDF 大小写敏感**
 - **3.40 原子写** / **3.41 文件锁** / **3.42 线程取消** / **3.43 PDF 句柄泄漏** / **3.44 资源管理清单**
 - **3.45 主题冲突** / **3.46 相对 vs 绝对导入** / **3.47 启动参数入口**
-- **3.48 PaddleOCR patch 完整性** / **3.49 PCDMIS 报告列** / **3.50 数据流 pipeline**
+- **3.48 PaddleOCR patch 完整性** / **3.49 PCDMIS 报告列** / **3.50 数据流 pipeline** / **3.51 数据提取重构（拆分 + 常量隔离 + 注册层解耦）**
 
 ### 四、壳主窗口设计
 - 4.1 布局 / 4.2 导航 / 4.3 状态栏 / 4.4 独立入口兼容 / 4.5 全局异常处理
@@ -1077,7 +1077,7 @@ datas=[
 | 新 OCR 引擎 | `ocr_engine.py:OCREngine` | `modules/cmm_filler/ocr/` | PaddleOCR 已稳定，但保留切换能力 |
 | 新报告格式导出 | `export/*.py` 各 dataclass | `modules/<name>/export/` | Word / PDF 报告 |
 | 新 GDT 符号 | `connector/pcdlrn_constants.py` `_FallbackConstants` | 扩展 enum | 圆度/平面度/圆柱度等 |
-| 新记录分类 | `core/data_extractor.py:RecordCategory` | `modules/<name>/core/` | 自定义业务分类 |
+| 新记录分类 | `core/classification.py:RecordCategory` | `modules/<name>/core/` | 自定义业务分类 |
 
 **集成后约束**：所有扩展点必须放在 `modules/<name>/` 内部，不得直接改 `toolbox/` 或 `utils/` 共享层。
 
@@ -1755,6 +1755,42 @@ list[FeatureRecord] with status
 - 这条 pipeline 是 pc_to_excel 的**核心业务逻辑**，迁移时严禁改动
 - `core/` 改名建议保留原名（`core/`、`connector/`、`export/`、`inject/`），方便代码对比
 - `Shell` 不直接调用 pipeline，只通过 ModuleProtocol 挂载 GUI，GUI 内部驱动 pipeline
+
+---
+
+### 3.51 数据提取重构（2026-08-27：拆分 + 常量隔离 + 注册层解耦）
+
+**背景**：`core/data_extractor.py` 一度膨胀到 1940 行 / 70+ 函数，混合了命令遍历、尺寸读取、形位公差、特征提取、分类统计五类职责。
+
+**拆分结果**（入口 `data_extractor.py` 压缩到 ~150 行，只做组合 + 统一导出）：
+
+```
+core/
+├── __init__.py           # from .data_extractor import extract_from_application
+├── data_extractor.py     # 入口：extract_from_application / extract_from_part_program + re-export
+├── _common.py            # 共享工具 + COM 字段访问（_field_value/_safe_float/_axis_values_for_letter 等）
+├── _command_cache.py     # _build_command_cache / _iter_commands / _get_command_at
+├── _dimension.py         # Legacy 评价尺寸读取与配对合并
+├── _tolerance.py         # 形位公差（ToleranceCommand + Legacy FCF）
+├── feature.py            # 特征提取 + 几何参数（_build_geometry_values）
+├── _datum.py             # 基准 / 赋值
+├── classification.py     # 分类统计（RecordCategory / classify_record / summarize*）
+└── models.py             # 数据模型（未动）
+```
+
+**约束**：
+- `extract_from_application()` 签名与返回值**不变**（`pcdmis_connector` 依赖）；`from core.data_extractor import extract_from_application` 与测试的 `from ..core.data_extractor import _extract_*` 均保持有效
+- 所有内部函数 `_` 前缀命名保留；`report_filter.py` 的 `from .data_extractor import RecordCategory, classify_record` 经 re-export 继续可用
+- `_common.py` 不在最初规划内——为消除尺寸/公差/特征/基准四簇之间的循环导入而补（共享工具集中于此）
+
+**常量缓存按 ProgID 隔离**（`connector/pcdlrn_constants.py`）：
+- 旧 `_CONSTANTS_SINGLETON` 全局单例加载后永不更新 → 改为 `_CONSTANTS_BY_PROGID: dict[str, object]`，`load_pcdlrn_constants(prog_id)` 按版本隔离
+- `get_const(name, prog_id=None, default=None)` 二级缓存键改为 `(prog_id, name)`
+- `PcdmisConnector.connect()` 成功后调 `set_active_prog_id(prog_id)`；data_extractor 因 `extract_from_application` 签名冻结，`get_const(field)` 回退到 `_ACTIVE_PROG_ID`；`command_injector` 链则显式透传 `prog_id`
+
+**注册层解耦**（`module.py`）：
+- `PCToExcelModule` 不在模块顶层 import GUI/connector；`mount()` 经 `_create_window()` 工厂方法延迟 import `MainWindow`
+- 未加 `_create_connector()`：`MainWindow.__init__` 内部自建 `PcdmisConnector()`，注入 connector 会改变行为
 
 ---
 

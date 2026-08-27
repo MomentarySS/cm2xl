@@ -73,8 +73,17 @@ pcdmis_toolbox/
 │       ├── main.py               # 独立入口
 │       ├── module.py             # 适配层（含 PCToExcelModule + register_module）
 │       ├── gui/main_window.py    # 主窗口
-│       ├── connector/            # PCDMIS COM 适配
-│       ├── core/                 # 数据提取 + 公差判定
+│       ├── connector/            # PCDMIS COM 适配（pcdlrn_constants 按 ProgID 隔离缓存）
+│       ├── core/                 # 数据提取 + 公差判定（已拆分）
+│       │   ├── data_extractor.py # 提取入口（组合子模块 + re-export）
+│       │   ├── _common.py        # 共享工具 + COM 字段访问
+│       │   ├── _command_cache.py # 命令遍历缓存
+│       │   ├── _dimension.py     # Legacy 尺寸读取
+│       │   ├── _tolerance.py     # 形位公差
+│       │   ├── feature.py        # 特征提取
+│       │   ├── _datum.py         # 基准/赋值
+│       │   ├── classification.py # 分类统计
+│       │   └── models.py         # 数据模型
 │       ├── export/               # Excel 报告导出
 │       ├── inject/               # PCDMIS 命令植入
 │       └── utils/                # admin 权限 / 本地配置

@@ -43,6 +43,15 @@ from modules import register_module  # 在文件底部
 register_module("<module_name>", ModuleClass())
 ```
 
+### PCDMIS 数据提取核心（已拆分，2026-08-27）
+`modules/pc_to_excel/core/data_extractor.py` 曾是 1940 行的 god-file，已拆成：
+`data_extractor.py`（入口，仅组合 + re-export）+ `_common.py` + `_command_cache.py` +
+`_dimension.py` + `_tolerance.py` + `feature.py` + `_datum.py` + `classification.py`。
+
+- **新增函数请按职责放到对应子模块，不要再塞回 `data_extractor.py`**
+- `extract_from_application()` 签名冻结（`pcdmis_connector` 依赖），共享工具放 `_common.py` 避免循环导入
+- COM 常量用 `get_const(name, prog_id=None, default=None)`；显式透传 `prog_id` 优先，data_extractor 内部回退到 `_ACTIVE_PROG_ID`（由 `PcdmisConnector.connect()` 的 `set_active_prog_id()` 写入）
+
 ### 资源清理
 - PDF 句柄：用 `utils.file_io.fitz_open_context()` 上下文管理器
 - 工作线程：用 `utils.threading_utils.CancellableWorker`，`daemon=True`
@@ -63,6 +72,7 @@ register_module("<module_name>", ModuleClass())
 | 审计日志 | `utils/audit.py` |
 | 路径管理 | `utils/paths.py` |
 | 模块接口协议 | `toolbox/protocol.py` |
+| PCDMIS 数据提取（已拆分） | `modules/pc_to_excel/core/`（`data_extractor.py` 入口 + `_common`/`_command_cache`/`_dimension`/`_tolerance`/`feature`/`_datum`/`classification`） |
 
 ---
 

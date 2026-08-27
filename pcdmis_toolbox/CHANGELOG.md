@@ -30,6 +30,34 @@
 
 ---
 
+### pc_to_excel 模块
+
+**代码审查修复（2026-08-27）**
+
+- `core/data_extractor.py` **P0**: `normalize_feature_element()` 子串匹配误判 → 改用 token 集合精确匹配，避免 `"CIRCLE"` 匹配到 `"AUTOCIRCLE"`、`"SLOT"` 匹配到 `"KEY_SLOT"` 等问题
+- `inject/command_injector.py` **P0**: `_find_export_command()` 中 `BAS_FILENAME in name` 子串匹配 → 改用 `name.lower().endswith(BAS_FILENAME.lower())`，避免 `export_current.bas` 被 `export_current_backup.bas` 误匹配
+- `export/template_report.py` **P0**: `export_report()` 中 `template_path`/`tolerance` 参数被 `_ =` 静默丢弃 → 传入非 None 值时显式发出 `DeprecationWarning`
+- `connector/com_detector.py` **P1**: `python_bitness()` 每次调用重新计算 → 改为模块级常量 `_PYTHON_POINTER_BITS`，在导入时确定一次
+- `utils/local_settings.py` **P1**: `load_settings()` 中全量 `except Exception` 掩盖配置损坏错误 → 分层异常处理：`JSONDecodeError`/`OSError` → `logger.warning`；`UnicodeDecodeError` → `logger.error`；各字段解析失败加 `logger.debug`
+- `gui/main_window.py` **P1**: `_refresh_connection_ui()` 无异常防护 → 整体包裹 `try/except`，失败时 `logger.exception` 记录，不阻断 UI 刷新
+- `export/inspection_form_fill.py` **P1**: `resolve_input_form()` 链式续填文件不验证有效性 → 增加 `.xlsx`/`.xlsm` 扩展名校验 + `load_workbook()` 完整性验证，失败时 warn 并回退到 `--form` 指定路径
+- `core/data_extractor.py` **P1**: `_safe_float()` 对 NaN 返回 `float('nan')` 而非 `None` → 加 `math.isnan()` 检查，NaN 转为 `None`，避免 NaN 数据静默写入 Excel
+- `export/inspection_form_fill.py` **P1**: `_resolve_target_col()` 列选择两条件优先级歧义 → 拆为两个独立循环，优先选**全空列**，再选**半数空列**，消除歧义
+- `core/report_filter.py` **P2**: `_is_cmd_marked()` 异常时默认返回 `True` → 改为默认返回 `False`（保守策略：新版 PCDMIS COM 若缺少 `Marked` 属性，不误将命令保留在报告中）
+- `core/tolerance.py` **P2**: `summarize_results()` 中 `total = len(judged)` 语义不明确 → 改为 `total = passed + failed`，加注释说明 NA 状态不计入合格率
+
+**架构重构（2026-08-27）**
+
+- `core/data_extractor.py`（1940 行 / 70+ 函数）拆分为 8 个子模块：`data_extractor.py`（入口组合 + re-export）+ `_common.py` + `_command_cache.py` + `_dimension.py` + `_tolerance.py` + `feature.py` + `_datum.py` + `classification.py`。`extract_from_application()` 签名与返回值不变，内部 `_` 前缀函数名与逻辑全部保留
+- `core/__init__.py` 统一导出 `extract_from_application`
+- `connector/pcdlrn_constants.py`：`_CONSTANTS_SINGLETON` 全局单例 → `_CONSTANTS_BY_PROGID` 按 ProgID 隔离缓存；`get_const(name, prog_id=None, default=None)` 二级缓存键 `(prog_id, name)`；新增 `set_active_prog_id()`
+- `connector/pcdmis_connector.py`：`connect()` 成功后 `set_active_prog_id(prog_id)`，`disconnect()` 清空
+- `inject/command_injector.py`：`_find_export_command` / `_configure_script_command` / `inject_export_command` / `check_export_command` 增加 `prog_id` 参数透传
+- `gui/main_window.py`、`cli.py`：注入/检查调用点传入 `prog_id=connector.prog_id`
+- `module.py`：`mount()` 改 `_create_window()` 工厂方法，注册层不再 import GUI/connector
+
+---
+
 ## [1.0.0] — 2026-08-26
 
 > 首个整合版本。CMMFiller + pc_to_excel 合并为统一工具箱，支持 Shell 挂载模式和独立运行。
