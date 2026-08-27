@@ -21,48 +21,72 @@ from abc import ABC, abstractmethod
 from utils.error_codes import ErrorCode, ToolboxError
 
 
-def _resolve_bundled_model_base() -> Path | None:
-    """定位项目或打包内置的 PaddleOCR 模型目录"""
-    candidates = []
+def _get_user_ocr_settings() -> tuple:
+    """
+    从 toolbox settings 读取 OCR 配置。
+    返回 (ocr_model_dir: str, ocr_model_tier: str)
+    """
+    try:
+        from utils.settings import load_toolbox_settings
+        s = load_toolbox_settings()
+        return (s.get("ocr_model_dir", "") or "", s.get("ocr_model_tier", "server") or "server")
+    except Exception:
+        return ("", "server")
+
+
+# 模型目录名（tier → (det_subdir, rec_subdir)）
+_TIER_MODEL_NAMES: dict = {
+    "server": ("ch_PP-OCRv4_det_infer", "ch_PP-OCRv4_rec_infer"),
+    "mobile": ("ch_ppocr_mobile_v2.0_det_infer", "ch_ppocr_mobile_v2.0_rec_infer"),
+}
+
+
+def _search_model_dir(model_subdir: str, custom_dir: str) -> Path | None:
+    """
+    在以下位置搜索 model_subdir：
+    1. 用户自定义路径 / model_subdir
+    2. 打包内置（frozen: _internal/models/paddleocr, dev: modules/.../models/paddleocr）
+    3. 用户 ~/.paddleocr/whl（仅 dev 模式）
+    返回完整的模型目录路径，或 None。
+    """
     _frozen = getattr(sys, "frozen", False)
+    exe_dir = Path(sys.executable).resolve().parent
+
+    search_bases: list[Path] = []
+    if custom_dir:
+        search_bases.append(Path(custom_dir))
     if _frozen:
-        exe_dir = Path(sys.executable).resolve().parent
-        candidates.extend([
+        search_bases.extend([
             exe_dir / '_internal' / 'models' / 'paddleocr',
             exe_dir / 'models' / 'paddleocr',
         ])
     else:
-        # 相对于本文件位置向上两级找到 modules/cmm_filler/models/paddleocr
-        candidates.append(Path(__file__).resolve().parent.parent / 'models' / 'paddleocr')
+        search_bases.append(Path(__file__).resolve().parent.parent / 'models' / 'paddleocr')
+        # dev 模式也查用户下载缓存
+        search_bases.append(Path(os.path.expanduser("~/.paddleocr/whl")))
 
-    for base in candidates:
-        if base.exists() and any(base.rglob('inference.pdmodel')):
-            return base
+    for base in search_bases:
+        # 标准嵌套结构：whl/{det,rec}/ch/<model_subdir>
+        for component in ("det", "rec"):
+            model_dir = base / "whl" / component / "ch" / model_subdir
+            if model_dir.exists():
+                return model_dir
+        # 自定义根目录直接含 <model_subdir>
+        direct = base / model_subdir
+        if direct.exists() and any(direct.rglob("inference.pdmodel")):
+            return direct
     return None
 
 
-def _resolve_model_base(custom_dir: str = "") -> Path | None:
+def _resolve_paddleocr_model_dirs(tier: str, custom_dir: str) -> tuple:
     """
-    按优先级定位 PaddleOCR 模型目录：
-    1. 用户自定义路径（toolbox settings 中的 ocr_model_dir）
-    2. 打包内置 / 项目内置（fallback）
-
-    返回 None 表示都找不到（OCR 引擎启动时会抛清晰错误）。
+    返回 (det_model_dir: str, rec_model_dir: str)
+    根据 tier 查找对应精度模型，返回空字符串表示未找到（引擎初始化时会报清晰错误）。
     """
-    if custom_dir:
-        p = Path(custom_dir)
-        if p.exists() and any(p.rglob('inference.pdmodel')):
-            return p
-    return _resolve_bundled_model_base()
-
-
-def _get_user_ocr_model_dir() -> str:
-    """从 toolbox settings 读取用户自定义 OCR 模型目录（空字符串表示用内置）。"""
-    try:
-        from utils.settings import load_toolbox_settings
-        return load_toolbox_settings().get("ocr_model_dir", "") or ""
-    except Exception:
-        return ""
+    det_name, rec_name = _TIER_MODEL_NAMES.get(tier, ("ch_PP-OCRv4_det_infer", "ch_PP-OCRv4_rec_infer"))
+    det_dir = _search_model_dir(det_name, custom_dir)
+    rec_dir = _search_model_dir(rec_name, custom_dir)
+    return (str(det_dir) if det_dir else "", str(rec_dir) if rec_dir else "")
 
 
 def _bootstrap_paddleocr_for_frozen():
@@ -135,24 +159,35 @@ class PaddleOCREngine(OCREngine):
         logger = logging.getLogger('CMMFiller')
         _bootstrap_paddleocr_for_frozen()
         from paddleocr import PaddleOCR
-        # 优先用 settings 中的自定义路径，否则回退到内置
-        custom_dir = _get_user_ocr_model_dir()
-        model_base = _resolve_model_base(custom_dir)
-        if model_base and any(Path(model_base).rglob('inference.pdmodel')):
-            os.environ['PADDLE_OCR_BASE_DIR'] = str(model_base)
-            logger.info(f'使用 OCR 模型: {model_base}')
-        else:
-            logger.error(f'未找到 OCR 模型（自定义: "{custom_dir or "未设置"}"，内置查找位置: {"_internal/models/paddleocr" if getattr(sys, "frozen", False) else "modules/cmm_filler/models/paddleocr"}）')
+
+        # 读取用户设置
+        custom_dir, tier = _get_user_ocr_settings()
+        tier_label = "高精度(Server)" if tier == "server" else "轻量(Mobile)"
+
+        # 解析 det / rec 模型目录（按精度档位）
+        det_dir, rec_dir = _resolve_paddleocr_model_dirs(tier, custom_dir)
+
+        if not det_dir or not rec_dir:
+            logger.error(
+                f'未找到 {tier_label} OCR 模型'
+                f'（精度: {tier}，自定义: "{custom_dir or "未设置"}"）'
+            )
             raise ToolboxError(
                 ErrorCode.MODEL_MISSING,
-                'OCR 模型文件缺失，无法离线识别。\n'
-                '请在「设置 → OCR 模型」中指定模型目录，\n'
-                '或重新复制完整的 cm2xl 文件夹\n'
-                f'（需包含 {"_internal/" if getattr(sys, "frozen", False) else "modules/cmm_filler/"}models/paddleocr 子目录，约 18 MB），\n'
+                f'OCR {tier_label}模型文件缺失，无法离线识别。\n'
+                f'当前精度档位：{tier_label}\n\n'
+                '请在「设置 → OCR 模型」中指定包含完整模型的目录，\n'
                 '或联系软件提供者重新获取完整安装包。',
             ) from None
-        logger.info(f'初始化 PaddleOCR 引擎 (lang={lang}) ...')
-        self._ocr = PaddleOCR(lang=lang, show_log=False)
+
+        logger.info(f'使用 OCR {tier_label} 模型 (det={det_dir})')
+        logger.info(f'初始化 PaddleOCR 引擎 (tier={tier}, lang={lang}) ...')
+        self._ocr = PaddleOCR(
+            lang=lang,
+            show_log=False,
+            det_model_dir=det_dir,
+            rec_model_dir=rec_dir,
+        )
         logger.info('PaddleOCR 引擎就绪')
 
     def recognize(self, img_path: str) -> list[str]:

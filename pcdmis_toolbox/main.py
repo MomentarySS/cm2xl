@@ -152,24 +152,49 @@ def _acquire_instance_lock():
 
 
 # ── Shell 入口 ──────────────────────────────────────────────────────────────
+def _preload_ocr():
+    """后台线程：仅做 PaddleOCR 预加载（唯一耗时操作）。"""
+    from paddleocr import PaddleOCR as _OCR
+    _OCR(use_angle_cls=True, lang='ch', show_log=False)
+
+
+def _create_shell():
+    """在主线程创建 Shell 窗口（必须在主线程调用）。"""
+    from toolbox.shell import Shell
+
+    root = ctk.CTk()
+    root.title(f"{APP_TITLE} {APP_VERSION}")
+    root.geometry("1100x700")
+    root.minsize(900, 600)
+    shell = Shell(root)
+    root.protocol("WM_DELETE_WINDOW", lambda: shell.on_close(root))
+    return root, shell
+
+
 def main():
     logger.info("初始化 Shell...")
     _acquire_instance_lock()
     _migrate_module_settings()
+
+    # Splash Screen：后台线程预加载 PaddleOCR，主线程显示进度
+    from toolbox.splash import SplashScreen
+
+    splash = SplashScreen(min_display_ms=1200)
     try:
-        from toolbox.shell import Shell
+        splash.show_and_wait(_preload_ocr)
+    except Exception as e:
+        logger.exception("PaddleOCR 初始化失败: %s", e)
+        raise
 
-        root = ctk.CTk()
-        root.title(f"{APP_TITLE} {APP_VERSION}")
-        root.geometry("1100x700")
-        root.minsize(900, 600)
-
-        shell = Shell(root)
-        root.protocol("WM_DELETE_WINDOW", lambda: shell.on_close(root))
-        root.mainloop()
+    # Splash 已关闭，创建 Shell 窗口（主线程）
+    logger.info("创建 Shell...")
+    try:
+        root, shell = _create_shell()
     except Exception as e:
         logger.exception("Shell 初始化失败")
         raise
+
+    root.mainloop()
 
 if __name__ == "__main__":
     main()

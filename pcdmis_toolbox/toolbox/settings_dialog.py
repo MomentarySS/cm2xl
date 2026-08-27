@@ -50,6 +50,7 @@ class SettingsDialog:
     """
 
     APPEARANCE_OPTIONS = [("浅色", "light"), ("深色", "dark"), ("系统", "system")]
+    OCR_TIER_OPTIONS = [("高精度(Server)", "server"), ("轻量(Mobile)", "mobile")]
     LOG_LEVEL_OPTIONS = ["DEBUG", "INFO", "WARNING"]
 
     def __init__(self, parent, shell):
@@ -90,8 +91,23 @@ class SettingsDialog:
 
         # 2. OCR 模型分组
         self._build_section(body, "OCR 模型", text_color).pack(fill="x", pady=(10, 6))
+        # 精度选择
+        self._ocr_tier_var = ctk.StringVar(
+            value=self._label_for(self.OCR_TIER_OPTIONS, self._working.get("ocr_model_tier", "server"))
+        )
+        ctk.CTkSegmentedButton(
+            body, values=[label for label, _ in self.OCR_TIER_OPTIONS],
+            variable=self._ocr_tier_var, height=32,
+            selected_color=accent, selected_hover_color=accent_h,
+        ).pack(fill="x", padx=4)
+        ctk.CTkLabel(
+            body, text="高精度(Server)：质量最佳，适合正式报告；轻量(Mobile)：速度更快，精度略低",
+            font=ctk.CTkFont(family="Microsoft YaHei", size=10),
+            text_color=muted,
+        ).pack(anchor="w", padx=4, pady=(2, 6))
+        # 路径选择
         ocr_row = ctk.CTkFrame(body, fg_color="transparent")
-        ocr_row.pack(fill="x", padx=4)
+        ocr_row.pack(fill="x", padx=4, pady=(0, 0))
         self._ocr_var = ctk.StringVar(value=self._working.get("ocr_model_dir", ""))
         ctk.CTkEntry(ocr_row, textvariable=self._ocr_var, height=30, placeholder_text="留空使用内置模型").pack(side="left", fill="x", expand=True, padx=(0, 6))
         ctk.CTkButton(ocr_row, text="浏览", width=70, height=30, command=self._browse_ocr_dir).pack(side="left", padx=2)
@@ -103,6 +119,7 @@ class SettingsDialog:
         )
         self._ocr_hint.pack(anchor="w", padx=4, pady=(4, 0))
         self._ocr_var.trace_add("write", lambda *_: self._refresh_ocr_hint())
+        self._ocr_tier_var.trace_add("write", lambda *_: self._refresh_ocr_hint())
         self._refresh_ocr_hint()
 
         # 3. 日志分组
@@ -169,14 +186,24 @@ class SettingsDialog:
         return options[-1][0]
 
     def _refresh_ocr_hint(self) -> None:
-        """根据 OCR 路径显示当前状态（内置 / 自定义 / 无效）。"""
+        """根据 OCR 路径和精度显示当前状态（内置 / 自定义 / 无效）。"""
+        tier = self._value_for(self.OCR_TIER_OPTIONS, self._ocr_tier_var.get())
+        tier_label = next((l for l, v in self.OCR_TIER_OPTIONS if v == tier), "高精度")
         path = self._ocr_var.get().strip()
+
         if not path:
-            self._ocr_hint.configure(text="✓ 使用内置 OCR 模型（默认）")
+            base_note = "✓ 使用内置 OCR 模型"
         elif Path(path).exists() and any(Path(path).rglob("inference.pdmodel")):
-            self._ocr_hint.configure(text=f"✓ 自定义路径有效 · ⚠ 切换需重启后生效\n  {path}")
+            base_note = f"✓ 自定义路径有效"
         else:
-            self._ocr_hint.configure(text=f"⚠ 路径无效（找不到 inference.pdmodel） · 切换需重启后生效\n  {path}")
+            base_note = f"⚠ 路径无效（找不到 inference.pdmodel）"
+
+        if tier == "mobile":
+            self._ocr_hint.configure(
+                text=f"{base_note} · 精度: {tier_label} · ⚠ 需重启后生效\n  {path or '(内置/默认下载路径)'}")
+        else:
+            self._ocr_hint.configure(
+                text=f"{base_note} · 精度: {tier_label} · 重启后生效\n  {path or '(内置模型)'}")
 
     # ─ ─ 交互 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 
@@ -217,6 +244,7 @@ class SettingsDialog:
     def _restore_defaults(self) -> None:
         self._working = dict(TOOLBOX_DEFAULT_SETTINGS)
         self._appearance_var.set(self._label_for(self.APPEARANCE_OPTIONS, self._working["appearance_mode"]))
+        self._ocr_tier_var.set(self._label_for(self.OCR_TIER_OPTIONS, self._working["ocr_model_tier"]))
         self._ocr_var.set(self._working["ocr_model_dir"])
         self._log_level_var.set(self._working["log_level"])
 
@@ -224,6 +252,7 @@ class SettingsDialog:
         """收集 UI 值 → 写盘 → 应用运行时变更。"""
         # 收集
         self._working["appearance_mode"] = self._value_for(self.APPEARANCE_OPTIONS, self._appearance_var.get())
+        self._working["ocr_model_tier"] = self._value_for(self.OCR_TIER_OPTIONS, self._ocr_tier_var.get())
         self._working["ocr_model_dir"] = self._ocr_var.get().strip()
         self._working["log_level"] = self._log_level_var.get()
 

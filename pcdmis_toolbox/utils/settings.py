@@ -320,6 +320,7 @@ TOOLBOX_DEFAULT_SETTINGS: dict = {
     "_schema": "toolbox.settings",
     "appearance_mode": "system",   # "light" / "dark" / "system"
     "ocr_model_dir": "",           # 空 = 用内置；非空 = 用户自定义路径
+    "ocr_model_tier": "server",    # "server" = 高精度(PP-OCRv4) / "mobile" = 轻量(Mobile v2.0)
     "log_level": "INFO",           # "DEBUG" / "INFO" / "WARNING"
 }
 

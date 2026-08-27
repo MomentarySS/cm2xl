@@ -33,7 +33,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
-SetupIconFile=
+SetupIconFile=..\cm2xl.ico
 LicenseFile=
 
 [Languages]
