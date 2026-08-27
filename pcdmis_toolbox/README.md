@@ -101,7 +101,7 @@ pcdmis_toolbox/
 ### `toolbox/shell.py` — Shell 主窗口
 
 实现 `ShellProtocol`：
-- 顶栏：标题 + "导出旧版配置"按钮
+- 顶栏：标题 + "关于" + "设置"按钮
 - 左侧导航栏：自动发现 `modules/` 下所有注册的模块
 - 内容区：当前激活模块的 GUI
 - 状态栏：PCDMIS 连接状态 + 模块名 + 消息
@@ -220,6 +220,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 | 5.5 | 错误码 + 审计全覆盖 | ✅ |
 | 6 | 打包整合（spec / hooks / fix_dist / Inno Setup） | ✅ |
 | 7 | 旧入口重定向 + README + CLAUDE.md | ✅ |
+| 7.5 | 设置与关于对话框（外观/OCR模型/日志级别） | ✅ |
 | 8 | 测试（独立运行 + 集成运行 + 异常路径） | ⏳ |
 
 详细进度参见 [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md)。
@@ -228,6 +229,6 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 版本
 
-`2.0.0` —— Phase 7 完成 2026-08-27
+`2.0.0` —— Phase 7.5 完成 2026-08-27
 
 定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。

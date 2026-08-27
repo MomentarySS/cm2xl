@@ -126,12 +126,6 @@ class CMMFillerGUI:
             font=ctk.CTkFont(size=22, weight='bold'),
         ).pack(side='left')
 
-        ctk.CTkButton(
-            title_row, text='ℹ️ 关于', width=80, height=28,
-            command=self._show_about, fg_color='transparent',
-            border_width=1, text_color=('gray20', 'gray80'),
-        ).pack(side='right')
-
         ctk.CTkLabel(
             header,
             text=f'{APP_DESCRIPTION}  |  v{__version__}',
@@ -646,27 +640,6 @@ class CMMFillerGUI:
             except Exception:
                 pass
         self._log('首次配置完成！点击「开始处理」即可开始识别。')
-
-    def _show_about(self):
-        log_path = str(paths.log_dir / 'CMMFiller.log')
-        data_dir = str(paths.config_dir / 'cmm_filler')
-        win = ctk.CTkToplevel(self.root.winfo_toplevel())
-        win.title('关于 CMMFiller')
-        win.geometry('440x300')
-        win.resizable(False, False)
-        win.transient(self.root)
-        win.grab_set()
-
-        ctk.CTkLabel(win, text='📐 CMMFiller', font=ctk.CTkFont(size=22, weight='bold')).pack(pady=(24, 4))
-        ctk.CTkLabel(win, text=f'版本 {__version__}', font=ctk.CTkFont(size=13)).pack()
-        ctk.CTkLabel(
-            win, text=APP_DESCRIPTION,
-            font=ctk.CTkFont(size=12), text_color=('gray30', 'gray70'), wraplength=380,
-        ).pack(pady=(10, 6))
-
-        info = f'配置目录:\n{data_dir}\n\n日志文件:\n{log_path}'
-        ctk.CTkLabel(win, text=info, font=ctk.CTkFont(size=11), justify='left', anchor='w').pack(padx=30, fill='x')
-        ctk.CTkButton(win, text='关闭', width=100, command=win.destroy).pack(pady=14)
 
     # ── 校验 ─────────────────────────────────────
     def _validate_paths(self, require_template=True):

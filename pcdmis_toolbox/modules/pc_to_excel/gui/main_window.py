@@ -285,18 +285,6 @@ class MainWindow:
             right, textvariable=self.conn_state_var, font=self._font(12, True), text_color=_C["idle"]
         )
         self.conn_badge.pack(side="left", padx=(0, 12))
-        appearance = ctk.CTkSegmentedButton(
-            right,
-            values=["浅色", "深色", "系统"],
-            command=self._on_appearance,
-            width=168,
-            height=30,
-            font=self._font(12),
-            selected_color=_C["accent"],
-            selected_hover_color=_C["accent_hover"],
-        )
-        appearance.set("系统")
-        appearance.pack(side="right")
 
         scroll = ctk.CTkScrollableFrame(self._container, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=22, pady=(0, 8))
@@ -546,10 +534,6 @@ class MainWindow:
         )
         self.progress.pack(fill="x", padx=22, pady=(0, 14))
         self.progress.set(0)
-
-    def _on_appearance(self, value: str) -> None:
-        mapping = {"浅色": "Light", "深色": "Dark", "系统": "System"}
-        ctk.set_appearance_mode(mapping.get(value, "System"))
 
     def _perm_text(self) -> str:
         tool = admin_status_text()
