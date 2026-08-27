@@ -595,7 +595,7 @@ def fill_inspection_form(
         target_col = _resolve_target_col(ws, cfg, cmm_rows)
         target_letter = get_column_letter(target_col)
 
-        if cfg.write_piece_id and piece:
+        if cfg.write_piece_id and piece and not piece_written:
             ws.cell(cfg.header_scan_row, target_col).value = piece
             piece_written = piece
 
