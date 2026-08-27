@@ -104,7 +104,8 @@ def test_resolve_input_form_chain(tmp_path: Path):
     base = tmp_path / "base.xlsx"
     last = tmp_path / "last.xlsx"
     base.write_bytes(b"x")
-    last.write_bytes(b"y")
+    # last 必须是真实可打开的 xlsx：resolve_input_form 现在会校验链式文件完整性
+    Workbook().save(last)
     cfg = FormFillConfig(
         form_path=str(base),
         chain_from_last=True,
