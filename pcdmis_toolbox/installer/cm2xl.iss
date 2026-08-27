@@ -8,13 +8,12 @@
 #define MyAppVersion "1.0.2"
 #define MyAppPublisher "cm2xl"
 #define MyAppExeName "cm2xl.exe"
-#define MyAppId "{{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
-
-; 旧版 PCDMIS Toolbox 的 AppId（用于检测旧版残留）
-#define OldAppId "{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
+; 旧版 CMMFiller GUID 与 cm2xl 不同，用于残留检测（Pascal 里拼接花括号，避免 ISS 常量解析）
+#define OldCmmFillerGuid "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
 
 [Setup]
-AppId={#MyAppId}
+; {{ 转义为 { ，行末 } 关闭 GUID。勿与 OldCmmFillerGuid 相同，否则重装会误报旧版。
+AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -37,8 +36,9 @@ SetupIconFile=..\cm2xl.ico
 LicenseFile=
 
 [Languages]
+; Inno Setup 6 默认不带 ChineseSimplified.isl（需额外语言包），用 english 保证能编译。
+; 下方 Tasks / MsgBox 文案仍为中文。
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加选项:"; Flags: checkedonce
@@ -56,15 +56,22 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function InitializeSetup(): Boolean;
+function HasUninstallKey(const UninstallId: string): Boolean;
 var
   UninstallCmd: string;
 begin
-  // 检测旧版 PCDMIS Toolbox 是否已安装
-  if RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#OldAppId}', 'UninstallString', UninstallCmd) then
+  Result :=
+    RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + UninstallId + '_is1', 'UninstallString', UninstallCmd)
+    or RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + UninstallId, 'UninstallString', UninstallCmd);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  // 只检测旧版 CMMFiller（不同 AppId）。cm2xl 自身重装由同一 AppId 走 Inno 升级，不弹此窗。
+  if HasUninstallKey('{' + '{#OldCmmFillerGuid}' + '}') then
   begin
-    if MsgBox('检测到旧版 PCDMIS Toolbox 已安装。' + #13#10 +
-              '安装 cm2xl 前请先卸载旧版，避免路径冲突。' + #13#10 + #13#10 +
+    if MsgBox('检测到旧版 CMMFiller 已安装。' + #13#10 +
+              '安装 cm2xl 前建议先卸载旧版，避免路径冲突。' + #13#10 + #13#10 +
               '是否继续安装？', mbConfirmation, MB_YESNO) = IDNO then
     begin
       Result := False;

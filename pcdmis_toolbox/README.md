@@ -36,11 +36,11 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 6）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.1.exe
+# 产物：installer/output/cm2xl_Setup_1.0.2.exe
 ```
 
 打包前确保：
-- `CMMFiller/models/paddleocr/` 已下载 OCR 模型（`inference.pdmodel` 文件存在）
+- `modules/cmm_filler/models/paddleocr/` 已下载 OCR 模型（`inference.pdmodel` 文件存在；兼容旧路径 `../CMMFiller/models/paddleocr/`）
 - 安装了 `customtkinter`、`paddlepaddle==2.6.2`、`paddleocr==2.10.0` 等依赖
 
 ---
@@ -52,7 +52,7 @@ pcdmis_toolbox/
 ├── main.py                       # Toolbox 统一入口
 ├── pcdmis_toolbox.spec           # PyInstaller 打包规格
 ├── build.bat / build_installer.bat
-├── installer/Toolbox.iss         # Inno Setup 安装脚本
+├── installer/cm2xl.iss           # Inno Setup 安装脚本
 ├── preview/index.html            # UI 修复对比预览（开发辅助）
 ├── scripts/export_current.bas*   # PCDMIS BAS 脚本模板
 ├── requirements/
@@ -148,7 +148,7 @@ pcdmis_toolbox/
    class MyModule(ModuleProtocol):
        title = "我的模块"
        icon = "🛠️"
-       version = "1.0.1"
+       version = "1.0.2"
 
        def mount(self, parent): ...
        def unmount(self): ...
@@ -174,11 +174,11 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 离线部署约束（测量房无网）
 
-参见 [offline-deployment-constraints.md](../ARCHITECTURE.md#离线部署约束)。
+参见 [ARCHITECTURE.md 离线部署约束](../ARCHITECTURE.md#离线部署约束)。
 
 关键点：
 1. **打包后体积 600-700 MB**：PaddlePaddle ~200MB + cv2/lmdb/lxml ~150MB + PaddleOCR 模型 18MB
-2. **PaddleOCR 模型**：必须预下载到 `CMMFiller/models/paddleocr/`，打包进 `_internal/models/paddleocr/`
+2. **PaddleOCR 模型**：必须预下载到 `modules/cmm_filler/models/paddleocr/`（或旧路径 `CMMFiller/models/paddleocr/`），打包进 `_internal/models/paddleocr/`
 3. **环境变量**：`PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 局部设置（`setdefault`），无需在 main.py 顶部设置
 4. **multiprocessing.freeze_support()**：必须在所有 import 之前
 5. **PyInstaller 后处理**：`build/fix_dist.py` 复制完整 paddleocr + patch 4 个文件
@@ -227,7 +227,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 | 6 | 打包整合（spec / hooks / fix_dist / Inno Setup） | ✅ |
 | 7 | 旧入口重定向 + README + CLAUDE.md | ✅ |
 | 7.5 | 设置与关于对话框（外观/OCR模型/日志级别） | ✅ |
-| 8 | 测试（61 passed，GUI/OCR/PCDMIS 待人工真机验证） | ✅ | |
+| 8 | 测试（130 passed，GUI/OCR/PCDMIS 待人工真机验证） | ✅ |
 
 详细进度参见 [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md)。
 
@@ -235,6 +235,6 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 版本
 
-`2.0.0` —— Phase 7.5 完成 2026-08-27
+`1.0.2` —— v1.0.2 发布 2026-08-27
 
-定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。
+定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。配置 schema 版本（`CONFIG_SCHEMA_VERSION`）为 `2.0.0`，与应用程序版本独立。

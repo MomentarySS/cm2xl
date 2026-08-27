@@ -38,10 +38,17 @@ for datas, bins, hidden in _collected:
 _extra_bins = [(src, dst) for src, dst in _extra_bins if "ffmpeg" not in src.lower()]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PaddleOCR 模型（已在 CMMFiller/models/paddleocr/，由 download_ocr_models.py 预下载）
+# PaddleOCR 模型（预下载到 modules/cmm_filler/models/paddleocr/ 或旧路径 CMMFiller/）
 # ══════════════════════════════════════════════════════════════════════════════
-_cmm_models_src = ROOT.parent / "CMMFiller" / "models" / "paddleocr"
-_has_models = _cmm_models_src.exists() and any(_cmm_models_src.rglob("inference.pdmodel"))
+_cmm_models_src = None
+for _candidate in (
+    MODULES_DIR / "cmm_filler" / "models" / "paddleocr",
+    ROOT.parent / "CMMFiller" / "models" / "paddleocr",
+):
+    if _candidate.exists() and any(_candidate.rglob("inference.pdmodel")):
+        _cmm_models_src = _candidate
+        break
+_has_models = _cmm_models_src is not None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # BAS 脚本模板（dev 源路径 → 打包后目标路径）

@@ -7,8 +7,11 @@ echo.
 
 cd /d "%~dp0"
 
-REM ── 检查 CMMFiller OCR 模型（如果存在）────────────────────────────
-if exist "..\CMMFiller\models\paddleocr" (
+REM ── 检查 CMMFiller OCR 模型 ─────────────────────────────────────
+if exist "modules\cmm_filler\models\paddleocr" (
+    echo [0/6] PaddleOCR models found in modules\cmm_filler\models\paddleocr
+    echo       将被打包到 dist\cm2xl\_internal\models\paddleocr
+) else if exist "..\CMMFiller\models\paddleocr" (
     echo [0/6] PaddleOCR models found in ..\CMMFiller\models\paddleocr
     echo       将被打包到 dist\cm2xl\_internal\models\paddleocr
 ) else (
@@ -26,7 +29,7 @@ if not exist "scripts\export_current.bas.template" (
 
 echo.
 echo [1/6] Clean old build...
-if exist build rmdir /s /q build
+if exist build\pcdmis_toolbox rmdir /s /q build\pcdmis_toolbox
 if exist dist rmdir /s /q dist
 
 echo.
@@ -41,7 +44,7 @@ if errorlevel 1 (
 
 echo.
 echo [3/6] Run post-build fix (fix_dist.py)...
-python fix_dist.py dist\cm2xl
+python build\fix_dist.py dist\cm2xl
 if errorlevel 1 (
     echo [WARN] fix_dist.py 失败，但打包文件可能仍可运行
 )

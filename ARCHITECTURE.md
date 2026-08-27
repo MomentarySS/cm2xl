@@ -13,6 +13,9 @@
 
 ## 目录索引
 
+### 离线部署约束
+- 打包体积 / OCR 模型路径 / 环境变量 / 多进程 / fix_dist / ffmpeg DLL
+
 ### 一、现状分析
 - 1.1 两个项目概况 / 1.2 关键发现
 
@@ -51,6 +54,21 @@
 ### 十一、迁移计划
 - 11.1 目标结构 / 11.2 文件映射 / 11.3 分 Phase 步骤（含 5.5 应用层修复）
 - 11.4 全局验证清单 / 11.5 风险回滚 / 11.6 时间估算（30-37 小时）
+
+---
+
+## 离线部署约束
+
+测量房无网环境，所有依赖与 OCR 模型必须在打包时一并打入。
+
+| 项 | 约束 |
+|----|------|
+| 打包体积 | 约 600–700 MB（PaddlePaddle + cv2/lmdb/lxml + OCR 模型 18MB） |
+| OCR 模型 | 预下载到 `modules/cmm_filler/models/paddleocr/`（兼容旧路径 `CMMFiller/models/paddleocr/`），打包进 `_internal/models/paddleocr/` |
+| 环境变量 | `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 的 `PaddleOCREngine.__init__()` 局部 `setdefault` |
+| 多进程 | `multiprocessing.freeze_support()` 必须在 `main.py` 最顶部、所有 import 之前 |
+| 后处理 | `build/fix_dist.py` 复制完整 paddleocr 源码并 patch 4 个文件 |
+| ffmpeg DLL | 打包后删除 `opencv_videoio_ffmpeg*.dll`（约 58–82 MB，OCR 不需要） |
 
 ---
 
@@ -281,9 +299,12 @@ class PathManager:
         if self._frozen:
             self._bundle = Path(sys._MEIPASS)
             self._root = Path(sys.executable).resolve().parent
+            # 打包后用户数据放 LocalAppData，避免 Program Files 无写权限
+            self._user_data = Path(os.environ.get("LOCALAPPDATA", "")) / "cm2xl"
         else:
             self._bundle = Path(__file__).resolve().parent.parent
             self._root = self._bundle
+            self._user_data = self._root / "data"
     
     @property
     def root(self) -> Path:
@@ -295,10 +316,8 @@ class PathManager:
     
     @property
     def data_dir(self) -> Path:
-        """用户数据目录（可写）"""
-        if self._frozen:
-            return self._root / "data"
-        return self._root / "data"
+        """用户数据目录（可写）：dev 为项目 data/，frozen 为 %LOCALAPPDATA%/cm2xl/"""
+        return self._user_data
     
     @property
     def config_dir(self) -> Path:
@@ -471,8 +490,9 @@ APP_DESCRIPTION = 'CMM 三坐标测量报告 OCR 识别 + Excel 自动填充'
 ```python
 # toolbox/app_meta.py
 APP_TITLE = "cm2xl"
-APP_VERSION = "1.0.0"
-APP_BUILD = "1"  # 内部构建号，对应 version.json
+APP_VERSION = "1.0.2"
+APP_BUILD = "1"  # 内部构建号
+# 配置 schema 版本在 utils/settings.py 的 CONFIG_SCHEMA_VERSION = "2.0.0"，与 APP_VERSION 独立
 TOOLBOX_THEME = { ... }  # 与 utils/theme.py 保持一致
 ```
 
@@ -533,7 +553,7 @@ def migrate_settings_if_needed(module_name: str, old_path: Path, new_path: Path)
 # utils/settings.py
 from typing import Callable
 
-# 模块版本（与 toolbox/app_meta.APP_VERSION 同步）
+# 配置 schema 版本（与 toolbox/app_meta.APP_VERSION 独立）
 CONFIG_SCHEMA_VERSION = "2.0.0"
 
 # 迁移函数签名：old_data → new_data
@@ -771,10 +791,10 @@ a = Analysis(
 
 **Phase 6 实际实现（2026-08-27）**：
 - spec 文件：`pcdmis_toolbox/pcdmis_toolbox.spec`（统一两个模块的 hiddenimports + datas）
-- hooks：`pcdmis_toolbox/build/hooks/`（hook-paddleocr_pre.py / hook-paddleocr.py / hook-customtkinter.py）
+- hooks：`pcdmis_toolbox/build/hooks/`（`hook-customtkinter.py` 普通 hook + `hook-paddleocr_pre.py` 作 runtime hook）。paddleocr 的 4 个 patch 由 `fix_dist.py` 打到 dist 副本，**不要**在 hook 里回写 site-packages
 - 后处理：`pcdmis_toolbox/build/fix_dist.py`（从 CMMFiller 搬移并简化）
-- build 脚本：`pcdmis_toolbox/build.bat`（含 fix_dist + 清 ffmpeg DLL）
-- 安装包：`pcdmis_toolbox/installer/Toolbox.iss` + `build_installer.bat`
+- build 脚本：`pcdmis_toolbox/build.bat`（含 fix_dist + 清 ffmpeg DLL；清理只删 `build\pcdmis_toolbox`）
+- 安装包：`pcdmis_toolbox/installer/cm2xl.iss` + `build_installer.bat`
 - BAS 脚本：`pcdmis_toolbox/scripts/`（从 `pc to excel/scripts/` 复制）
 - theme.json：`pcdmis_toolbox/utils/theme.json` 打包到 `_internal/utils/`
 - 模块 `__init__.py`：全部加进 datas 列表，确保 `pkgutil.iter_modules` 在打包后能识别子包
@@ -874,12 +894,12 @@ CMMFiller 现有一套自定义 PyInstaller hook，集成后必须保留：
 
 | 文件 | 类型 | 作用 |
 |------|------|------|
-| `hooks/hook-customtkinter.py` | 普通 hook | customtkinter 的 assets 资源打包 |
-| `hooks/hook-paddleocr.py` | 普通 hook | paddleocr 的 datas/hiddens |
-| `hooks/hook-paddleocr_pre.py` | runtime hook | 运行时环境准备 |
-| `build/rth_paddleocr_fix.py` | runtime hook | 见 3.12 中的 bootstrap |
+| `build/hooks/hook-customtkinter.py` | 普通 hook | customtkinter 的 assets 资源打包 |
+| `build/hooks/hook-paddleocr_pre.py` | runtime hook（spec `runtime_hooks`） | frozen 下 `PADDLE_OCR_BASE_DIR` + `tools` 路径 |
 
-集成后迁移到 `toolbox/build/hooks/`。
+paddleocr 源码 4 个 patch 由 `build/fix_dist.py` 打到 `dist/` 副本。**禁止**分析阶段 hook 回写 site-packages 的 `paddleocr.py`。
+
+集成后路径：`pcdmis_toolbox/build/hooks/`（不是 `toolbox/build/hooks/`）。
 
 ---
 
@@ -1164,14 +1184,14 @@ CMMFiller 已有一个完整的 Inno Setup 安装包脚本 `CMMFiller/installer/
 **卸载时清理**：
 - `[UninstallDelete]` 删除 `%localappdata%\CMMFiller\cache`
 
-**集成后策略**：
-- 写一份 `pcdmis_toolbox/installer/PCDMIS_Toolbox.iss`
-- AppId 用新 GUID：`{TOOLBOX-GUID}`
+**集成后策略**（实际文件，2026-08-27）：
+- 脚本：`pcdmis_toolbox/installer/cm2xl.iss`
+- AppId：`{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}`（与旧版 CMMFiller `{...7890}` 区分）
 - AppName = "cm2xl"
-- AppVersion = "1.0.0"
+- AppVersion = "1.0.2"
 - 复制 `dist\cm2xl\*` 到 `{app}`
-- 同时保留 `run_as_admin.bat` 在 `{app}`
-- **同样 `PrivilegesRequired=admin`**
+- **`PrivilegesRequired=admin`**
+- Inno Setup 6 默认无 `ChineseSimplified.isl`，语言包用 `compiler:Default.isl`；自定义 Tasks/MsgBox 仍为中文
 
 ---
 
@@ -1659,7 +1679,7 @@ def cmd_inject(args): ...
 
 | 入口 | 命令 | 模式 |
 |------|------|------|
-| Toolbox Shell | `python main.py` 或双击 `PCDMIS_Toolbox.exe` | 集成 |
+| Toolbox Shell | `python main.py` 或双击 `cm2xl.exe` | 集成 |
 | 模块独立 GUI | `python -m modules.cmm_filler` | 独立 |
 | 模块 CLI | `python -m modules.pc_to_excel.cli export ...` | 独立批处理 |
 | 模板向导 | `python -m modules.cmm_filler.wizard` | 独立子工具 |
@@ -1800,7 +1820,7 @@ core/
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  cm2xl 1.0.0                            [版本] [_][□][X] │
+│  cm2xl 1.0.2                            [版本] [_][□][X] │
 ├──────────┬──────────────────────────────────────────────┤
 │          │                                              │
 │  📊 CMM报告填充 │         模块内容区                       │
@@ -2440,12 +2460,12 @@ python -c "from utils.settings import export_legacy_settings; export_legacy_sett
    - 加 `PATCH_MARKER = "# TOOLBOX_PATCHED_v2"` 防止重复 patch（3.48）
 5. 搬移 `hooks/` → `build/hooks/`
 6. 写 `build.bat`：pyinstaller → fix_dist → copy 资源
-7. **写 Inno Setup 脚本** `installer/PCDMIS_Toolbox.iss`（3.28）
-   - AppId 用新 GUID
+7. **写 Inno Setup 脚本** `installer/cm2xl.iss`（3.28；规划稿曾用名 `PCDMIS_Toolbox.iss`）
+   - AppId 用新 GUID（与 CMMFiller `{...7890}` 区分）
    - `PrivilegesRequired=admin`
    - `ArchitecturesInstallIn64BitMode=x64compatible`
-   - 安装时复制 dist/PCDMIS_Toolbox + run_as_admin.bat
-   - 卸载时清 %localappdata%\PCDMIS_ExcelExporter\cache
+   - 安装时复制 dist/cm2xl + run_as_admin.bat
+   - 卸载时清 %localappdata%\cm2xl\cache
 8. 写 `build_installer.bat` 调用 Inno Setup 编译
 
 **验收**：
@@ -2453,11 +2473,11 @@ python -c "from utils.settings import export_legacy_settings; export_legacy_sett
 cd pcdmis_toolbox
 pip install -r requirements/base.txt -r requirements/cmm_filler.txt -r requirements/pc_to_excel.txt
 python build.bat
-# 应该生成 dist/PCDMIS_Toolbox/ 目录，包含 exe 和 _internal/
+# 应该生成 dist/cm2xl/ 目录，包含 exe 和 _internal/
 
 # 安装包
 python build_installer.bat
-# 生成 installer/output/PCDMIS_Toolbox_Setup_2.0.0.exe
+# 生成 installer/output/cm2xl_Setup_1.0.2.exe
 ```
 
 ---
@@ -2571,5 +2591,5 @@ cat pcdmis_toolbox/README.md  # 内容齐全，链接到 docs/
 4. 记录当前各模块的版本号：
    - CMMFiller `__version__ = '1.0.0'`
    - pc to excel `APP_VERSION = '1.4.5'`
-   - 整合后 `APP_VERSION = '2.0.0'`
+   - 整合后应用版本 `APP_VERSION = '1.0.2'`（`toolbox/app_meta.py`）；配置 schema `CONFIG_SCHEMA_VERSION = '2.0.0'`（独立）
 

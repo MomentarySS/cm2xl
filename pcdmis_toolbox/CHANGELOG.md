@@ -4,6 +4,41 @@
 
 ---
 
+## [1.0.2] — 2026-08-27
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.2`
+- 文档版本号、安装包文件名、测试数量与代码对齐
+- `main.py` / `cmm_filler/main.py`：移除全局 `PROTOCOL_BUFFERS`（由 `ocr/engine.py` 局部 `setdefault`）
+- `pcdmis_toolbox.spec`：OCR 模型优先 `modules/cmm_filler/models/paddleocr/`
+- `tests/phase8_smoke.py`：修正 `ROOT` 路径与 `test_defaults` 隔离
+- `ARCHITECTURE.md`：补「离线部署约束」章节（修复 README 死链）；安装脚本名/版本/路径与代码对齐
+- `build.bat`：OCR 模型优先模块内路径；清理只删 `build\pcdmis_toolbox`（避免误删 `hooks/` 与 `fix_dist.py`）；`fix_dist.py` 调用路径修正
+- `build_installer.bat`：补充 `%LOCALAPPDATA%\Programs\Inno Setup 6` 探测
+- `installer/cm2xl.iss`：去掉未随 Inno Setup 6 分发的 `ChineseSimplified.isl`（避免编译失败；向导按钮为英文，自定义文案仍为中文）；旧版检测改为 CMMFiller GUID `...7890`（带 `_is1`），不再与自身 AppId 相同导致重装误报
+- `build/hooks/`：保留 `hook-customtkinter.py` + `hook-paddleocr_pre.py`；不提交会回写 site-packages 的 `hook-paddleocr.py` 及未引用的 `paddleocr_fix.py` / `rth_paddleocr_fix.py`（paddleocr patch 由 `fix_dist.py` 打到 dist 副本）
+- `build/generate_icon.py`：删除（图标以已入库的 `cm2xl.ico` 为准）
+- `utils/settings.py`：明确 `CONFIG_SCHEMA_VERSION`（2.0.0）与 `APP_VERSION` 独立
+
+### pc_to_excel 模块
+
+**代码审查修复（2026-08-27晚）**
+
+- `export/inspection_form_fill.py` **P0-3**: 关键字检测（"检验/判定/检具/OK/NG"）从数据行移至 `header_scan_row`（第5行），避免 "OK-001"/"检验件-A1" 等真实序号被误跳过
+- `export/pcdmis_style_report.py` **P0-5**: `_compute_outtol()` 有偏差无公差时返回 `None` 而非 `0.0`，语义修正
+- `gui/main_window.py` **P1-4**: `_on_error()` 移除无效的 `msg.startswith('【')` 分支（所有调用方已预格式化）
+
+### cm2xl 工具箱
+
+**UI 改进（2026-08-27晚）**
+
+- `toolbox/shell.py`: 状态栏 PCDMIS 连接状态加🟢🔴图标（`update_pcdmis_status()`）
+- `modules/pc_to_excel/gui/main_window.py`: 独立模式首次运行显示 3 步引导面板（检测 PCDMIS 状态 + 连接按钮），连接成功后自动隐藏
+- `modules/cmm_filler/gui.py`: 结果 tab 文件列表从 card 叠堆改为表格视图（状态/文件名/文件夹/复制路径），失败文件红色高亮
+
+---
+
 ## [1.0.1] — 2026-08-27
 
 ### 整体
@@ -32,8 +67,6 @@
 - `README.md`: PROTOCOL_BUFFERS 不再列为 main.py 必要配置
 - `MIGRATION_STATUS.md`: PROTOCOL_BUFFERS 清单项更新
 
----
-
 ### pc_to_excel 模块
 
 **代码审查修复（2026-08-27）**
@@ -60,28 +93,6 @@
 - `inject/command_injector.py`：`_find_export_command` / `_configure_script_command` / `inject_export_command` / `check_export_command` 增加 `prog_id` 参数透传
 - `gui/main_window.py`、`cli.py`：注入/检查调用点传入 `prog_id=connector.prog_id`
 - `module.py`：`mount()` 改 `_create_window()` 工厂方法，注册层不再 import GUI/connector
-
----
-
-## [1.0.2] — 2026-08-27
-
-### 整体
-
-### pc_to_excel 模块
-
-**代码审查修复（2026-08-27晚）**
-
-- `export/inspection_form_fill.py` **P0-3**: 关键字检测（"检验/判定/检具/OK/NG"）从数据行移至 `header_scan_row`（第5行），避免 "OK-001"/"检验件-A1" 等真实序号被误跳过
-- `export/pcdmis_style_report.py` **P0-5**: `_compute_outtol()` 有偏差无公差时返回 `None` 而非 `0.0`，语义修正
-- `gui/main_window.py` **P1-4**: `_on_error()` 移除无效的 `msg.startswith('【')` 分支（所有调用方已预格式化）
-
-### cm2xl 工具箱
-
-**UI 改进（2026-08-27晚）**
-
-- `toolbox/shell.py`: 状态栏 PCDMIS 连接状态加🟢🔴图标（`update_pcdmis_status()`）
-- `modules/pc_to_excel/gui/main_window.py`: 独立模式首次运行显示 3 步引导面板（检测 PCDMIS 状态 + 连接按钮），连接成功后自动隐藏
-- `modules/cmm_filler/gui.py`: 结果 tab 文件列表从 card 叠堆改为表格视图（状态/文件名/文件夹/复制路径），失败文件红色高亮
 
 ---
 

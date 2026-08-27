@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 from utils.error_codes import ErrorCode, ToolboxError
 
-# 配置 schema 版本（与 toolbox.app_meta.APP_VERSION 同步）
+# 配置 schema 版本（与 toolbox.app_meta.APP_VERSION 独立；APP_VERSION 随发布递增）
 CONFIG_SCHEMA_VERSION = "2.0.0"
 
 # 迁移函数类型

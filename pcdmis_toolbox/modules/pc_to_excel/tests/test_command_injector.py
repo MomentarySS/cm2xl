@@ -158,11 +158,11 @@ def test_deploy_bas_script_copies_and_substitutes(tmp_path: Path, monkeypatch):
     fake_paths = _FullFakePaths(project_root, deploy_dir)
 
     monkeypatch.setattr(
-        "pcdmis_toolbox.modules.pc_to_excel.inject.command_injector.paths",
+        "modules.pc_to_excel.inject.command_injector.paths",
         fake_paths,
     )
     monkeypatch.setattr(
-        "pcdmis_toolbox.modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
+        "modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
         project_root,
     )
 
@@ -187,11 +187,11 @@ def test_deploy_bas_script_creates_export_config(tmp_path: Path, monkeypatch):
     fake_paths = _FullFakePaths(project_root, deploy_dir)
 
     monkeypatch.setattr(
-        "pcdmis_toolbox.modules.pc_to_excel.inject.command_injector.paths",
+        "modules.pc_to_excel.inject.command_injector.paths",
         fake_paths,
     )
     monkeypatch.setattr(
-        "pcdmis_toolbox.modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
+        "modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
         project_root,
     )
 

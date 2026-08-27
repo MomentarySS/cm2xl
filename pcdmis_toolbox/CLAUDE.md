@@ -15,7 +15,7 @@
 ## 开发约定
 
 ### Python 环境
-- **必须 64-bit Python 3.12+**（PC-DMIS 2026+ 是 64 位应用）
+- **必须 64-bit Python 3.12+**（PC-DMIS 2022.1–2026.1 为 64 位应用；主测环境 2024.1）
 - 主要依赖：`customtkinter`、`paddlepaddle==2.6.2`、`paddleocr==2.10.0`、`pymupdf`、`openpyxl`、`pywin32`、`tkinterdnd2`
 
 ### 导入路径
@@ -161,18 +161,20 @@ spec `datas` 列表里加：
 ## 调试技巧
 
 ### 查看 frozen 模式日志
+打包后用户数据在 `%LOCALAPPDATA%\cm2xl\`（不是 `dist/cm2xl/data/`）。
+
 ```bash
 # 启动 exe 后
-cat "dist/cm2xl/data/logs/toolbox.log"
+cat "%LOCALAPPDATA%/cm2xl/logs/toolbox.log"
 
 # 或运行中实时
-tail -f "dist/cm2xl/data/logs/toolbox.log"
+tail -f "%LOCALAPPDATA%/cm2xl/logs/toolbox.log"
 ```
 
 ### 复现打包后问题
 ```bash
-# 1. 清缓存
-rm -rf dist/ build/ "dist/cm2xl/data"
+# 1. 清缓存（不要删整个 build/，其中有 hooks 与 fix_dist.py）
+rm -rf dist/ build/pcdmis_toolbox
 
 # 2. 重新打包
 cd pcdmis_toolbox
@@ -199,6 +201,6 @@ python -c "from utils.theme import _build_theme_json; _build_theme_json()"
 | 0–6 | ✅ 完成 |
 | 7 | ✅ 完成（README + CLAUDE.md + 旧入口重定向） |
 | 7.5 | ✅ 完成（设置 + 关于对话框，外观/OCR模型/日志级别） |
-| 8 | ✅ 完成（100 tests passed；GUI/OCR/PCDMIS 需人工真机验证） |
+| 8 | ✅ 完成（130 tests passed；GUI/OCR/PCDMIS 需人工真机验证） |
 
 详细参见 `MIGRATION_STATUS.md`。

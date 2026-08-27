@@ -3,19 +3,15 @@ cm2xl — 统一启动入口
 
 必须在所有 import 之前执行：
   1. multiprocessing.freeze_support()   ← PyInstaller 打包多进程必需
-  2. PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = 'python'  ← PaddleOCR 兼容
-  3. 64 位检测
-  4. ctk.set_default_color_theme         ← 只调一次，避免主题冲突
+  2. 64 位检测
+  3. apply_theme()                       ← 只调一次，避免主题冲突
 
 然后初始化日志 + 审计日志 + 异常处理 + Shell 窗口。
 """
 
-# ── 最早处：多进程 + 环境变量 + 位数检测（不可移后）─────────────────────────
+# ── 最早处：多进程 + 位数检测（不可移后）───────────────────────────────────
 import multiprocessing
 multiprocessing.freeze_support()
-
-import os
-os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 import struct
 

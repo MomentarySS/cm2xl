@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 # ── 路径 ────────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from utils.settings import (
@@ -118,19 +118,27 @@ class TestFileLock:
             assert acquired is True
 
     def test_concurrent_conflict(self, tmp_dir):
+        import time
+
         lock_path = tmp_dir / "shared.lock"
         order = []
+        start = threading.Event()
 
         def worker(name):
-            lock = FileLock(lock_path, timeout=1.0)
+            start.wait(timeout=1.0)
+            lock = FileLock(lock_path, timeout=3.0)
             with lock as acquired:
                 if acquired:
                     order.append(name)
+                    time.sleep(0.15)
 
         t1 = threading.Thread(target=worker, args=("t1",))
         t2 = threading.Thread(target=worker, args=("t2",))
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        start.set()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
         # 两个线程都拿到了锁（串行），不应同时持有
         assert len(order) == 2
 
@@ -238,8 +246,14 @@ class TestLegacyExport:
 # ── 6. Toolbox 全局设置 ─────────────────────────────────────────────────────
 
 class TestToolboxSettings:
-    def test_defaults(self, monkeypatch):
-        monkeypatch.setenv("LOCALAPPDATA", str(ROOT / "data"))
+    def test_defaults(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "toolbox"
+        cfg.mkdir()
+        settings_file = cfg / "settings.json"
+        monkeypatch.setattr(
+            "utils.settings._toolbox_settings_path",
+            lambda: settings_file,
+        )
         # 不创建文件 → 返回默认值
         s = load_toolbox_settings()
         assert s["appearance_mode"] == "system"

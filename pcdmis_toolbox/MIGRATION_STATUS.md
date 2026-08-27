@@ -18,10 +18,10 @@
 | **4** | pc_to_excel 迁移 | ✅ | `f3ba93f` | `modules/pc_to_excel/`（含 `connector/core/export/inject/gui/utils` + BAS 脚本） |
 | **5** | 配置迁移 | ✅ | `a046ec9` | `migrate_settings_if_needed()`、版本升级链、legacy 导出 |
 | **5.5** | 应用层修复 | ✅ | `ff1d551`, `b7e6de6`, `9d45c4d`, `276e5ea` | 原子写、文件锁、日志落盘、审计分离、错误码接入 |
-| **6** | 打包整合 | ✅ | `f108ba1` | `pcdmis_toolbox.spec`、`build/fix_dist.py`、`build/hooks/`、`installer/Toolbox.iss`、`build.bat` |
+| **6** | 打包整合 | ✅ | `f108ba1` | `pcdmis_toolbox.spec`、`build/fix_dist.py`、`build/hooks/`、`installer/cm2xl.iss`、`build.bat` |
 | **7** | 保留独立入口 | ✅ | `c963bda` | 旧入口重定向脚本、`README.md`、`CLAUDE.md` |
 | **7.5** | 设置与关于对话框 | ✅ | `567ca07`, `5e5450c` | `toolbox/{settings_dialog,about_dialog}.py`、运行时外观/日志切换 |
-| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | `tests/phase8_smoke.py`（30 用例）＋ `tests/test_report_filter.py`（41 用例）＋ `tests/test_local_settings.py`（15 用例）＋ `tests/test_command_injector.py`（13 用例），**100 passed, 0 failed** |
+| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | `tests/phase8_smoke.py`（30）＋ `modules/pc_to_excel/tests/`（100），**130 passed, 0 failed** |
 
 ### 打包产物
 
@@ -85,6 +85,8 @@
 | **3.9.1 迁移链** | `_next_version` 末段+1 链式步进 | 每个 from_version 一次性升到当前 schema | 链式依赖注册表连续键，缺中间版本抛 RuntimeError（2026-08-26 调整） |
 | **3.46 导入根** | `....utils.*` 指向 toolbox 层 | 统一 0 连点（`from utils.paths import paths`） | 4 连点在 `modules` 为顶级包时越界，与 `main.py`/`cmm_filler` 的 0 连点约定互斥（2026-08-26 统一） |
 | **3.50/11.2 data_extractor 单文件** | 1940 行 god-file「禁止重构核心逻辑」 | 拆为 8 子模块，入口 `data_extractor.py` 仅组合 + re-export | 五类职责耦合（2026-08-27 重构，核心逻辑未变，见 3.51） |
+| **3.10 安装脚本名** | `installer/Toolbox.iss` / `PCDMIS_Toolbox.iss` | `installer/cm2xl.iss`，产物 `cm2xl_Setup_1.0.2.exe` | 产品名定为 cm2xl |
+| **3.13 Hook 文件** | hook-paddleocr.py 回写源码 + rth_paddleocr_fix.py | 仅 `hook-customtkinter.py` + `hook-paddleocr_pre.py`（runtime）；patch 由 fix_dist.py 打 dist 副本 | 避免污染 site-packages |
 
 ---
 
@@ -119,3 +121,5 @@
 | **状态栏缺图标** | 连接状态只有文字，无视觉区分 | `update_pcdmis_status()` 加🟢🔴图标 |
 | **pc_to_excel 首次运行无引导** | 未连接时直接显示空白界面，用户不知如何使用 | 新增 3 步引导面板（独立模式），连接成功后自动隐藏 |
 | **CMMFiller 结果列表 card 堆叠** | 文件多时列表不清晰 | 改为表格视图（状态/文件名/文件夹/复制路径），失败红色高亮 |
+| **安装包重装误报旧版** | `MyAppId` 与 `OldAppId` 同一 GUID | 旧版检测改为 CMMFiller `{...7890}` + `_is1`；cm2xl 自身重装走同一 AppId 升级 |
+| **frozen 日志路径写错** | CLAUDE.md 指向 `dist/cm2xl/data/logs/` | 改为 `%LOCALAPPDATA%\cm2xl\logs\`（与 `utils/paths.py` 一致） |
