@@ -63,6 +63,28 @@
 
 ---
 
+## [1.0.2] — 2026-08-27
+
+### 整体
+
+### pc_to_excel 模块
+
+**代码审查修复（2026-08-27晚）**
+
+- `export/inspection_form_fill.py` **P0-3**: 关键字检测（"检验/判定/检具/OK/NG"）从数据行移至 `header_scan_row`（第5行），避免 "OK-001"/"检验件-A1" 等真实序号被误跳过
+- `export/pcdmis_style_report.py` **P0-5**: `_compute_outtol()` 有偏差无公差时返回 `None` 而非 `0.0`，语义修正
+- `gui/main_window.py` **P1-4**: `_on_error()` 移除无效的 `msg.startswith('【')` 分支（所有调用方已预格式化）
+
+### cm2xl 工具箱
+
+**UI 改进（2026-08-27晚）**
+
+- `toolbox/shell.py`: 状态栏 PCDMIS 连接状态加🟢🔴图标（`update_pcdmis_status()`）
+- `modules/pc_to_excel/gui/main_window.py`: 独立模式首次运行显示 3 步引导面板（检测 PCDMIS 状态 + 连接按钮），连接成功后自动隐藏
+- `modules/cmm_filler/gui.py`: 结果 tab 文件列表从 card 叠堆改为表格视图（状态/文件名/文件夹/复制路径），失败文件红色高亮
+
+---
+
 ## [1.0.0] — 2026-08-26
 
 > 首个整合版本。CMMFiller + pc_to_excel 合并为统一工具箱，支持 Shell 挂载模式和独立运行。
