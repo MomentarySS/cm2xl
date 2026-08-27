@@ -312,12 +312,12 @@ class Shell:
         if connected:
             ver_str = f" v{version}" if version else ""
             self._pcdmis_label.configure(
-                text=f"PC-DMIS: 已连接{ver_str}",
+                text=f"🟢 PC-DMIS: 已连接{ver_str}",
                 text_color=TOOLBOX_THEME["ok"],
             )
         else:
             self._pcdmis_label.configure(
-                text="PC-DMIS: 未连接",
+                text=f"🔴 PC-DMIS: 未连接",
                 text_color="#9CA3AF",
             )
 

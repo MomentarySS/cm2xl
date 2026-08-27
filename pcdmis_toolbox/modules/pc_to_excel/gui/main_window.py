@@ -76,6 +76,8 @@ class MainWindow:
         self.settings = load_settings()
         self.connector = PcdmisConnector()
         self._busy = False
+        self._wizard_frame = None   # 首次运行向导面板
+        self._wizard_done = False  # 向导是否已被用户关闭
 
         # ── 挂载模式支持 ──────────────────────────────────────────────
         # parent=None → 自建根窗口（独立运行，行为不变）
@@ -120,6 +122,104 @@ class MainWindow:
         self._set_conn_visual("idle")
         if self._owns_root:
             self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        # 首次运行向导（独立模式、未连接时显示引导）
+        self._show_wizard_if_needed()
+
+    # ── 首次运行向导 ───────────────────────────────────────────────────────
+
+    def _show_wizard_if_needed(self) -> None:
+        """未连接时显示引导面板（独立模式）；已在连接状态则静默。"""
+        if not self._owns_root or self.connector.is_connected():
+            return
+        self._wizard_frame = self._build_wizard_panel(self._container)
+        self._wizard_frame.pack(fill="both", expand=True)
+
+    def _build_wizard_panel(self, parent) -> ctk.CTkFrame:
+        """首次运行引导面板：3 步引导卡片 + 检测 PCDMIS 状态。"""
+        from ..connector.com_detector import is_pcdmis_running
+
+        panel = ctk.CTkFrame(parent, fg_color="transparent")
+
+        # 标题
+        ctk.CTkLabel(
+            panel,
+            text="欢迎使用 PCDMIS 导出",
+            font=self._font(22, True),
+            anchor="w",
+        ).pack(anchor="w", pady=(0, 4))
+        ctk.CTkLabel(
+            panel,
+            text="按照以下步骤开始导出测量数据",
+            font=self._font(13),
+            text_color=_C["subtle"],
+            anchor="w",
+        ).pack(anchor="w", pady=(0, 24))
+
+        # 3 步引导卡片
+        steps = [
+            ("1", "确认 PCDMIS 运行中", "请先在 PCDMIS 中打开要导出的测量程序（.prg 文件）"),
+            ("2", "点击「连接 PCDMIS」", "工具会通过 COM 接口读取当前程序数据，无需额外操作"),
+            ("3", "导出 Excel 报告", "点击「一键导出 Excel」，生成包含尺寸、公差、偏差的报告"),
+        ]
+        cards_frame = ctk.CTkFrame(panel, fg_color="transparent")
+        cards_frame.pack(fill="x", pady=(0, 24))
+        for i, (num, title, desc) in enumerate(steps):
+            card = ctk.CTkFrame(cards_frame, corner_radius=12)
+            card.pack(side="left", fill="both", expand=True, padx=(0, 12) if i < 2 else (0, 0))
+            num_label = ctk.CTkLabel(
+                card, text=num, font=self._font(18, True),
+                text_color=_C["accent"], width=36, height=36,
+                corner_radius=18,
+            )
+            num_label.pack(pady=(16, 8))
+            ctk.CTkLabel(card, text=title, font=self._font(13, True), anchor="w").pack(
+                anchor="w", padx=16, pady=(0, 4)
+            )
+            ctk.CTkLabel(
+                card, text=desc, font=self._font(11), text_color=_C["subtle"],
+                anchor="w", wraplength=200,
+            ).pack(anchor="w", padx=16, pady=(0, 16))
+
+        # PCDMIS 运行状态检测
+        running = is_pcdmis_running()
+        status_frame = ctk.CTkFrame(panel, corner_radius=10)
+        status_frame.pack(fill="x", pady=(0, 20))
+
+        if running:
+            status_icon = "🟢"
+            status_color = _C["ok"]
+            status_text = "PC-DMIS 正在运行，可以点击连接了"
+        else:
+            status_icon = "🔴"
+            status_color = _C["bad"]
+            status_text = "PC-DMIS 未检测到，请先启动 PCDMIS 并打开测量程序"
+
+        icon_label = ctk.CTkLabel(status_frame, text=status_icon, font=self._font(20))
+        icon_label.pack(side="left", padx=14, pady=14)
+        ctk.CTkLabel(
+            status_frame, text=status_text,
+            font=self._font(13), text_color=status_color,
+        ).pack(side="left", pady=14)
+
+        # 按钮行
+        btn_row = ctk.CTkFrame(panel, fg_color="transparent")
+        btn_row.pack(fill="x")
+        self._btn_primary(btn_row, "连接 PCDMIS", self._connect, width=148).pack(side="left")
+        ctk.CTkLabel(
+            btn_row, text="连接成功后此引导将自动收起",
+            font=self._font(11), text_color=_C["subtle"],
+        ).pack(side="left", padx=14)
+        ctk.CTkLabel(btn_row, text="", font=self._font(11)).pack(side="right")  # 占位
+
+        return panel
+
+    def _dismiss_wizard(self) -> None:
+        """关闭向导面板。"""
+        if self._wizard_frame:
+            self._wizard_frame.pack_forget()
+            self._wizard_frame.destroy()
+            self._wizard_frame = None
+            self._wizard_done = True
 
     def _font(self, size: int = 13, bold: bool = False) -> ctk.CTkFont:
         return ctk.CTkFont(family="Microsoft YaHei UI", size=size, weight="bold" if bold else "normal")
@@ -585,6 +685,8 @@ class MainWindow:
             self.part_var.set(self.connector.get_active_part_name() or "—")
             self.status_var.set("已连接")
             self._set_conn_visual("ok")
+            if self._wizard_frame and not self._wizard_done:
+                self._dismiss_wizard()
         else:
             self.conn_var.set("连接失败")
             self._set_conn_visual("bad")

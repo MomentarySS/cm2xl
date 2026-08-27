@@ -1120,17 +1120,32 @@ class CMMFillerGUI:
 
         for w in self.output_list.winfo_children():
             w.destroy()
+
+        # 表头
+        hdr = ctk.CTkFrame(self.output_list, fg_color='transparent')
+        hdr.pack(fill='x', pady=(0, 4))
+        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=11, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
+        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ctk.CTkLabel(hdr, text='', width=82).pack(side='right')
+
         path = summary.get('output_file')
         if path:
+            p = Path(path)
+            failed_paths = {Path(fp).name: fp for fp in summary.get('failed_pdfs', [])}
+            is_fail = p.name in failed_paths
             row = ctk.CTkFrame(self.output_list, fg_color='transparent')
             row.pack(fill='x', pady=1)
-            ctk.CTkLabel(row, text=f'📄 {Path(path).name}', font=ctk.CTkFont(size=12), anchor='w').pack(
-                side='left', fill='x', expand=True)
+            icon = '🔴' if is_fail else '📄'
+            icon_color = self.COLORS['err'] if is_fail else self.COLORS['ok']
+            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=12), width=50, anchor='w').pack(side='left', padx=(8, 0))
+            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=12), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
             ctk.CTkButton(
                 row, text='复制路径', width=76, height=26,
                 command=lambda p=path: (self._copy_to_clipboard(p),
                                         messagebox.showinfo('已复制', f'文件路径已复制:\n{p}')),
-            ).pack(side='right', padx=(8, 0))
+            ).pack(side='right', padx=(0, 6))
 
     # ── 结果展示 ─────────────────────────────
     def _show_result_summary(self, summary):
@@ -1149,17 +1164,32 @@ class CMMFillerGUI:
 
         for w in self.output_list.winfo_children():
             w.destroy()
+
+        # 表头
+        hdr = ctk.CTkFrame(self.output_list, fg_color='transparent')
+        hdr.pack(fill='x', pady=(0, 4))
+        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=11, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
+        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ctk.CTkLabel(hdr, text='', width=82).pack(side='right')
+
+        failed_paths = {Path(p).name: p for p in summary.get('failed_pdfs', [])}
         files = summary.get('output_files', [])
         for path in files:
-            row = ctk.CTkFrame(self.output_list, fg_color="transparent")
+            p = Path(path)
+            is_fail = p.name in failed_paths
+            row = ctk.CTkFrame(self.output_list, fg_color='transparent')
             row.pack(fill='x', pady=1)
-            ctk.CTkLabel(row, text=f'📄 {Path(path).name}', font=ctk.CTkFont(size=12), anchor='w').pack(
-                side='left', fill='x', expand=True)
+            icon = '🔴' if is_fail else '📄'
+            icon_color = self.COLORS['err'] if is_fail else self.COLORS['ok']
+            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=12), width=50, anchor='w').pack(side='left', padx=(8, 0))
+            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=12), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
             ctk.CTkButton(
                 row, text='复制路径', width=76, height=26,
                 command=lambda p=path: (self._copy_to_clipboard(p),
                                         messagebox.showinfo('已复制', f'文件路径已复制:\n{p}')),
-            ).pack(side='right', padx=(8, 0))
+            ).pack(side='right', padx=(0, 6))
 
     # ── 进度 / 摘要文本 ──────────────────────────
     def _update_progress(self, current, total, message):
