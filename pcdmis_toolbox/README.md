@@ -36,7 +36,7 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 6）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.0.exe
+# 产物：installer/output/cm2xl_Setup_1.0.1.exe
 ```
 
 打包前确保：
@@ -148,7 +148,7 @@ pcdmis_toolbox/
    class MyModule(ModuleProtocol):
        title = "我的模块"
        icon = "🛠️"
-       version = "1.0.0"
+       version = "1.0.1"
 
        def mount(self, parent): ...
        def unmount(self): ...

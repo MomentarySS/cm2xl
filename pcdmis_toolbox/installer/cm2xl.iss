@@ -1,11 +1,11 @@
 ; cm2xl Inno Setup 安装脚本
 ; 需先运行 ..\build.bat 完成 PyInstaller 打包
 ; 编译: iscc installer\cm2xl.iss
-; 输出: installer\output\cm2xl_Setup_1.0.0.exe
+; 输出: installer\output\cm2xl_Setup_1.0.1.exe
 
 #define SourceDir ".."
 #define MyAppName "cm2xl"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "cm2xl"
 #define MyAppExeName "cm2xl.exe"
 #define MyAppId "{{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
