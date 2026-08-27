@@ -23,13 +23,17 @@ class PCToExcelModule(ModuleProtocol):
 
     def mount(self, parent) -> None:
         """挂载到 Shell 内容区"""
-        from .gui.main_window import MainWindow
-
         self._container = parent
         for widget in parent.winfo_children():
             widget.destroy()
-        self._instance = MainWindow(parent=parent)
+        self._instance = self._create_window(parent)
         self._instance.shell = self.shell
+
+    def _create_window(self, parent):
+        """工厂方法 — 延迟 import GUI，注册层不依赖具体窗口实现。"""
+        from .gui.main_window import MainWindow
+
+        return MainWindow(parent=parent)
 
     def unmount(self) -> None:
         """从 Shell 内容区卸载"""
