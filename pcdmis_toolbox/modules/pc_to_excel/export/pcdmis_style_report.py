@@ -161,7 +161,9 @@ def _compute_outtol(
     if stored is not None:
         return stored
     if deviation is None:
-        return 0.0 if plus_tol is not None or minus_tol is not None else None
+        # 无实测偏差时返回 None（表示"无测量数据"），而非 0.0（"偏差为 0"）；
+        # 有公差但无偏差 ≠ 在公差范围内，而是数据缺失
+        return None
     out = 0.0
     if plus_tol is not None and deviation > plus_tol:
         out = max(out, deviation - plus_tol)

@@ -1062,10 +1062,10 @@ class MainWindow:
             messagebox.showerror("检查失败", format_user_error("检查失败", exc))
 
     def _on_error(self, title: str, msg: str) -> None:
+        # 所有调用方已通过 format_user_error 格式化，此处直接使用
         self._set_busy(False)
         self.status_var.set(title)
-        # msg 可能已是 format_user_error 结果
-        messagebox.showerror(title, msg if msg.startswith("【") else format_user_error(title, msg))
+        messagebox.showerror(title, msg)
 
     def _refresh_conn_status(self) -> None:
         """模块激活时静默刷新连接状态（不弹错误框）。

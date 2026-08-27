@@ -484,14 +484,18 @@ def preview_form_fill(
             row_serials: dict[int, str] = {}
             row_specs: dict[int, float | None] = {}
 
+            # 表头行关键字检测（仅 header_scan_row，不检查数据行）
+            header_val = ws.cell(cfg.header_scan_row, serial_col).value
+            if isinstance(header_val, str) and any(
+                k in header_val for k in ("检验", "判定", "检具", "OK/NG")
+            ):
+                # 序号列表头包含关键字，说明第 5 列（如"检验员"）被误认为序号；
+                # 这种情况极少见，按原逻辑跳过即可，不影响数据行
+                pass
+
             for row in range(cfg.data_start_row, (ws.max_row or cfg.data_start_row) + 1):
                 serial = _normalize_serial(ws.cell(row, serial_col).value)
                 if not serial:
-                    continue
-                raw_a = ws.cell(row, serial_col).value
-                if isinstance(raw_a, str) and any(
-                    k in raw_a for k in ("检验", "判定", "检具", "OK/NG")
-                ):
                     continue
                 if not _is_cmm_code(ws.cell(row, inst_col).value, cfg.cmm_codes):
                     continue
@@ -575,12 +579,16 @@ def fill_inspection_form(
         cmm_rows: list[int] = []
         row_serials: dict[int, str] = {}
 
+        # 表头行关键字检测（仅 header_scan_row，不检查数据行）
+        header_val = ws.cell(cfg.header_scan_row, serial_col).value
+        if isinstance(header_val, str) and any(
+            k in header_val for k in ("检验", "判定", "检具", "OK/NG")
+        ):
+            pass
+
         for row in range(cfg.data_start_row, (ws.max_row or cfg.data_start_row) + 1):
             serial = _normalize_serial(ws.cell(row, serial_col).value)
             if not serial:
-                continue
-            raw_a = ws.cell(row, serial_col).value
-            if isinstance(raw_a, str) and any(k in raw_a for k in ("检验", "判定", "检具", "OK/NG")):
                 continue
             inst = ws.cell(row, inst_col).value
             if not _is_cmm_code(inst, cfg.cmm_codes):
