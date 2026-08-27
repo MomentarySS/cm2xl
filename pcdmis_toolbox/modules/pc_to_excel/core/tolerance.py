@@ -105,10 +105,11 @@ def apply_tolerance(
 
 
 def summarize_results(features: list[FeatureRecord]) -> dict[str, int | float]:
+    """统计已评价特征的合格/超差情况。NA 状态不计入合格率。"""
     judged = [f for f in features if f.status != PassStatus.NA]
     passed = sum(1 for f in judged if f.status == PassStatus.PASS)
     failed = sum(1 for f in judged if f.status == PassStatus.FAIL)
-    total = len(judged)
+    total = passed + failed  # 明确 total = passed + failed，避免 len(judged) 语义歧义
     rate = (passed / total * 100) if total else 0.0
     return {
         "total": total,

@@ -18,6 +18,9 @@ REGISTRY_PATHS = [
     r"HKLM\SOFTWARE\Classes",
     r"HKLM\SOFTWARE\WOW6432Node\Classes",
 ]
+
+# Python 解释器字长，在模块首次导入时确定一次（由解释器启动参数决定，不会动态改变）
+_PYTHON_POINTER_BITS: int = struct.calcsize("P") * 8
 INSTALL_PATHS = [
     r"C:\Program Files\Hexagon\PC-DMIS",
     r"C:\Program Files (x86)\Hexagon\PC-DMIS",
@@ -205,7 +208,8 @@ def check_elevation_match() -> tuple[bool, str]:
 
 
 def python_bitness() -> int:
-    return struct.calcsize("P") * 8
+    """返回 Python 解释器的字长（32 或 64），由解释器启动参数决定，不会动态改变。"""
+    return _PYTHON_POINTER_BITS
 
 
 @contextmanager

@@ -110,11 +110,40 @@ class FormFillConfig:
         return dict(self.manual_map)
 
     def resolve_input_form(self) -> tuple[Path | None, bool]:
-        """返回 (输入表路径, 是否来自上次续填)。"""
+        """返回 (输入表路径, 是否来自上次续填)。
+
+        链式文件会验证扩展名（.xlsx/.xlsm）并在无法作为 Excel 打开时发出警告。
+        """
         if self.chain_from_last and self.last_fill_output.strip():
             last = Path(self.last_fill_output)
             if last.is_file():
-                return last, True
+                # 验证扩展名，排除损坏或被替换为非 Excel 文件的情况
+                if last.suffix.lower() not in (".xlsx", ".xlsm"):
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "上次续填输出 %s 不是 Excel 文件（扩展名 %s），"
+                        "将回退到 --form 指定路径。",
+                        last,
+                        last.suffix,
+                    )
+                else:
+                    # 扩展名正确后，尝试用 openpyxl 加载验证文件完整性
+                    try:
+                        load_workbook(last, read_only=True, data_only=True)
+                        return last, True
+                    except Exception as exc:
+                        import logging
+
+                        logger = logging.getLogger(__name__)
+                        logger.warning(
+                            "上次续填输出 %s 无法作为 Excel 打开（%s），"
+                            "将回退到 --form 指定路径。请确认文件未损坏，"
+                            "或用 --reset-chain 重新开始。",
+                            last,
+                            exc,
+                        )
         if self.form_path.strip():
             path = Path(self.form_path)
             if path.is_file():
@@ -380,7 +409,7 @@ def _column_has_cmm_data(ws, col: int, candidate_rows: list[int]) -> bool:
 
 
 def _resolve_target_col(ws, config: FormFillConfig, candidate_rows: list[int]) -> int:
-    """返回 1-based 列号。auto：表头空且 CMM 数据行也空，才选用，避免覆盖已有实测。"""
+    """返回 1-based 列号。auto：优先选全空列，其次半数空列，避免覆盖已有实测。"""
     start = _col_index(config.data_start_col)
     mode = (config.target_col or "auto").strip().lower()
     if mode and mode != "auto":
@@ -394,6 +423,17 @@ def _resolve_target_col(ws, config: FormFillConfig, candidate_rows: list[int]) -
         if header_empty and not _column_has_cmm_data(ws, col, candidate_rows):
             return col
 
+    # 优先查找全空的 CMM 列（完全不动已有数据）
+    for col in range(start, max_col + 8):
+        empty = 0
+        for row in candidate_rows:
+            val = ws.cell(row, col).value
+            if val is None or str(val).strip() == "":
+                empty += 1
+        if candidate_rows and empty == len(candidate_rows):
+            return col
+
+    # 全空列找不到时，退而求其次：选半数空（仍有空间）且无实测的列
     for col in range(start, max_col + 8):
         empty = 0
         for row in candidate_rows:
@@ -406,8 +446,7 @@ def _resolve_target_col(ws, config: FormFillConfig, candidate_rows: list[int]) -
             and not _column_has_cmm_data(ws, col, candidate_rows)
         ):
             return col
-        if candidate_rows and empty == len(candidate_rows):
-            return col
+
     # 全部有数据时追加新列，绝不覆盖
     return max_col + 1
 

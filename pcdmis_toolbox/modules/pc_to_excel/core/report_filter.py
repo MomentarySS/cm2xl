@@ -51,7 +51,9 @@ def _is_cmd_marked(cmd: Any) -> bool:
     try:
         return bool(cmd.Marked)
     except Exception:
-        return True
+        # 保守默认：无法确认时返回 False（不过滤出报告），
+        # 避免在新版 PCDMIS COM 缺少 Marked 属性时误将命令保留在报告中
+        return False
 
 
 def _record_marked(rec: FeatureRecord, cmd_by_index: dict[int, Any]) -> bool:
