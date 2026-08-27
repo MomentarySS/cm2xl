@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 审计日志
+cm2xl — 审计日志
 所有用户可见操作必须调用 audit() 记录，格式固定为 [时间] action | k=v。
 audit logger 独立写入专用 audit 文件（按天切分 × 30 天），不混入主日志。
 """

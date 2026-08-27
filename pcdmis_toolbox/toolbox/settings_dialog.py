@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 设置弹窗
+cm2xl — 设置弹窗
 
 布局：
 ┌─ 设置 ─────────────────────────────────────┐
@@ -108,13 +108,11 @@ class SettingsDialog:
         # 3. 日志分组
         self._build_section(body, "日志", text_color).pack(fill="x", pady=(10, 6))
         self._log_level_var = ctk.StringVar(value=self._working.get("log_level", "INFO"))
-        log_row = ctk.CTkFrame(body, fg_color="transparent")
-        log_row.pack(fill="x", padx=4)
-        for level in self.LOG_LEVEL_OPTIONS:
-            ctk.CTkRadioButton(
-                log_row, text=level, variable=self._log_level_var, value=level,
-                font=ctk.CTkFont(family="Microsoft YaHei", size=12),
-            ).pack(side="left", padx=(0, 16))
+        ctk.CTkSegmentedButton(
+            body, values=self.LOG_LEVEL_OPTIONS,
+            variable=self._log_level_var, height=32,
+            selected_color=accent, selected_hover_color=accent_h,
+        ).pack(fill="x", padx=4)
 
         # 4. 兼容性分组
         self._build_section(body, "兼容性", text_color).pack(fill="x", pady=(10, 6))

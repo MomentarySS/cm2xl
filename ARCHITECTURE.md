@@ -1,4 +1,4 @@
-# PCDMIS Toolbox 2.0 架构设计
+# cm2xl 架构设计
 
 > **目标**：新建一个功能壳，将 `CMMFiller` 和 `pc to excel` 两个项目整合为统一的工具箱，同时保留各模块独立运行能力。
 >
@@ -471,8 +471,8 @@ APP_DESCRIPTION = 'CMM 三坐标测量报告 OCR 识别 + Excel 自动填充'
 
 ```python
 # toolbox/app_meta.py
-APP_TITLE = "PCDMIS Toolbox"
-APP_VERSION = "2.0.0"
+APP_TITLE = "cm2xl"
+APP_VERSION = "1.0.0"
 APP_BUILD = "1"  # 内部构建号，对应 version.json
 TOOLBOX_THEME = { ... }  # 与 utils/theme.py 保持一致
 ```
@@ -1170,9 +1170,9 @@ CMMFiller 已有一个完整的 Inno Setup 安装包脚本 `CMMFiller/installer/
 **集成后策略**：
 - 写一份 `pcdmis_toolbox/installer/PCDMIS_Toolbox.iss`
 - AppId 用新 GUID：`{TOOLBOX-GUID}`
-- AppName = "PCDMIS Toolbox"
-- AppVersion = "2.0.0"
-- 复制 `dist\PCDMIS_Toolbox\*` 到 `{app}`
+- AppName = "cm2xl"
+- AppVersion = "1.0.0"
+- 复制 `dist\cm2xl\*` 到 `{app}`
 - 同时保留 `run_as_admin.bat` 在 `{app}`
 - **同样 `PrivilegesRequired=admin`**
 
@@ -1767,7 +1767,7 @@ list[FeatureRecord] with status
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  PCDMIS Toolbox 2.0                    [版本] [_][□][X] │
+│  cm2xl 1.0.0                            [版本] [_][□][X] │
 ├──────────┬──────────────────────────────────────────────┤
 │          │                                              │
 │  📊 CMM报告填充 │         模块内容区                       │

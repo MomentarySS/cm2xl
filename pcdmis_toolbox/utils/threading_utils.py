@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 线程管理工具
+cm2xl — 线程管理工具
 提供 CancellableWorker，替代 bare threading.Thread(daemon=True)。
 """
 

@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0
+cm2xl
 """
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION, APP_BUILD, EXPORT_CMD_ID

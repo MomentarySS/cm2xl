@@ -1,4 +1,4 @@
-# PCDMIS Toolbox 2.0 — 迁移进度跟踪
+# cm2xl — 迁移进度跟踪
 
 > 对应 ARCHITECTURE.md 各章节，完成一个阶段更新一次。
 > 偏差（Deviation）栏记录实现与原设计的差异及原因。
@@ -157,7 +157,7 @@
 | 3.28 Inno Setup | 写 `installer/PCDMIS_Toolbox.iss` | ✅ | 写 `installer/Toolbox.iss` + `build_installer.bat` | — |
 | — | 写 `build.bat` | ✅ | 含 build + fix_dist + 清 ffmpeg DLL 三步 | — |
 
-**打包产物**：`dist/PCDMIS Toolbox/PCDMIS Toolbox.exe`（30 MB），总 601 MB（清完 ffmpeg 后从 683 MB 降下，节省 82 MB）。
+**打包产物**：`dist/cm2xl/cm2xl.exe`（30 MB），总 601 MB（清完 ffmpeg 后从 683 MB 降下，节省 82 MB）。
 
 **离线打包验证**（已在 dev 环境实测）：
 - ✅ PaddleOCR 模型文件已在 `CMMFiller/models/paddleocr/`，自动打包到 `_internal/models/paddleocr/`

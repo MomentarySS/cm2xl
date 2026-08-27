@@ -147,7 +147,7 @@ class PaddleOCREngine(OCREngine):
                 ErrorCode.MODEL_MISSING,
                 'OCR 模型文件缺失，无法离线识别。\n'
                 '请在「设置 → OCR 模型」中指定模型目录，\n'
-                '或重新复制完整的 PCDMIS Toolbox 文件夹\n'
+                '或重新复制完整的 cm2xl 文件夹\n'
                 f'（需包含 {"_internal/" if getattr(sys, "frozen", False) else "modules/cmm_filler/"}models/paddleocr 子目录，约 18 MB），\n'
                 '或联系软件提供者重新获取完整安装包。',
             ) from None

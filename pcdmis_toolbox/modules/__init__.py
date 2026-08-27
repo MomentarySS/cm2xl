@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 模块注册表
+cm2xl — 模块注册表
 自动发现并注册所有 modules/<name>/gui.py 中的模块。
 """
 

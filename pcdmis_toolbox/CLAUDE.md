@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> 给 AI 编码助手的项目指南 —— PCDMIS Toolbox 2.0
+> 给 AI 编码助手的项目指南 —— cm2xl
 
 ## 项目速览
 
@@ -145,7 +145,7 @@ spec `datas` 列表里加：
 1. **修改前先排查**：用 `python -c "import modules; print(modules.REGISTRY.keys())"` 验证模块发现
 2. **先 dev 验证**：所有改动先在 dev 模式测一遍，再打包
 3. **打包前清缓存**：删除 `utils/theme.json`、`data/logs/`、`data/config/`，避免脏缓存
-4. **打包后真机测**：必须跑 `dist/PCDMIS Toolbox/PCDMIS Toolbox.exe`（不是 `python main.py`）才算验证
+4. **打包后真机测**：必须跑 `dist/cm2xl/cm2xl.exe`（不是 `python main.py`）才算验证
 5. **dev 模式没色块 ≠ 打包后没色块**：很多 GUI 问题只在 frozen exe 出现
 
 ---
@@ -155,16 +155,16 @@ spec `datas` 列表里加：
 ### 查看 frozen 模式日志
 ```bash
 # 启动 exe 后
-cat "dist/PCDMIS Toolbox/data/logs/toolbox.log"
+cat "dist/cm2xl/data/logs/toolbox.log"
 
 # 或运行中实时
-tail -f "dist/PCDMIS Toolbox/data/logs/toolbox.log"
+tail -f "dist/cm2xl/data/logs/toolbox.log"
 ```
 
 ### 复现打包后问题
 ```bash
 # 1. 清缓存
-rm -rf dist/ build/ "dist/PCDMIS Toolbox/data"
+rm -rf dist/ build/ "dist/cm2xl/data"
 
 # 2. 重新打包
 cd pcdmis_toolbox
@@ -173,7 +173,7 @@ python build/fix_dist.py
 find dist -name "opencv_videoio_ffmpeg*.dll" -delete
 
 # 3. 启动
-"./dist/PCDMIS Toolbox/PCDMIS Toolbox.exe"
+"./dist/cm2xl/cm2xl.exe"
 ```
 
 ### 强制重新生成 theme.json

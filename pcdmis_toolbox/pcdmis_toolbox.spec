@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PCDMIS Toolbox 2.0 — Unified PyInstaller spec
+cm2xl — Unified PyInstaller spec
 ===============================================
 Bundles: main.py + Shell + 两个功能模块 (cmm_filler, pc_to_excel)
 后处理: build/fix_dist.py (必须在 PyInstaller 完成后执行)
@@ -258,7 +258,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="PCDMIS Toolbox",
+    name="cm2xl",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -271,7 +271,7 @@ exe = EXE(
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
-# COLLECT（最终输出 dist/PCDMIS Toolbox/）
+# COLLECT（最终输出 dist/cm2xl/）
 # ══════════════════════════════════════════════════════════════════════════════
 coll = COLLECT(
     exe,
@@ -281,5 +281,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="PCDMIS Toolbox",
+    name="cm2xl",
 )

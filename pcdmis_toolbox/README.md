@@ -1,4 +1,4 @@
-# PCDMIS Toolbox 2.0
+# cm2xl
 
 > 整合 `CMMFiller`（CMM 报告 OCR 识别 + Excel 自动填充）和 `pc_to_excel`（PCDMIS 数据提取 + 公差判定 + 报告导出）两个独立工具的**统一工具箱**，同时保留各模块独立运行能力。
 
@@ -32,11 +32,11 @@ cd pcdmis_toolbox
 
 # Step 1: PyInstaller 打包（10-20 分钟）
 build.bat
-# 产物：dist/PCDMIS Toolbox/PCDMIS Toolbox.exe
+# 产物：dist/cm2xl/cm2xl.exe
 
 # Step 2: 生成安装包（需先安装 Inno Setup 6）
 build_installer.bat
-# 产物：installer/output/PCDMIS Toolbox_Setup_2.0.0.exe
+# 产物：installer/output/cm2xl_Setup_1.0.0.exe
 ```
 
 打包前确保：
@@ -199,7 +199,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ### 打包后体积过大
 
-`dist/PCDMIS Toolbox/_internal/cv2/opencv_videoio_ffmpeg*.dll` 占 58MB，OCR 永远不用。build.bat 已自动清理。
+`dist/cm2xl/_internal/cv2/opencv_videoio_ffmpeg*.dll` 占 58MB，OCR 永远不用。build.bat 已自动清理。
 
 ### 中文路径报错
 

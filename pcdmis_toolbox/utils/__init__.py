@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 共享工具层
+cm2xl — 共享工具层
 """
 
 from utils.paths import paths, PathManager

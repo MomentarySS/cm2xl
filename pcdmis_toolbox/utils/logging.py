@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 统一日志系统
+cm2xl — 统一日志系统
 控制台 + 按大小轮转主日志（按 logger 命名）+ 审计日志 Handler。
 
 每个 logger 只挂主日志（{name}.log）；audit 日志由独立 audit logger 处理。

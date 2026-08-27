@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 关于弹窗
+cm2xl — 关于弹窗
 显示应用名 / 版本 / 配置与日志路径 / 版权信息。
 """
 
@@ -11,7 +11,7 @@ from utils.theme import TOOLBOX_THEME
 
 
 APP_DESCRIPTION = "整合 CMMFiller（OCR 报告填充）+ pc_to_excel（PCDMIS 数据导出）"
-COPYRIGHT = "© 2026 PCDMIS Toolbox"
+COPYRIGHT = "© 2026 cm2xl"
 
 
 class AboutDialog:

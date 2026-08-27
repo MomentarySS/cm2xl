@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 统一启动入口
+cm2xl — 统一启动入口
 
 必须在所有 import 之前执行：
   1. multiprocessing.freeze_support()   ← PyInstaller 打包多进程必需
@@ -139,7 +139,7 @@ def _acquire_instance_lock():
 
         again = messagebox.askyesno(
             "已有实例在运行",
-            "检测到已有 PCDMIS Toolbox 在运行。\n\n"
+            "检测到已有 cm2xl 在运行。\n\n"
             "是否仍要启动第二个实例？\n"
             "（两个实例会共用同一份配置文件）",
         )

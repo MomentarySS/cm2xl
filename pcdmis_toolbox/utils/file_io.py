@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 文件 I/O 工具
+cm2xl — 文件 I/O 工具
 PDF 上下文管理器 + 大小写不敏感 glob + 原子文本写。
 """
 

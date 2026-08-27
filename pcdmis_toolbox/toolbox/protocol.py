@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 模块接口协议
+cm2xl — 模块接口协议
 所有功能模块必须实现 ModuleProtocol 才能被 Shell 挂载。
 """
 

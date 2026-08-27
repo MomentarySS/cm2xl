@@ -1,5 +1,5 @@
 """
-PCDMIS Toolbox 2.0 — 错误码体系
+cm2xl — 错误码体系
 所有业务异常必须用 ToolboxError(code, message) 抛出，不用裸 RuntimeError。
 """
 
