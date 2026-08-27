@@ -4,7 +4,6 @@ __pycache__/
 *.so
 *.egg-info/
 dist/
-build/
 *.egg
 
 # Virtual environments
@@ -28,3 +27,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# PyInstaller build artifacts (keep build/fix_dist.py and build/hooks/, ignore working dir)
+pcdmis_toolbox/build/pcdmis_toolbox/
+pcdmis_toolbox/build/*.toc
+pcdmis_toolbox/build/warn*.txt
+pcdmis_toolbox/build/*.pyz
+pcdmis_toolbox/build/*.manifest

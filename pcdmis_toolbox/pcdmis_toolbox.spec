@@ -65,6 +65,8 @@ _all_hidden = list(set(_extra_hidden + [
     "toolbox.app_meta",
     "toolbox.protocol",
     "toolbox.shell",
+    "toolbox.settings_dialog",
+    "toolbox.about_dialog",
     "utils.theme",
     "utils.paths",
     "utils.logging",
