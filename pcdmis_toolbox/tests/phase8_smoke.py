@@ -370,3 +370,11 @@ class TestModuleCoreImports:
 
     def test_pc_to_excel_main_window(self):
         from modules.pc_to_excel.gui.main_window import MainWindow  # noqa: F401
+
+    def test_cmm_filler_gui_lazy_core_import(self):
+        """gui.py 懒加载必须用 .core；..core 会错误解析为 modules.core。"""
+        import modules.cmm_filler.gui as gui_mod
+
+        ns = gui_mod.__dict__.copy()
+        exec("from .core.filler import set_gui_logger", ns)
+        assert callable(ns["set_gui_logger"])

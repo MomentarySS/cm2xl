@@ -36,7 +36,7 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 6）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.2.exe
+# 产物：installer/output/cm2xl_Setup_1.0.3.exe
 ```
 
 打包前确保：
@@ -148,7 +148,7 @@ pcdmis_toolbox/
    class MyModule(ModuleProtocol):
        title = "我的模块"
        icon = "🛠️"
-       version = "1.0.2"
+       version = "1.0.3"
 
        def mount(self, parent): ...
        def unmount(self): ...
@@ -235,6 +235,6 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 版本
 
-`1.0.2` —— v1.0.2 发布 2026-08-27
+`1.0.3` —— v1.0.3 发布 2026-08-28
 
 定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。配置 schema 版本（`CONFIG_SCHEMA_VERSION`）为 `2.0.0`，与应用程序版本独立。

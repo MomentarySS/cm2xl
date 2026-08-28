@@ -4,6 +4,21 @@
 
 ---
 
+## [1.0.3] — 2026-08-28
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.3`
+- 安装包文件名同步为 `cm2xl_Setup_1.0.3.exe`
+
+### CMMFiller 模块
+
+- `modules/cmm_filler/gui.py` **P0**: OCR/填充流程中 5 处懒加载 `from ..core.filler` 错误解析为 `modules.core`，导致安装后点识别/填充报 `No module named 'modules.core'` → 改为 `from .core.filler`
+- `pcdmis_toolbox.spec`：补打包 `modules/pc_to_excel/gui/__init__.py`（PyInstaller 子包发现）
+- `tests/phase8_smoke.py`：新增 `test_cmm_filler_gui_lazy_core_import` 回归测试
+
+---
+
 ## [1.0.2] — 2026-08-27
 
 ### 整体

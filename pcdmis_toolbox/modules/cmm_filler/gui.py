@@ -716,7 +716,7 @@ class CMMFillerGUI:
     def _run_analyze(self, template, pdf_folder):
         gui = self
         try:
-            from ..core.filler import set_gui_logger
+            from .core.filler import set_gui_logger
             set_gui_logger(gui)
             gui.filler = CMMReportFiller(template, dpi=300)
             gui.filler.cancel_check = gui._is_worker_cancelled
@@ -917,7 +917,7 @@ class CMMFillerGUI:
     def _run_batch(self, template, pdf_folder, output_folder, excluded_measures):
         gui = self
         try:
-            from ..core.filler import set_gui_logger
+            from .core.filler import set_gui_logger
             set_gui_logger(gui)
             if gui.filler is None:
                 gui.filler = CMMReportFiller(template, dpi=300)
@@ -962,7 +962,7 @@ class CMMFillerGUI:
     def _run_export(self, template, pdf_folder, output_folder):
         gui = self
         try:
-            from ..core.filler import set_gui_logger
+            from .core.filler import set_gui_logger
             set_gui_logger(gui)
             gui.filler = CMMReportFiller(template, dpi=300)
             gui.filler.cancel_check = gui._is_worker_cancelled
@@ -1038,7 +1038,7 @@ class CMMFillerGUI:
     def _run_summary_export(self, pdf_paths, output_folder):
         gui = self
         try:
-            from ..core.filler import set_gui_logger
+            from .core.filler import set_gui_logger
             set_gui_logger(gui)
             if gui.filler is None:
                 gui.filler = CMMReportFiller(gui.template_var.get().strip() or str(paths.data_dir / 'cmm_filler' / 'template.xlsx'), dpi=300)
@@ -1282,7 +1282,7 @@ class CMMFillerGUI:
 
 if __name__ == '__main__':
     app = CMMFillerGUI()
-    from ..core.filler import set_gui_logger
+    from .core.filler import set_gui_logger
     set_gui_logger(app)
     app.run()
 

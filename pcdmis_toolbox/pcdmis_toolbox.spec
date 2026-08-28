@@ -203,6 +203,7 @@ _local_pkgs = [
     "modules/pc_to_excel/__init__.py",
     "modules/pc_to_excel/connector/__init__.py",
     "modules/pc_to_excel/core/__init__.py",
+    "modules/pc_to_excel/gui/__init__.py",
     "modules/pc_to_excel/export/__init__.py",
     "modules/pc_to_excel/inject/__init__.py",
     "modules/pc_to_excel/utils/__init__.py",
