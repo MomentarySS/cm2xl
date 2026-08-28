@@ -4,6 +4,16 @@
 
 ---
 
+## [1.0.4] — 2026-08-28
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.4`
+- `pcdmis_toolbox.spec`：补打包 `Cython/Utility`（含 `CppSupport.cpp`），修复安装后 OCR 报 `Cython\Utility\CppSupport.cpp` 错误
+- `build/fix_dist.py`：打包后校验 `CppSupport.cpp` 是否存在
+
+---
+
 ## [1.0.3] — 2026-08-28
 
 ### 整体

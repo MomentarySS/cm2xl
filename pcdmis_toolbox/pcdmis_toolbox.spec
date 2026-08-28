@@ -177,6 +177,8 @@ _all_hidden = list(set(_extra_hidden + [
 datas = [
     # customtkinter 主题资源
     (str(_ctk_dir / "assets"), "customtkinter/assets"),
+    # Cython Utility（pyclipper/scipy 等运行时需 CppSupport.cpp 等模板）
+    (_cython_util, "Cython/Utility"),
     # 自定义主题 JSON（避免冷启动重新生成时丢失 weight 等字段）
     (str(ROOT / "utils" / "theme.json"), "utils"),
     # BAS 脚本模板（pc_to_excel 运行时部署到 LocalAppData）

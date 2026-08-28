@@ -237,6 +237,16 @@ def _patch_paddleocr_source(paddleocr_py: Path):
         print('  Patched paddleocr.py frozen imports')
 
 
+def _verify_cython_utility(internal: Path) -> bool:
+    """OCR 依赖链（pyclipper/scipy）运行时需要 Cython/Utility/CppSupport.cpp。"""
+    cpp = internal / 'Cython' / 'Utility' / 'CppSupport.cpp'
+    if cpp.is_file():
+        print(f'  Cython Utility OK: {cpp.name}')
+        return True
+    print(f'  ERROR: missing {cpp} — add (_cython_util, "Cython/Utility") to spec datas')
+    return False
+
+
 def fix_dist(dist_path):
     internal = Path(dist_path) / '_internal'
     if not internal.is_dir():
@@ -244,9 +254,10 @@ def fix_dist(dist_path):
         return False
 
     _copy_paddleocr_package(internal)
+    ok = _verify_cython_utility(internal)
 
-    print('\nFix complete!')
-    return True
+    print('\nFix complete!' if ok else '\nFix incomplete — see errors above')
+    return ok
 
 
 if __name__ == '__main__':
