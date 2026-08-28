@@ -1,11 +1,11 @@
 ; cm2xl Inno Setup 安装脚本
 ; 需先运行 ..\build.bat 完成 PyInstaller 打包
 ; 编译: iscc installer\cm2xl.iss
-; 输出: installer\output\cm2xl_Setup_1.0.5.exe
+; 输出: installer\output\cm2xl_Setup_1.0.6.exe
 
 #define SourceDir ".."
 #define MyAppName "cm2xl"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "cm2xl"
 #define MyAppExeName "cm2xl.exe"
 ; 旧版 CMMFiller GUID 与 cm2xl 不同，用于残留检测（Pascal 里拼接花括号，避免 ISS 常量解析）
@@ -31,7 +31,7 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\cm2xl.ico
 SetupIconFile=..\cm2xl.ico
 LicenseFile=
 
@@ -48,9 +48,9 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 Source: "{#SourceDir}\dist\cm2xl\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\cm2xl.ico"; WorkingDir: "{app}"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; WorkingDir: "{app}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\cm2xl.ico"; Tasks: desktopicon; WorkingDir: "{app}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent

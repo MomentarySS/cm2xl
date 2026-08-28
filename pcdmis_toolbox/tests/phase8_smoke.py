@@ -378,3 +378,21 @@ class TestModuleCoreImports:
         ns = gui_mod.__dict__.copy()
         exec("from .core.filler import set_gui_logger", ns)
         assert callable(ns["set_gui_logger"])
+
+
+# ── 11. 应用图标（CTk 6 兼容） ─────────────────────────────────────────────
+
+class TestAppIcon:
+    def test_get_logo_image_uses_pil_not_path(self):
+        from PIL import Image
+        from utils.app_icon import get_logo_image
+
+        img = get_logo_image(32)
+        assert img is not None
+        assert isinstance(img.cget("light_image"), Image.Image)
+        assert isinstance(img.cget("dark_image"), Image.Image)
+
+    def test_icon_ico_path_exists(self):
+        from utils.app_icon import icon_ico_path
+
+        assert icon_ico_path() is not None

@@ -4,6 +4,18 @@
 
 ---
 
+## [1.0.6] — 2026-08-28
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.6`
+- **P0 修复**：CustomTkinter 6.0 的 `CTkImage` 不再接受路径字符串，`utils/app_icon.py` 改为传入 `PIL.Image` 对象，修复启动即崩溃（`light_image must be instance of PIL.Image.Image`）
+- `utils/app_icon.py`：窗口图标设置改用 `after_idle` + `wm iconbitmap`；优先从 exe 同级加载 `cm2xl.ico`
+- `build/fix_dist.py`：打包后将 `cm2xl.ico` / `assets/app_logo.png` 复制到 exe 同级（快捷方式图标 + 标题栏图标）
+- `installer/cm2xl.iss`：桌面/开始菜单快捷方式显式指定 `IconFilename: {app}\cm2xl.ico`；卸载项图标同步
+
+---
+
 ## [1.0.5] — 2026-08-28
 
 ### 整体

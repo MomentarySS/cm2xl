@@ -247,6 +247,40 @@ def _verify_cython_utility(internal: Path) -> bool:
     return False
 
 
+def _deploy_branding(dist_path: Path) -> bool:
+    """把 ico / assets 复制到 exe 同级，供快捷方式图标与 iconbitmap 使用。"""
+    dist = Path(dist_path)
+    internal = dist / '_internal'
+    root = dist.parent if dist.name == '_internal' else dist
+    if not internal.is_dir():
+        internal = root / '_internal'
+    if not root.is_dir():
+        print(f'  ERROR: dist root not found: {root}')
+        return False
+
+    ok = True
+    spec_root = Path(__file__).resolve().parent.parent
+    ico_src = spec_root / 'cm2xl.ico'
+    if ico_src.is_file():
+        ico_dst = root / 'cm2xl.ico'
+        shutil.copy2(ico_src, ico_dst)
+        print(f'  Branding: {ico_dst.name} -> {root.name}/')
+    else:
+        print(f'  WARN: missing source icon {ico_src}')
+        ok = False
+
+    logo_src = spec_root / 'assets' / 'app_logo.png'
+    if logo_src.is_file():
+        logo_dst_dir = root / 'assets'
+        logo_dst_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(logo_src, logo_dst_dir / 'app_logo.png')
+        print(f'  Branding: app_logo.png -> {root.name}/assets/')
+    else:
+        print(f'  WARN: missing source logo {logo_src}')
+
+    return ok
+
+
 def fix_dist(dist_path):
     internal = Path(dist_path) / '_internal'
     if not internal.is_dir():
@@ -254,8 +288,10 @@ def fix_dist(dist_path):
         return False
 
     _copy_paddleocr_package(internal)
-    ok = _verify_cython_utility(internal)
+    ok_cython = _verify_cython_utility(internal)
+    ok_brand = _deploy_branding(Path(dist_path))
 
+    ok = ok_cython and ok_brand
     print('\nFix complete!' if ok else '\nFix incomplete — see errors above')
     return ok
 
