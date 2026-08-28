@@ -16,7 +16,8 @@ import threading
 import time
 import customtkinter as ctk
 
-from toolbox.app_meta import APP_TITLE, APP_VERSION
+from toolbox.app_meta import APP_VERSION
+from utils.app_icon import apply_window_icon, get_logo_image
 
 # ── 主题色（与 utils/theme.py 保持一致）───────────────────────────────────────
 _ACCENT      = "#0F766E"
@@ -111,6 +112,7 @@ class SplashScreen:
         splash.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
 
         self._root = splash
+        apply_window_icon(splash)
         self._build_ui(splash)
         splash.deiconify()
 
@@ -127,11 +129,17 @@ class SplashScreen:
         card.grid(row=0, column=0, sticky="nsew", padx=28, pady=28)
         card.columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
-            card, text="cm2xl",
-            font=ctk.CTkFont(family="Segoe UI", size=52, weight="bold"),
-            text_color=_ACCENT, fg_color="transparent",
-        ).grid(row=0, column=0, pady=(20, 2))
+        self._logo = get_logo_image(72)
+        if self._logo is not None:
+            ctk.CTkLabel(
+                card, text="", image=self._logo, fg_color="transparent",
+            ).grid(row=0, column=0, pady=(20, 2))
+        else:
+            ctk.CTkLabel(
+                card, text="cm2xl",
+                font=ctk.CTkFont(family="Segoe UI", size=52, weight="bold"),
+                text_color=_ACCENT, fg_color="transparent",
+            ).grid(row=0, column=0, pady=(20, 2))
 
         ctk.CTkLabel(
             card, text=f"Version {APP_VERSION}",

@@ -11,6 +11,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION
+from utils.app_icon import apply_window_icon, get_logo_image
 from utils.paths import paths
 from utils.audit import audit
 from utils.theme import TOOLBOX_THEME
@@ -89,12 +90,21 @@ class Shell:
             fg_color=[TOOLBOX_THEME["card_bg"], "#252B3A"]
         )
 
+        title_frame = ctk.CTkFrame(self._header, fg_color="transparent")
+        title_frame.pack(side="left", padx=16, pady=0)
+
+        self._header_logo = get_logo_image(28)
+        if self._header_logo is not None:
+            ctk.CTkLabel(
+                title_frame, text="", image=self._header_logo, fg_color="transparent",
+            ).pack(side="left", padx=(0, 8))
+
         ctk.CTkLabel(
-            self._header,
+            title_frame,
             text=f"{APP_TITLE} {APP_VERSION}",
             font=("Microsoft YaHei", 14, "bold"),
             text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
-        ).pack(side="left", padx=16, pady=0)
+        ).pack(side="left", pady=0)
 
         # 顶栏右侧：关于 + 设置（"导出旧版配置"已移入设置面板"兼容性"分组）
         ctk.CTkButton(

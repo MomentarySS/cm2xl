@@ -183,6 +183,9 @@ datas = [
     (str(ROOT / "utils" / "theme.json"), "utils"),
     # BAS 脚本模板（pc_to_excel 运行时部署到 LocalAppData）
     (str(_bas_template_src), "scripts"),
+    # 应用图标（运行时窗口标题栏 + 界面 Logo）
+    (str(ROOT / "cm2xl.ico"), "."),
+    (str(ROOT / "assets" / "app_logo.png"), "assets"),
 ]
 
 # CMMFiller 模板（bundled，放在模块目录内，core/filler.py 用 __file__ 相对定位）

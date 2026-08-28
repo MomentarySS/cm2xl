@@ -30,6 +30,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
+from utils.app_icon import apply_window_icon
 from utils.paths import paths
 from utils.settings import (
     TOOLBOX_DEFAULT_SETTINGS,
@@ -60,6 +61,7 @@ class SettingsDialog:
         self._win.geometry("640x500")
         self._win.minsize(560, 460)
         self._win.transient(parent)
+        apply_window_icon(self._win)
         self._win.after(120, self._win.grab_set)
 
         # 工作副本（未保存不写盘）

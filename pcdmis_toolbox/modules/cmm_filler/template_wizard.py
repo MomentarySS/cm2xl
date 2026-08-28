@@ -11,6 +11,7 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 from pathlib import Path
 from utils.settings import save_settings_json_atomic
 from utils.paths import paths
+from utils.app_icon import apply_window_icon
 
 def _get_appdata_dir():
     """统一配置目录：{data}/config/cmm_filler（与 gui.py/filler.py 一致，ARCH 3.9）"""
@@ -50,6 +51,7 @@ class TemplateWizard:
             self.root.transient(parent)
         self.root.title('模板配置向导')
         self.root.geometry('1000x780')
+        apply_window_icon(self.root)
 
         self.template_path = None
         self.wb = None

@@ -6,6 +6,7 @@ cm2xl — 关于弹窗
 import customtkinter as ctk
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION
+from utils.app_icon import apply_window_icon, get_logo_image
 from utils.paths import paths
 from utils.theme import TOOLBOX_THEME
 
@@ -24,9 +25,10 @@ class AboutDialog:
     def __init__(self, parent):
         self._win = ctk.CTkToplevel(parent)
         self._win.title("关于")
-        self._win.geometry("460x340")
+        self._win.geometry("460x380")
         self._win.resizable(False, False)
         self._win.transient(parent)
+        apply_window_icon(self._win)
         # 延迟 grab_set（等窗口可见后再设焦点，避免部分 Windows 平台丢焦点）
         self._win.after(120, self._win.grab_set)
 
@@ -38,12 +40,21 @@ class AboutDialog:
         text_color = [TOOLBOX_THEME["text"], "#E8E6E1"]
         muted = [TOOLBOX_THEME["text_muted"], "#9CA3AF"]
 
-        # 应用名（粗体大字号）
+        # Logo + 应用名
+        title_frame = ctk.CTkFrame(win, fg_color="transparent")
+        title_frame.pack(pady=(24, 4))
+
+        self._logo = get_logo_image(64)
+        if self._logo is not None:
+            ctk.CTkLabel(
+                title_frame, text="", image=self._logo, fg_color="transparent",
+            ).pack(pady=(0, 8))
+
         ctk.CTkLabel(
-            win, text=f"📐 {APP_TITLE}",
+            title_frame, text=APP_TITLE,
             font=ctk.CTkFont(family="Microsoft YaHei", size=22, weight="bold"),
             text_color=text_color,
-        ).pack(pady=(28, 4))
+        ).pack()
 
         # 版本
         ctk.CTkLabel(

@@ -16,6 +16,7 @@ from pathlib import Path
 from .core.filler import CMMReportFiller, load_settings, save_settings
 from .app_meta import __version__, APP_TITLE, APP_DESCRIPTION
 from utils.paths import paths
+from utils.app_icon import apply_window_icon
 from utils.audit import audit
 from utils.threading_utils import CancellableWorker
 from toolbox.protocol import ModuleProtocol
@@ -554,6 +555,7 @@ class CMMFillerGUI:
         win.geometry('740x460')
         win.minsize(700, 420)
         win.transient(self.root.winfo_toplevel())
+        apply_window_icon(win)
         # 点 X 关闭视为跳过：保存当前路径，下次不再打扰
         win.protocol('WM_DELETE_WINDOW', lambda: (self._save_paths(), win.destroy()))
         self._guide_win = win
@@ -753,6 +755,7 @@ class CMMFillerGUI:
         win.title('识别结果预览 - 勾选要保留的测量项')
         win.geometry('900x640')
         win.transient(self.root)
+        apply_window_icon(win)
         self._preview_window = win
         self._preview_widgets = []
 

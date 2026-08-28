@@ -158,10 +158,13 @@ def _create_shell():
     """在主线程创建 Shell 窗口（必须在主线程调用）。"""
     from toolbox.shell import Shell
 
+    from utils.app_icon import apply_window_icon
+
     root = ctk.CTk()
     root.title(f"{APP_TITLE} {APP_VERSION}")
     root.geometry("1100x700")
     root.minsize(900, 600)
+    apply_window_icon(root)
     shell = Shell(root)
     root.protocol("WM_DELETE_WINDOW", lambda: shell.on_close(root))
     return root, shell

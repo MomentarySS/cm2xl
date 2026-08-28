@@ -1,11 +1,11 @@
 ; cm2xl Inno Setup 安装脚本
 ; 需先运行 ..\build.bat 完成 PyInstaller 打包
 ; 编译: iscc installer\cm2xl.iss
-; 输出: installer\output\cm2xl_Setup_1.0.4.exe
+; 输出: installer\output\cm2xl_Setup_1.0.5.exe
 
 #define SourceDir ".."
 #define MyAppName "cm2xl"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "cm2xl"
 #define MyAppExeName "cm2xl.exe"
 ; 旧版 CMMFiller GUID 与 cm2xl 不同，用于残留检测（Pascal 里拼接花括号，避免 ISS 常量解析）

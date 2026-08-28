@@ -54,20 +54,21 @@ _C = {
     "warn": _lp("#C2410C", "#EA580C"),
     "warn_hover": _lp("#EA580C", "#F97316"),
     "bad": _lp("#B91C1C", "#F87171"),
-    "card_border": _lp("#E2E8F0", "#334155"),
+    "card_border": _lp("#B8BFC8", "#334155"),
     # 仅 pc_to_excel 使用
-    "muted": _lp("#64748B", "#475569"),
+    "muted": _lp("#5B6775", "#475569"),
     "muted_hover": _lp("#475569", "#334155"),
-    "subtle": _lp("#64748B", "#94A3B8"),
-    "idle": _lp("#94A3B8", "#64748B"),
-    "card": _lp("#FAFAF7", "#252B3A"),
-    "page": _lp("#F5F4EF", "#1A1F2B"),
+    "subtle": _lp("#52606D", "#94A3B8"),
+    "idle": _lp("#7B8794", "#64748B"),
+    "card": _lp("#F0EEE6", "#252B3A"),
+    "page": _lp("#E4E2DA", "#1A1F2B"),
     "stripe": _lp("#0F766E", "#14B8A6"),
-    "hint_bg": _lp("#F0FDFA", "#134E4A"),
+    "hint_bg": _lp("#D9EDE8", "#134E4A"),
 }
 
 # For REPORTS_DIR reference
 from utils.paths import paths
+from utils.app_icon import apply_window_icon
 
 
 class MainWindow:
@@ -276,6 +277,40 @@ class MainWindow:
             hover_color=_C["warn_hover"],
         )
 
+    @staticmethod
+    def _checkbox_width(text: str, *, min_width: int = 100) -> int:
+        """CTkCheckBox 默认 width=100，中文标签会画出控件边界但点击区域仍只有 100px。"""
+        return max(min_width, len(text) * 14 + 44)
+
+    def _checkbox(self, parent, text: str, variable, command=None, **kwargs):
+        """可点击复选框：补足宽度，并给背景 canvas 绑点击（CTk 6 空白区默认无响应）。"""
+        width = kwargs.pop("width", self._checkbox_width(text))
+        cb = ctk.CTkCheckBox(
+            parent,
+            text=text,
+            variable=variable,
+            command=command,
+            font=self._font(12),
+            width=width,
+            checkbox_width=20,
+            checkbox_height=20,
+            border_width=1,
+            border_color=_C["card_border"],
+            **kwargs,
+        )
+        cb._bg_canvas.bind("<Button-1>", cb.toggle)
+        return cb
+
+    def _sync_shell_pcdmis_status(self) -> None:
+        """挂载到 Shell 时同步底栏 PC-DMIS 连接灯。"""
+        shell = getattr(self, "shell", None)
+        if shell is None or not hasattr(shell, "update_pcdmis_status"):
+            return
+        if self.connector.is_connected():
+            shell.update_pcdmis_status(True, self.connector.version)
+        else:
+            shell.update_pcdmis_status(False)
+
     def _hint(self, parent, text: str) -> None:
         ctk.CTkLabel(
             parent,
@@ -424,19 +459,17 @@ class MainWindow:
 
         scope = ctk.CTkFrame(export, fg_color="transparent")
         scope.pack(fill="x", pady=(12, 0))
-        ctk.CTkCheckBox(
+        self._checkbox(
             scope,
             text="仅报告窗口数据",
             variable=self.report_only_var,
             command=self._save_settings_from_ui,
-            font=self._font(12),
         ).pack(side="left")
-        ctk.CTkCheckBox(
+        self._checkbox(
             scope,
             text="仅 Mark 命令",
             variable=self.require_marked_var,
             command=self._save_settings_from_ui,
-            font=self._font(12),
         ).pack(side="left", padx=(18, 0))
 
         btn_row = ctk.CTkFrame(export, fg_color="transparent")
@@ -459,13 +492,12 @@ class MainWindow:
         )
         form_row1 = ctk.CTkFrame(form, fg_color="transparent")
         form_row1.pack(fill="x")
-        ctk.CTkCheckBox(
+        self._checkbox(
             form_row1,
             text="启用填入",
             variable=self.form_fill_var,
             command=self._save_settings_from_ui,
             width=100,
-            font=self._font(12),
         ).pack(side="left")
         ctk.CTkEntry(form_row1, textvariable=self.form_path_var, height=34, corner_radius=8).pack(
             side="left", fill="x", expand=True, padx=8
@@ -492,12 +524,11 @@ class MainWindow:
 
         form_row3 = ctk.CTkFrame(form, fg_color="transparent")
         form_row3.pack(fill="x", pady=(12, 0))
-        ctk.CTkCheckBox(
+        self._checkbox(
             form_row3,
             text="接着上次结果填入",
             variable=self.chain_from_last_var,
             command=self._save_settings_from_ui,
-            font=self._font(12),
         ).pack(side="left")
         self._btn_muted(form_row3, "清除续填", self._clear_last_fill, width=90, height=30).pack(
             side="left", padx=10
@@ -508,13 +539,12 @@ class MainWindow:
 
         form_row_piece = ctk.CTkFrame(form, fg_color="transparent")
         form_row_piece.pack(fill="x", pady=(12, 0))
-        ctk.CTkCheckBox(
+        self._checkbox(
             form_row_piece,
             text="写入件号",
             variable=self.write_piece_id_var,
             command=self._save_settings_from_ui,
-            width=90,
-            font=self._font(12),
+            width=110,
         ).pack(side="left")
         ctk.CTkEntry(
             form_row_piece,
@@ -523,13 +553,12 @@ class MainWindow:
             height=34,
             corner_radius=8,
         ).pack(side="left", fill="x", expand=True, padx=8)
-        ctk.CTkCheckBox(
+        self._checkbox(
             form_row_piece,
             text="核对规格/名义",
             variable=self.nominal_check_var,
             command=self._save_settings_from_ui,
-            width=120,
-            font=self._font(12),
+            width=130,
         ).pack(side="right")
 
         form_row_map = ctk.CTkFrame(form, fg_color="transparent")
@@ -685,6 +714,7 @@ class MainWindow:
             self.part_var.set(self.connector.get_active_part_name() or "—")
             self.status_var.set("已连接")
             self._set_conn_visual("ok")
+            self._sync_shell_pcdmis_status()
             if self._wizard_frame and not self._wizard_done:
                 self._dismiss_wizard()
         else:
@@ -704,6 +734,7 @@ class MainWindow:
         self.status_var.set("已断开")
         self.perm_var.set(self._perm_text())
         self._set_conn_visual("idle")
+        self._sync_shell_pcdmis_status()
 
     def _save_settings_from_ui(self) -> None:
         self.settings.export_dir = self.export_dir_var.get().strip()
@@ -788,6 +819,8 @@ class MainWindow:
         except Exception:
             # 连接状态刷新失败不影响主流程，仅记录日志
             logger.exception("刷新连接状态 UI 失败")
+        else:
+            self._sync_shell_pcdmis_status()
 
     def _ensure_connected(self, *, action: str) -> bool:
         """导出/填入前自动保持会话；失效则静默重连，无需每件手点「连接」。"""
@@ -987,6 +1020,7 @@ class MainWindow:
         win.geometry("660x480")
         win.configure(fg_color=_C["page"])
         win.transient(self.root)
+        apply_window_icon(win)
         win.grab_set()
 
         card = ctk.CTkFrame(
@@ -1181,6 +1215,7 @@ class MainWindow:
                 self.conn_var.set("未连接")
                 self.part_var.set("—")
                 self._set_conn_visual("idle")
+                self._sync_shell_pcdmis_status()
                 return
         self._refresh_connection_ui()
 

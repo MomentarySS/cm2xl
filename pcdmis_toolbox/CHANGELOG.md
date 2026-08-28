@@ -4,6 +4,28 @@
 
 ---
 
+## [1.0.5] — 2026-08-28
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.5`
+- 应用图标：`cm2xl.ico` 换新；新增 `utils/app_icon.py` 统一窗口标题栏图标与界面 Logo（Splash / 关于 / 顶栏 / 子窗口）
+- `assets/app_logo.png`：界面内 Logo 资源；`pcdmis_toolbox.spec` 打包 `cm2xl.ico` 与 `assets/app_logo.png`
+- 浅色主题「暖灰纸感」：`utils/theme.py` 调整页面/卡片/边框/输入框对比度，修复勾选框白勾不可见（`CTkCheckBox.fg_color` 改回品牌青绿）
+- `build/generate_theme_preview.py`：主题改善前后对比预览图生成脚本
+
+### pc_to_excel 模块
+
+- `gui/main_window.py`：导出/填入板块复选框无法点击 → 新增 `_checkbox()`（自动宽度 + 背景 canvas 绑点击）
+- `gui/main_window.py`：挂载 Shell 时同步底栏 PCDMIS 连接状态灯
+
+### cm2xl 工具箱
+
+- `toolbox/shell.py` / `splash.py` / `about_dialog.py` / `settings_dialog.py`：接入统一图标与 Logo
+- `main.py` / `modules/cmm_filler/gui.py` / `template_wizard.py`：子窗口设置标题栏图标
+
+---
+
 ## [1.0.4] — 2026-08-28
 
 ### 整体

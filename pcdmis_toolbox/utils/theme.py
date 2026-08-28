@@ -16,14 +16,17 @@ TOOLBOX_THEME = {
     "ok": "#15803D",
     "warn": "#C2410C",
     "bad": "#B91C1C",
-    # 界面色（避开纯白 #FFFFFF，改用低饱和暖白，护眼）
-    "muted": "#64748B",
-    "card_bg": "#FAFAF7",        # 暖灰白，避开纯白刺眼
-    "card_border": "#E5E7EB",
-    "page_bg": "#F5F4EF",         # 暖灰背景，避免纯灰冷感
+    # 界面色（暖灰纸感：降低纯白刺激，拉大层级对比）
+    "muted": "#5B6775",
+    "card_bg": "#F0EEE6",
+    "card_border": "#B8BFC8",
+    "page_bg": "#E4E2DA",
+    "entry_bg": "#FAFAF8",
+    "entry_border": "#9CA8B6",
+    "hint_bg": "#D9EDE8",
     # 文字
-    "text": "#1F2937",
-    "text_muted": "#6B7280",
+    "text": "#1A2332",
+    "text_muted": "#4B5563",
 }
 
 TOOLBOX_THEME_JSON_PATH = Path(__file__).parent / "theme.json"
@@ -36,7 +39,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
     完整字段参考：customtkinter/assets/themes/green.json
 
     配色策略：
-    - 浅色：用暖灰白避开纯白刺眼（card_bg=#FAFAF7 / page_bg=#F5F4EF）
+    - 浅色：暖灰纸背景 + 浅米卡片 + 清晰边框（降低眩光、提高控件可辨度）
     - 深色：用低饱和深石板，避免纯黑冷感
     - CTkLabel fg_color 设为 transparent，避免文字后出现灰色色块
     """
@@ -49,9 +52,12 @@ def _build_theme_json(dest: Path | None = None) -> None:
     card_bg_d = "#252B3A"           # 深石板卡片
     card_bd = TOOLBOX_THEME["card_border"]
     card_bd_d = "#374151"
+    entry_bg_l = TOOLBOX_THEME["entry_bg"]
+    entry_bd_l = TOOLBOX_THEME["entry_border"]
     text_l = TOOLBOX_THEME["text"]
     text_d = "#E8E6E1"              # 暖白文字（非冷蓝白）
-    muted = "#9CA3AF"
+    muted = TOOLBOX_THEME["text_muted"]
+    checkbox_bd_l = "#7B8794"
 
     theme = {
         "CTk": {"fg_color": [page_bg_l, page_bg_d]},
@@ -85,8 +91,8 @@ def _build_theme_json(dest: Path | None = None) -> None:
         "CTkEntry": {
             "corner_radius": 6,
             "border_width": 1,
-            "border_color": [card_bd, card_bd_d],
-            "fg_color": [page_bg_l, page_bg_d],
+            "border_color": [entry_bd_l, card_bd_d],
+            "fg_color": [entry_bg_l, page_bg_d],
             "text_color": [text_l, text_d],
             "placeholder_text_color": [muted, "#64748B"],
         },
@@ -138,9 +144,10 @@ def _build_theme_json(dest: Path | None = None) -> None:
         },
         "CTkCheckBox": {
             "corner_radius": 6,
-            "border_width": 0,
-            "border_color": [card_bd, card_bd_d],
-            "fg_color": [page_bg_l, page_bg_d],
+            "border_width": 1,
+            # fg_color = 勾选后方框填充色（须与白色勾形成对比，不能用浅底）
+            "border_color": [checkbox_bd_l, card_bd_d],
+            "fg_color": [accent, accent],
             "hover_color": [accent_h, "#0D9488"],
             "checkmark_color": ["#FFFFFF", "#F1F5F9"],
             "text_color": [text_l, text_d],
