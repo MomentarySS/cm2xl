@@ -12,6 +12,7 @@ cm2xl — 设置弹窗
 │                                            │
 │  [日志]                                     │
 │    级别: ○ DEBUG  ● INFO  ○ WARNING       │
+│    [清理日志文件]                            │
 │                                            │
 │  [兼容性]                                   │
 │    [导出旧版配置] (从顶栏移入)             │
@@ -22,15 +23,19 @@ cm2xl — 设置弹窗
 保存行为：
 - 外观模式 + 日志级别：运行时立即生效
 - OCR 模型目录：仅写入 settings.json，下次启动 OCR 时生效
+- 清理日志 / OCR 缓存：立即执行，无需点「保存」
 """
 
 import logging
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
 from utils.app_icon import apply_window_icon
+from utils.audit import audit
+from utils.log_maintenance import cleanup_logs, directory_size_bytes, iter_log_files
+from utils.ocr_cache import clear_ocr_cache
 from utils.paths import paths
 from utils.settings import (
     TOOLBOX_DEFAULT_SETTINGS,
@@ -58,8 +63,8 @@ class SettingsDialog:
         self._shell = shell
         self._win = ctk.CTkToplevel(parent)
         self._win.title("设置")
-        self._win.geometry("640x500")
-        self._win.minsize(560, 460)
+        self._win.geometry("640x560")
+        self._win.minsize(560, 520)
         self._win.transient(parent)
         apply_window_icon(self._win)
         self._win.after(120, self._win.grab_set)
@@ -123,6 +128,13 @@ class SettingsDialog:
         self._ocr_var.trace_add("write", lambda *_: self._refresh_ocr_hint())
         self._ocr_tier_var.trace_add("write", lambda *_: self._refresh_ocr_hint())
         self._refresh_ocr_hint()
+        ctk.CTkButton(
+            body, text="清理 OCR 缓存", height=30,
+            font=ctk.CTkFont(family="Microsoft YaHei", size=12),
+            fg_color="transparent", border_width=1,
+            border_color=muted, text_color=text_color,
+            command=self._cleanup_ocr_cache,
+        ).pack(fill="x", padx=4, pady=(6, 0))
 
         # 3. 日志分组
         self._build_section(body, "日志", text_color).pack(fill="x", pady=(10, 6))
@@ -132,6 +144,20 @@ class SettingsDialog:
             variable=self._log_level_var, height=32,
             selected_color=accent, selected_hover_color=accent_h,
         ).pack(fill="x", padx=4)
+        self._log_size_hint = ctk.CTkLabel(
+            body, text="",
+            font=ctk.CTkFont(family="Microsoft YaHei", size=10),
+            text_color=muted, justify="left",
+        )
+        self._log_size_hint.pack(anchor="w", padx=4, pady=(4, 4))
+        self._refresh_log_size_hint()
+        ctk.CTkButton(
+            body, text="清理日志文件", height=30,
+            font=ctk.CTkFont(family="Microsoft YaHei", size=12),
+            fg_color="transparent", border_width=1,
+            border_color=muted, text_color=text_color,
+            command=self._cleanup_logs,
+        ).pack(fill="x", padx=4, pady=(0, 2))
 
         # 4. 兼容性分组
         self._build_section(body, "兼容性", text_color).pack(fill="x", pady=(10, 6))
@@ -217,9 +243,64 @@ class SettingsDialog:
     def _reset_ocr_dir(self) -> None:
         self._ocr_var.set("")
 
+    def _refresh_log_size_hint(self) -> None:
+        size_mb = directory_size_bytes(iter_log_files(paths.log_dir)) / (1024 * 1024)
+        self._log_size_hint.configure(
+            text=(
+                f"日志目录：{paths.log_dir}\n"
+                f"当前约 {size_mb:.1f} MB · 启动超 100 MB 自动删最旧"
+                f"（安装版在用户 AppData，不在程序安装目录）"
+            )
+        )
+
+    def _cleanup_logs(self) -> None:
+        if not messagebox.askyesno(
+            "清理日志",
+            "将删除日志目录中的全部 .log 文件（含轮转备份与 crash.log）。\n\n是否继续？",
+            parent=self._win,
+        ):
+            return
+        try:
+            result = cleanup_logs(paths.log_dir, max_total_bytes=0)
+            audit("cleanup_logs", **result)
+            messagebox.showinfo(
+                "清理完成",
+                f"已删除 {result['deleted_files']} 个文件，"
+                f"释放约 {result['freed_bytes'] / (1024 * 1024):.1f} MB。",
+                parent=self._win,
+            )
+            self._refresh_log_size_hint()
+            if self._shell:
+                self._shell.update_status("日志已清理", "ok")
+        except Exception as exc:
+            logger.exception("清理日志失败")
+            messagebox.showerror("清理失败", str(exc), parent=self._win)
+
+    def _cleanup_ocr_cache(self) -> None:
+        if not messagebox.askyesno(
+            "清理 OCR 缓存",
+            "将删除 OCR 渲染缓存图片与 ocr_cache.json。\n"
+            "下次识别会重新渲染 PDF（稍慢）。\n\n是否继续？",
+            parent=self._win,
+        ):
+            return
+        try:
+            result = clear_ocr_cache()
+            audit("cleanup_ocr_cache", source="settings", **result)
+            messagebox.showinfo(
+                "清理完成",
+                f"已删除 {result['png_files']} 张缓存图"
+                + (f"，清除 {result['json_entries_cleared']} 条 OCR 记录。" if result["json_removed"] else "。"),
+                parent=self._win,
+            )
+            if self._shell:
+                self._shell.update_status("OCR 缓存已清理", "ok")
+        except Exception as exc:
+            logger.exception("清理 OCR 缓存失败")
+            messagebox.showerror("清理失败", str(exc), parent=self._win)
+
     def _export_legacy_settings(self) -> None:
         """从设置面板直接导出旧版配置（复用 shell._export_legacy_settings 逻辑）。"""
-        from tkinter import messagebox
         path = filedialog.asksaveasfilename(
             title="导出旧版配置",
             defaultextension=".json",

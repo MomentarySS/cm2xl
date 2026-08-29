@@ -38,6 +38,11 @@ class PCToExcelModule(ModuleProtocol):
     def unmount(self) -> None:
         """从 Shell 内容区卸载"""
         if self._instance:
+            if hasattr(self._instance, "_stop_status_watcher"):
+                try:
+                    self._instance._stop_status_watcher()
+                except Exception:
+                    pass
             if hasattr(self._instance, "_on_close"):
                 try:
                     self._instance._on_close()
@@ -50,9 +55,11 @@ class PCToExcelModule(ModuleProtocol):
             self._container = None
 
     def on_activate(self) -> None:
-        """模块被选中时调用 — 静默刷新连接状态（不弹框）"""
+        """模块被选中时调用 — 刷新连接状态并启动后台轮询（ARCHITECTURE 3.19）"""
         if self._instance and hasattr(self._instance, "connector"):
             self._instance.root.after(0, self._instance._refresh_conn_status)
+            if hasattr(self._instance, "_start_status_watcher"):
+                self._instance._start_status_watcher()
 
 
 # 模块注册（由 modules/__init__.py 的 pkgutil 自动发现）

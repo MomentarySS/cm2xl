@@ -79,6 +79,8 @@ class MainWindow:
         self._busy = False
         self._wizard_frame = None   # 首次运行向导面板
         self._wizard_done = False  # 向导是否已被用户关闭
+        self._status_watcher_running = False
+        self._status_watcher_after_id = None
 
         # ── 挂载模式支持 ──────────────────────────────────────────────
         # parent=None → 自建根窗口（独立运行，行为不变）
@@ -1203,6 +1205,38 @@ class MainWindow:
         self.status_var.set(title)
         messagebox.showerror(title, msg)
 
+    def _start_status_watcher(self) -> None:
+        """后台每 30 秒检测 COM 会话是否仍有效（ARCHITECTURE 3.19）。"""
+        self._stop_status_watcher()
+        self._status_watcher_running = True
+        self._schedule_status_watch()
+
+    def _stop_status_watcher(self) -> None:
+        self._status_watcher_running = False
+        if self._status_watcher_after_id is not None:
+            try:
+                self.root.after_cancel(self._status_watcher_after_id)
+            except Exception:
+                pass
+            self._status_watcher_after_id = None
+
+    def _schedule_status_watch(self) -> None:
+        if not self._status_watcher_running:
+            return
+        self._status_watcher_tick()
+        self._status_watcher_after_id = self.root.after(30_000, self._schedule_status_watch)
+
+    def _status_watcher_tick(self) -> None:
+        if not self._status_watcher_running:
+            return
+        try:
+            if self.connector.is_connected() and not self.connector.session_alive():
+                self.connector.disconnect()
+            self._refresh_connection_ui()
+            self._sync_shell_pcdmis_status()
+        except Exception as exc:
+            logger.debug("PCDMIS 状态轮询异常: %s", exc)
+
     def _refresh_conn_status(self) -> None:
         """模块激活时静默刷新连接状态（不弹错误框）。
 
@@ -1220,6 +1254,7 @@ class MainWindow:
         self._refresh_connection_ui()
 
     def _on_close(self) -> None:
+        self._stop_status_watcher()
         self._save_settings_from_ui()
         self.connector.disconnect()
         # 挂载模式下 root 属于 Shell，不能 destroy；独立运行时才关窗
@@ -1232,6 +1267,8 @@ class MainWindow:
             messagebox.showwarning("权限提示", msg)
         if is_pcdmis_running() and not self.connector.is_connected():
             self.root.after(400, self._connect)
+        if self._owns_root:
+            self._start_status_watcher()
         if self._owns_root:
             self.root.mainloop()
 

@@ -54,6 +54,17 @@ setup_logging("pc_to_excel", paths.log_dir)     # pc_to_excel 日志落盘（连
 logger.info(f"{APP_TITLE} {APP_VERSION} 启动中...")
 audit("app_start", version=APP_VERSION, frozen=paths.is_frozen())
 
+# 启动时日志目录超 100MB 则删最旧文件（ARCHITECTURE 3.6）
+from utils.log_maintenance import prune_logs_on_startup as _prune_logs_on_startup
+
+_prune_result = _prune_logs_on_startup(paths.log_dir)
+if _prune_result:
+    logger.info(
+        "启动日志裁剪: deleted=%s freed=%.1fMB",
+        _prune_result["deleted_files"],
+        _prune_result["freed_bytes"] / (1024 * 1024),
+    )
+
 # ── 全局异常处理 ────────────────────────────────────────────────────────────
 def _global_exception_handler(exc_type, exc_val, exc_tb):
     tb = "".join(traceback.format_exception(exc_type, exc_val, exc_tb))
@@ -92,33 +103,16 @@ atexit.register(_cleanup_on_exit)
 # ── 配置迁移 + 实例锁 ───────────────────────────────────────────────────────
 
 def _migrate_module_settings() -> None:
-    """启动时对两个模块执行配置迁移：
-    1) 基础位置迁移：旧路径 → 新路径（复制 + 旧文件改 .bak，见 ARCH 3.9）
-    2) 版本升级链：补 _version 字段 + 迁移函数 + 备份（见 ARCH 3.9.1）
-    """
-    from utils.settings import load_and_migrate_settings, migrate_settings_if_needed
+    """启动配置迁移；结果写入 startup_notices 供 Shell 弹窗告知用户。"""
+    from utils.startup_migrations import run_startup_migrations
+    from toolbox.startup_notices import set_migration_notices
 
-    # 1) cmm_filler：旧路径 data/cmm_filler → 新路径 config_dir/cmm_filler
-    cmm_cfg = paths.config_dir / "cmm_filler"
-    for name in ("settings.json", "template_config.json"):
-        old = paths.data_dir / "cmm_filler" / name
-        new = cmm_cfg / name
-        if old.exists() and not new.exists():
-            try:
-                migrate_settings_if_needed("cmm_filler", old, new)
-            except Exception as e:
-                logger.warning(f"[settings] {name} 位置迁移跳过: {e}")
-
-    # 2) 版本升级链
-    targets = (
-        ("cmm_filler", cmm_cfg / "settings.json"),
-        ("pc_to_excel", paths.config_dir / "pc_to_excel" / "settings.json"),
-    )
-    for module_name, config_path in targets:
-        try:
-            load_and_migrate_settings(module_name, config_path)
-        except Exception as e:
-            logger.warning(f"[settings] {module_name} 配置迁移跳过: {e}")
+    try:
+        notices = run_startup_migrations()
+        if notices:
+            set_migration_notices(notices)
+    except Exception as e:
+        logger.warning(f"[settings] 启动迁移异常: {e}")
 
 
 def _acquire_instance_lock():

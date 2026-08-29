@@ -355,6 +355,7 @@ class CMMFillerGUI:
         ctk.CTkButton(btn_inner, text='⚙ 模板配置', height=40, command=self._open_wizard).pack(side='left', padx=4)
         ctk.CTkButton(btn_inner, text='📂 输出路径', height=40, command=self._copy_output_path).pack(side='left', padx=4)
         ctk.CTkButton(btn_inner, text='📃 查看日志', height=40, command=self._show_log_window).pack(side='left', padx=4)
+        ctk.CTkButton(btn_inner, text='🧹 清理 OCR 缓存', height=40, command=self._clear_ocr_cache).pack(side='left', padx=4)
 
         # 进度
         self.progress_frame = ctk.CTkFrame(t, fg_color="transparent")
@@ -749,6 +750,27 @@ class CMMFillerGUI:
             command=lambda: (self._copy_to_clipboard(log_path),
                              messagebox.showinfo('已复制', f'日志路径已复制:\n{log_path}')),
         ).pack(pady=(0, 12))
+
+    def _clear_ocr_cache(self) -> None:
+        from utils.ocr_cache import clear_ocr_cache
+
+        if not messagebox.askyesno(
+            '清理 OCR 缓存',
+            '将删除 OCR 渲染缓存图片与 ocr_cache.json。\n'
+            '下次识别会重新渲染 PDF（稍慢）。\n\n是否继续？',
+        ):
+            return
+        try:
+            result = clear_ocr_cache()
+            audit('cleanup_ocr_cache', source='cmm_filler_gui', **result)
+            messagebox.showinfo(
+                '清理完成',
+                f'已删除 {result["png_files"]} 张缓存图'
+                + (f'，清除 {result["json_entries_cleared"]} 条 OCR 记录。' if result['json_removed'] else '。'),
+            )
+            self._log('OCR 缓存已清理。')
+        except Exception as exc:
+            messagebox.showerror('清理失败', str(exc))
 
     # ── 拖拽 ─────────────────────────────────────
     def _setup_dnd(self, widget, kind):

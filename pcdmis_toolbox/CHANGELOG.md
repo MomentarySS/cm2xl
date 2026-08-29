@@ -4,6 +4,30 @@
 
 ---
 
+## [1.0.8] — 2026-08-29
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.8`
+- 安装包输出文件名同步为 `cm2xl_Setup_1.0.8.exe`
+- 全项目自动化测试 **194 passed**（phase8 26 + cmm_filler 58 + pc_to_excel 110）
+- **用户文档**：新增 `toolbox/docs/`（README、cmm_filler、pc_to_excel），打包进 `dist/docs/`
+- **日志维护**：启动超 100MB 自动裁剪；设置面板可手动清理日志
+- **OCR 缓存**：设置面板 + CMM 处理页可清理；`utils/ocr_cache.py`
+- **配置迁移**：扩展旧版路径检测（CMMFiller / PCDMIS_ExcelExporter AppData）；首次迁移弹窗告知
+- **关于**：说明日志在 AppData 不在安装目录；复制/打开日志文件夹
+
+### pc_to_excel 模块
+
+- **PCDMIS 状态轮询**：模块激活后每 30 秒检测 `session_alive()`，失效自动断开并刷新状态栏
+
+### cm2xl 工具箱
+
+- `toolbox/settings_dialog.py`：日志/OCR 维护入口并入设置（顶栏不再单独「维护」按钮）
+- `utils/startup_migrations.py` + `toolbox/startup_notices.py`：统一启动迁移与弹窗
+
+---
+
 ## [1.0.7] — 2026-08-29
 
 ### 整体

@@ -396,3 +396,45 @@ class TestAppIcon:
         from utils.app_icon import icon_ico_path
 
         assert icon_ico_path() is not None
+
+
+# ── 12. 日志 / OCR 缓存 / 启动迁移 ─────────────────────────────────────────
+
+class TestLogMaintenance:
+    def test_cleanup_when_over_limit(self, tmp_dir):
+        from utils.log_maintenance import cleanup_logs, directory_size_bytes, iter_log_files
+
+        log_dir = tmp_dir / "logs"
+        log_dir.mkdir()
+        (log_dir / "a.log").write_bytes(b"x" * 60 * 1024 * 1024)
+        (log_dir / "b.log").write_bytes(b"y" * 50 * 1024 * 1024)
+        assert directory_size_bytes(iter_log_files(log_dir)) > 100 * 1024 * 1024
+        result = cleanup_logs(log_dir, max_total_bytes=100 * 1024 * 1024)
+        assert result["deleted_files"] >= 1
+        assert directory_size_bytes(iter_log_files(log_dir)) <= 100 * 1024 * 1024
+
+
+class TestOcrCache:
+    def test_clear_ocr_cache(self, tmp_dir):
+        from utils.ocr_cache import clear_ocr_cache
+
+        (tmp_dir / "a.png").write_bytes(b"png")
+        (tmp_dir / "ocr_cache.json").write_text('{"k": "v"}', encoding="utf-8")
+        result = clear_ocr_cache(tmp_dir)
+        assert result["png_files"] == 1
+        assert result["json_removed"] is True
+        assert not (tmp_dir / "ocr_cache.json").exists()
+
+
+class TestStartupMigrations:
+    def test_path_migration_notice(self, tmp_dir, monkeypatch):
+        from utils.paths import paths
+        from utils.startup_migrations import run_startup_migrations
+
+        monkeypatch.setattr(paths, "_user_data", tmp_dir / "data")
+        old = tmp_dir / "data" / "cmm_filler" / "settings.json"
+        old.parent.mkdir(parents=True)
+        old.write_text('{"template_path": "T.xlsx"}', encoding="utf-8")
+        notices = run_startup_migrations()
+        assert any(n.module == "cmm_filler" and "迁移" in n.title for n in notices)
+        assert (tmp_dir / "data" / "config" / "cmm_filler" / "settings.json").is_file()

@@ -49,6 +49,7 @@ class Shell:
         self._build_layout()
         self._load_modules()
         self._select_first_module()
+        self._schedule_migration_notices()
         logger.info("Shell 初始化完成")
 
     def _apply_toolbox_settings(self) -> None:
@@ -78,6 +79,27 @@ class Shell:
         from toolbox.about_dialog import AboutDialog
         AboutDialog(self.root.winfo_toplevel())
 
+    def _schedule_migration_notices(self) -> None:
+        """主窗口就绪后展示配置迁移结果（ARCHITECTURE Phase 5a）。"""
+        from toolbox.startup_notices import pop_migration_notices
+
+        notices = pop_migration_notices()
+        if notices:
+            self.root.after(400, lambda n=notices: self._show_migration_notices(n))
+
+    def _show_migration_notices(self, notices) -> None:
+        from tkinter import messagebox
+
+        lines = []
+        for item in notices:
+            lines.append(f"【{item.title}】\n{item.detail}")
+        messagebox.showinfo(
+            "配置已自动迁移",
+            "\n\n—\n\n".join(lines),
+            parent=self.root,
+        )
+        audit("settings_migration_notice", count=len(notices))
+
     # ── 布局 ────────────────────────────────────────────────────────────────
 
     def _build_layout(self):
@@ -106,7 +128,7 @@ class Shell:
             text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
         ).pack(side="left", pady=0)
 
-        # 顶栏右侧：关于 + 设置（"导出旧版配置"已移入设置面板"兼容性"分组）
+        # 顶栏右侧：关于 + 设置（清理日志 / OCR 缓存见设置面板）
         ctk.CTkButton(
             self._header, text="关于", width=70, height=28,
             font=("Microsoft YaHei", 11),

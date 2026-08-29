@@ -94,6 +94,27 @@ class PathManager:
         d.mkdir(parents=True, exist_ok=True)
         return d
 
+    @property
+    def docs_dir(self) -> Path:
+        """用户文档目录（打包后在 exe 同级 docs/）。"""
+        for candidate in (self._root / "docs", self._bundle / "docs"):
+            if candidate.is_dir():
+                return candidate
+        return self._root / "docs"
+
+    def user_data_location_hint(self) -> str:
+        """面向用户的简短说明：日志/配置是否在安装目录。"""
+        if self._frozen:
+            return (
+                "安装版：配置、日志、OCR 缓存写在当前 Windows 用户的 AppData 下"
+                "（通常在 C 盘，路径见下），不在程序安装目录。"
+                "这样无需管理员权限也能保存设置和日志。"
+            )
+        return (
+            "开发模式：配置、日志、缓存在本项目 data/ 目录下"
+            "（与安装包路径无关）。"
+        )
+
     def is_frozen(self) -> bool:
         return self._frozen
 
