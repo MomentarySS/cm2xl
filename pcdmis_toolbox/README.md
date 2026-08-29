@@ -36,7 +36,7 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 6）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.8.exe
+# 产物：installer/output/cm2xl_Setup_1.0.9.exe
 ```
 
 打包前确保：
@@ -228,7 +228,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 | 6 | 打包整合（spec / hooks / fix_dist / Inno Setup） | ✅ |
 | 7 | 旧入口重定向 + README + CLAUDE.md | ✅ |
 | 7.5 | 设置与关于对话框（外观/OCR模型/日志级别） | ✅ |
-| 8 | 测试（194 passed，GUI/OCR/PCDMIS 待人工真机验证） | ✅ |
+| 8 | 测试（见 CHANGELOG 各版本 passed 数；GUI/OCR/PCDMIS 待人工真机验证） | ✅ |
 
 详细进度参见 [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md)。
 
@@ -236,6 +236,6 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 版本
 
-`1.0.8` —— v1.0.8 发布 2026-08-29
+`1.0.9` —— v1.0.9 发布 2026-08-29
 
 定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。配置 schema 版本（`CONFIG_SCHEMA_VERSION`）为 `2.0.0`，与应用程序版本独立。

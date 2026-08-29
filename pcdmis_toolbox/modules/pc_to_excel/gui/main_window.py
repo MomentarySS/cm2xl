@@ -965,13 +965,20 @@ class MainWindow:
         self._set_busy(False)
         self.status_var.set("待确认填入")
         if preview.will_fill <= 0:
+            if preview.cmm_rows <= 0:
+                extra = "表中没有识别到 CMM 行（检具列须为 A 或 CMM）。"
+            elif preview.extract_count <= 0:
+                extra = "未从 PCDMIS 提取到可匹配序号。"
+            else:
+                extra = "提取到的序号与表中 CMM 行对不上。"
             messagebox.showwarning(
                 "没有可填入的数据",
                 format_user_error(
                     "没有可填入的数据",
                     "预览结果：预计填入 0 格。\n"
                     + preview.summary_text()
-                    + "\n\n未提取到匹配序号，或表中无 CMM 行。",
+                    + "\n\n"
+                    + extra,
                 ),
             )
             return

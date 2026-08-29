@@ -35,6 +35,21 @@ def hint_for_message(text: str) -> str:
             "• 确认程序里已有实测尺寸后再导出/填入"
         )
 
+    if "没有识别到 CMM 行" in raw or "CMM 行：0" in raw:
+        return (
+            "处理建议：\n"
+            "• 出货表检具列（默认 G）须为 A 或 CMM，与设置中的 CMM 代号一致\n"
+            "• 确认序号在 A 列、数据从设定起始行开始\n"
+            "• 选错底稿时请重新「选出货表」"
+        )
+
+    if "序号与表中 CMM 行对不上" in raw:
+        return (
+            "处理建议：\n"
+            "• 对照尺寸名与表中序号（如 CC_15 → 15）\n"
+            "• 需要时在手工对照里写 FAI_17A=17.1"
+        )
+
     if "未提取" in raw or "0 条" in raw or "没有可导出" in raw or "无数据" in raw:
         return (
             "处理建议：\n"

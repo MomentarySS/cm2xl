@@ -15,6 +15,9 @@ from .pcdmis_style_report import flatten_to_pcdmis_rows
 
 _DEFAULT_PREFIXES = ("FAI_", "CC_", "尺寸_")
 _DEFAULT_CMM_CODES = ("A", "CMM")
+# 出货表每序号只写一格。多轴优先 D（直径），其次 M/A；XYZ 仅参考。
+# 与 CMMFiller parse_measurements._AXIS_PRIORITY 对齐。
+_FORM_AXIS_PRIORITY = ("D", "M", "A", "Z", "X", "Y")
 MANUAL_MAP_PLACEHOLDER = "示例：FAI_17A=17.1; POS_A=34（分号分隔，可按需改）"
 _MAP_LINE_RE = re.compile(
     r"^\s*([^=:：>]+?)\s*(?:=|:|：|->|→)\s*([^=:：>]+?)\s*$"
@@ -180,6 +183,7 @@ class FormFillResult:
     source_path: Path | None = None
     chained: bool = False
     piece_id_written: str = ""
+    serial_conflicts: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -314,20 +318,43 @@ def dim_name_to_serial(
     return _normalize_serial(body)
 
 
-def _primary_measured(rec: FeatureRecord) -> float | None:
+def _pick_form_fill_row(rec: FeatureRecord):
+    """多轴时选写入出货表的那一行：D > M > A > Z > X > Y。"""
     rows = flatten_to_pcdmis_rows(rec)
+    if not rows:
+        return None
+    by_axis: dict[str, object] = {}
+    for row in rows:
+        axis = (row.axis or "").strip().upper()
+        if axis and axis not in by_axis:
+            by_axis[axis] = row
+
+    for axis in _FORM_AXIS_PRIORITY:
+        row = by_axis.get(axis)
+        if row is not None and getattr(row, "measured", None) is not None:
+            return row
+    for axis in _FORM_AXIS_PRIORITY:
+        row = by_axis.get(axis)
+        if row is not None:
+            return row
     for row in rows:
         if row.measured is not None:
-            return float(row.measured)
-    return None
+            return row
+    return rows[0]
+
+
+def _primary_measured(rec: FeatureRecord) -> float | None:
+    row = _pick_form_fill_row(rec)
+    if row is None or row.measured is None:
+        return None
+    return float(row.measured)
 
 
 def _primary_nominal(rec: FeatureRecord) -> float | None:
-    rows = flatten_to_pcdmis_rows(rec)
-    for row in rows:
-        if row.nominal is not None:
-            return float(row.nominal)
-    return None
+    row = _pick_form_fill_row(rec)
+    if row is None or row.nominal is None:
+        return None
+    return float(row.nominal)
 
 
 def build_serial_value_maps(
@@ -560,7 +587,7 @@ def fill_inspection_form(
             "输出路径与出货表底稿相同，拒绝覆盖。请另存副本（换输出目录或文件名）。"
         )
 
-    measured_map, nominal_map, _conflicts = build_serial_value_maps(features, cfg)
+    measured_map, nominal_map, serial_conflicts = build_serial_value_maps(features, cfg)
     used_serials: set[str] = set()
     filled = 0
     skipped_not_cmm = 0
@@ -639,6 +666,7 @@ def fill_inspection_form(
         target_col=target_letter,
         source_path=form_path,
         piece_id_written=piece_written,
+        serial_conflicts=serial_conflicts,
     )
 
 
@@ -661,6 +689,10 @@ def summarize_fill_result(result: FormFillResult, extract_count: int = 0) -> str
     if result.piece_id_written:
         lines.append(f"件号已写入表头行：{result.piece_id_written}")
     lines.append(f"输出：{result.output_path}")
+    if result.serial_conflicts:
+        lines.append("")
+        lines.append(f"序号冲突（后写覆盖）（{len(result.serial_conflicts)}）：")
+        lines.extend(f"  - {x}" for x in result.serial_conflicts)
     if result.unmatched_form:
         lines.append("")
         lines.append(f"表中未匹配（{len(result.unmatched_form)}）：")

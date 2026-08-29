@@ -291,7 +291,11 @@ def _is_plane_feature_row(row_cells: list[OCRBox], skip_lines: set[str]) -> list
 
 
 def _is_angle_feature_desc(desc: str) -> bool:
-    return bool(re.search(r'至|角度|angle', desc, re.IGNORECASE))
+    """仅识别角度项。不含「至」：垂直/平面5至平面3 是形位，不是角度。"""
+    text = desc or ''
+    if re.search(r'垂直|平面度|平行|位置|轮廓|圆度|圆柱度|跳动|倾斜|同轴|对称', text):
+        return False
+    return bool(re.search(r'角度|angle', text, re.IGNORECASE))
 
 
 def _parse_ax_data_row(row_cells: list[OCRBox], skip_lines: set[str]) -> tuple[str, list[float]] | None:
@@ -363,6 +367,46 @@ def _collect_forward_data_rows(
     return ax_rows, numeric_rows
 
 
+def _collect_ax_blocks_between(
+    rows: list[list[OCRBox]],
+    start_idx: int,
+    end_idx: int,
+    skip_lines: set[str],
+    item_prefixes: list[str],
+) -> list[tuple[list[tuple[str, list[float]]], float]]:
+    """两个标签之间按 AX 表头切成多块，每块独立（不把后一块并进第一块）。"""
+    blocks: list[tuple[list[tuple[str, list[float]]], float]] = []
+    j = start_idx + 1
+    while j < end_idx:
+        row_text = ' '.join(c.text for c in rows[j])
+        if find_label_in_row(row_text, item_prefixes):
+            j += 1
+            continue
+        if not _is_ax_header_row(rows[j]):
+            j += 1
+            continue
+        ax_rows: list[tuple[str, list[float]]] = []
+        conf = 1.0
+        k = j + 1
+        while k < end_idx:
+            if find_label_in_row(' '.join(c.text for c in rows[k]), item_prefixes):
+                break
+            if _is_ax_header_row(rows[k]):
+                break
+            if _is_table_header_row(rows[k]) or _is_plane_feature_row(rows[k], skip_lines):
+                k += 1
+                continue
+            ax = _parse_ax_data_row(rows[k], skip_lines)
+            if ax:
+                ax_rows.append(ax)
+                conf = _row_confidence(rows[k])
+            k += 1
+        if ax_rows:
+            blocks.append((ax_rows, conf))
+        j = k
+    return blocks
+
+
 def _row_confidence(row_cells: list[OCRBox]) -> float:
     confidences = [c.confidence for c in row_cells if c.confidence > 0]
     return min(confidences) if confidences else 1.0
@@ -418,7 +462,7 @@ def _resolve_pc_dmis_nums(
         ax_rows, _ = _collect_forward_data_rows(
             rows, label_idx, skip_lines, item_prefixes,
         )
-        nums = _pick_primary_ax_nums(ax_rows, pref_axis, label)
+        nums = _pick_primary_ax_nums(ax_rows, pref_axis or 'A', label)
         if nums:
             conf = _row_confidence(rows[label_idx + 1]) if label_idx + 1 < len(rows) else 1.0
             return nums, conf
@@ -469,44 +513,22 @@ def _infer_orphan_measurements(
     if not label_positions:
         return orphans
 
-    prefix = label_positions[0][1].prefix
     for li in range(len(label_positions) - 1):
         idx_curr, parsed_curr = label_positions[li]
         idx_next, parsed_next = label_positions[li + 1]
-        for missing in range(parsed_curr.num + 1, parsed_next.num):
-            if missing in assigned_nums:
-                continue
-            ax_rows: list[tuple[str, list[float]]] = []
-            desc = ''
-            data_conf = 1.0
-            j = idx_curr + 1
-            while j < idx_next:
-                row_text = ' '.join(c.text for c in rows[j])
-                if find_label_in_row(row_text, item_prefixes):
-                    j += 1
-                    continue
-                if not desc and _is_angle_feature_desc(row_text):
-                    desc = row_text.strip()
-                if _is_ax_header_row(rows[j]):
-                    k = j + 1
-                    while k < idx_next:
-                        if find_label_in_row(' '.join(c.text for c in rows[k]), item_prefixes):
-                            break
-                        if _is_ax_header_row(rows[k]) or _is_table_header_row(rows[k]):
-                            k += 1
-                            continue
-                        if _is_plane_feature_row(rows[k], skip_lines):
-                            k += 1
-                            continue
-                        ax = _parse_ax_data_row(rows[k], skip_lines)
-                        if ax:
-                            ax_rows.append(ax)
-                            data_conf = _row_confidence(rows[k])
-                        k += 1
-                    break
-                j += 1
-
-            inferred = ParsedLabel(prefix=prefix, num=missing, sub='', sub_sep='', desc=desc)
+        missing_nums = [
+            n for n in range(parsed_curr.num + 1, parsed_next.num)
+            if n not in assigned_nums
+        ]
+        if not missing_nums:
+            continue
+        blocks = _collect_ax_blocks_between(
+            rows, idx_curr, idx_next, skip_lines, item_prefixes,
+        )
+        for missing, (ax_rows, data_conf) in zip(missing_nums, blocks):
+            inferred = ParsedLabel(
+                prefix=parsed_curr.prefix, num=missing, sub='', sub_sep='', desc='',
+            )
             label = format_item_label(inferred.prefix, inferred.num, inferred.sub, inferred.sub_sep)
             pref_axis = None
             if axis_preferences:

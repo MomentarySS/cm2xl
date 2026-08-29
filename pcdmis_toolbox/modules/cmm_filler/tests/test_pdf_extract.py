@@ -149,6 +149,64 @@ class TestPCDMISOrphanAndMultiAxis(unittest.TestCase):
         self.assertAlmostEqual(nums[5]['nominal'], 90.0)
         self.assertAlmostEqual(nums[5]['measured'], 90.001)
 
+    def test_infer_two_orphans_two_ax_blocks(self):
+        """缺口 4、5 各自对应一块 AX，不得共用第一块。"""
+        boxes = [
+            OCRBox('CC_3', 10, 10, 60, 30),
+            OCRBox('1.000', 100, 10, 150, 30),
+            OCRBox('0.010', 160, 10, 210, 30),
+            OCRBox('-0.010', 220, 10, 270, 30),
+            OCRBox('1.001', 280, 10, 330, 30),
+            OCRBox('AX', 10, 50, 40, 70),
+            OCRBox('NOMINAL', 50, 50, 120, 70),
+            OCRBox('MEAS', 250, 50, 300, 70),
+            OCRBox('A', 10, 80, 30, 100),
+            OCRBox('90.000', 50, 80, 120, 100),
+            OCRBox('0.010', 130, 80, 180, 100),
+            OCRBox('-0.010', 190, 80, 240, 100),
+            OCRBox('90.111', 250, 80, 310, 100),
+            OCRBox('AX', 10, 130, 40, 150),
+            OCRBox('NOMINAL', 50, 130, 120, 150),
+            OCRBox('MEAS', 250, 130, 300, 150),
+            OCRBox('A', 10, 160, 30, 180),
+            OCRBox('45.000', 50, 160, 120, 180),
+            OCRBox('0.010', 130, 160, 180, 180),
+            OCRBox('-0.010', 190, 160, 240, 180),
+            OCRBox('45.222', 250, 160, 310, 180),
+            OCRBox('CC_6', 10, 200, 60, 220),
+            OCRBox('2.000', 100, 200, 150, 220),
+            OCRBox('0.010', 160, 200, 210, 220),
+            OCRBox('-0.010', 220, 200, 270, 220),
+            OCRBox('2.003', 280, 200, 330, 220),
+        ]
+        data = parse_from_ocr_boxes(boxes, ['CC'], set(), _is_ng, _month_cn_to_num)
+        nums = {m['num']: m for m in data['measurements']}
+        self.assertAlmostEqual(nums[3]['measured'], 1.001)
+        self.assertAlmostEqual(nums[4]['measured'], 90.111)
+        self.assertAlmostEqual(nums[5]['measured'], 45.222)
+        self.assertAlmostEqual(nums[6]['measured'], 2.003)
+
+    def test_angle_prefers_a_when_d_also_present(self):
+        boxes = [
+            OCRBox('CC_8-角度平面1至平面2', 10, 100, 240, 120),
+            OCRBox('AX', 10, 130, 40, 150),
+            OCRBox('NOMINAL', 50, 130, 120, 150),
+            OCRBox('MEAS', 250, 130, 300, 150),
+            OCRBox('A', 10, 160, 30, 180),
+            OCRBox('90.000', 50, 160, 120, 180),
+            OCRBox('0.010', 130, 160, 180, 180),
+            OCRBox('-0.010', 190, 160, 240, 180),
+            OCRBox('89.999', 250, 160, 310, 180),
+            OCRBox('D', 10, 190, 30, 210),
+            OCRBox('10.000', 50, 190, 120, 210),
+            OCRBox('0.010', 130, 190, 180, 210),
+            OCRBox('-0.010', 190, 190, 240, 210),
+            OCRBox('10.192', 250, 190, 310, 210),
+        ]
+        data = parse_from_ocr_boxes(boxes, ['CC'], set(), _is_ng, _month_cn_to_num)
+        m = data['measurements'][0]
+        self.assertAlmostEqual(m['measured'], 89.999)
+
     def test_position_picks_diameter_axis(self):
         boxes = [
             OCRBox('特性', 10, 100, 50, 120),

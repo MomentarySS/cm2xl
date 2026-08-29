@@ -93,6 +93,50 @@
 ### 已知边界
 - **overflow_samples 模式**不使用模板序号回退与子编号冲突解析（保留旧行为）
 - **CLI 批量处理**无交互预览，冲突默认取 NG 最严重子项
+- **多轴特性（圆柱 X/Y/D）**：当前每个 CC 序号只提取并写入 **一个** 实测值（见 Phase 6）
+
+---
+
+## Phase 6 — 多轴拆行（待开发）
+
+> 记录于 2026-08-29。当前业务以取 **D 轴（直径）** 为主，已满足出货表需求；本 Phase 供后续模板需分行填写时实现。
+
+### 背景
+
+PC-DMIS 等报告中，部分特性（如 `CC_15 - 圆柱1`）在 AX 表下含 **多行数据**（X、Y、D 等）。用户 Excel 模板也可能为同一序号预留 **多行**（例如序号 15 占 3 行）。
+
+### 现状（v1.0.9）
+
+| 环节 | 行为 |
+|------|------|
+| PDF 解析 | 每个 CC/FAI 序号 → **一条** measurement；从 X/Y/D 中按优先级或模板「轴」列取 **一轴** |
+| 轴选择 | 模板「轴」列填 `D`/`X`/`Y` 等 → 指定取哪一轴；**未配置时默认 D**；角度描述优先 **A** |
+| OCR 漏标签 | 相邻已识别序号之间按 **AX 表头分块** 补全缺口，多缺口不共用第一块 |
+| Excel 写入（CMMFiller） | 序号列键 **唯一**，只写入该序号 **首次出现** 的行；其余预留行保持空白 |
+| 出货表填入（pc_to_excel） | 同样每序号一格，多轴优先 **D**，XYZ 仅参考（`inspection_form_fill._pick_form_fill_row`） |
+
+相关代码：`parse_measurements._pick_primary_ax_nums`、`_collect_ax_blocks_between`、`fixed_page_layout.load_axis_preferences_from_template`、`build_sheet_row_index`、`inspection_form_fill._pick_form_fill_row`。
+
+### 目标行为（规划）
+
+1. 模板多行：同一序号（或首行序号 + 后续空序号续行）+ 各行「轴」列分别标 `X`/`Y`/`D`
+2. PDF 解析：从多轴 AX 块拆出多条记录（或单条记录带 `axes: {X:…, Y:…, D:…}`）
+3. 写入：按 `(序号, 轴)` 复合键定位行，分别填入对应实测值、公差
+4. 预览：拆行结果在预览窗口展示，低置信度/NG 按行标色
+5. **向后兼容**：仅配置单轴或未配轴列时，保持现有「取 D、写一行」逻辑
+
+### 实现要点（草案）
+
+- [ ] `build_sheet_row_index` 支持 `(serial_key, axis)` → `(sheet, row)`，同序号多行不互相覆盖
+- [ ] `parse_from_ocr_boxes` 可选输出 `multi_axis` 结构或按轴展开为多条 measurement
+- [ ] `resolve_measure_write_location` 匹配时同时考虑序号与轴
+- [ ] 单元测试：`CC_15` 三行 PDF + 模板三行 → X/Y/D 各写入正确单元格
+- [ ] 文档：`cmm_filler.md` 补充多轴模板配置说明
+
+### 非目标（本期不做）
+
+- 不改变「单序号只关心直径」的默认策略（仍默认 D）
+- 不与「子编号冲突」（`FAI_1-1`…`FAI_1-N`）混用同一套 UI；多轴是同一特性的不同测量轴，语义不同
 
 ---
 

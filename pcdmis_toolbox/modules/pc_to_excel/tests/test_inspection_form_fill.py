@@ -9,9 +9,11 @@ from openpyxl import Workbook, load_workbook
 from ..core.models import AxisValues, FeatureRecord
 from ..export.inspection_form_fill import (
     FormFillConfig,
+    build_serial_value_maps,
     dim_name_to_serial,
     fill_inspection_form,
     parse_manual_map_text,
+    summarize_fill_result,
 )
 
 
@@ -217,3 +219,58 @@ def test_preview_form_fill(tmp_path: Path):
     assert preview.will_fill == 2
     assert preview.cmm_rows == 2
     assert "P-9" in preview.summary_text()
+
+
+def test_multi_axis_prefers_diameter_over_xyz():
+    """圆柱 X/Y/D 同时有值时，出货表写 D，不用参考轴 X/Y。"""
+    rec = FeatureRecord(
+        name="CC_15",
+        feature_type="圆柱",
+        measured=AxisValues(x=0.0, y=0.0, d=10.192),
+        nominal=AxisValues(x=0.0, y=0.0, d=10.0),
+    )
+    measured, nominal, _ = build_serial_value_maps([rec], FormFillConfig())
+    assert measured["15"] == 10.192
+    assert nominal["15"] == 10.0
+
+
+def test_single_axis_angle_still_fills():
+    """单轴角度没有 D，仍取 A。"""
+    rec = FeatureRecord(
+        name="CC_8",
+        feature_type="角度",
+        measured=AxisValues(angle=89.999),
+        nominal=AxisValues(angle=90.0),
+        write_axis="A",
+    )
+    measured, _, _ = build_serial_value_maps([rec], FormFillConfig())
+    assert measured["8"] == 89.999
+
+
+def test_multi_axis_xz_d_prefers_diameter():
+    rec = FeatureRecord(
+        name="CC_18",
+        feature_type="圆柱",
+        measured=AxisValues(x=-15.022, z=-7.007, d=10.186),
+        nominal=AxisValues(x=-15.0, z=-7.0, d=10.0),
+    )
+    measured, nominal, _ = build_serial_value_maps([rec], FormFillConfig())
+    assert measured["18"] == 10.186
+    assert nominal["18"] == 10.0
+
+
+def test_fill_keeps_serial_conflicts_in_result(tmp_path: Path):
+    form = tmp_path / "form.xlsx"
+    out = tmp_path / "out.xlsx"
+    _make_mini_form(form)
+    features = [
+        FeatureRecord(name="FAI_1", feature_type="尺寸位置", measured=AxisValues(d=14.0)),
+        FeatureRecord(name="CC_1", feature_type="尺寸位置", measured=AxisValues(d=14.5)),
+    ]
+    result = fill_inspection_form(
+        features, form, out, config=FormFillConfig(cmm_codes=["A"], target_col="I")
+    )
+    assert result.serial_conflicts
+    summary = summarize_fill_result(result, extract_count=2)
+    assert "序号冲突" in summary
+    assert load_workbook(out)["Table 1"]["I6"].value == 14.5
