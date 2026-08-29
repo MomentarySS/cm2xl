@@ -1,0 +1,14 @@
+---
+description: PyInstaller 打包、fix_dist 与离线部署
+globs: pcdmis_toolbox/build/**,pcdmis_toolbox/**/*.spec
+alwaysApply: false
+---
+
+# 打包与离线部署
+
+- 测量房无网：OCR 模型、Paddle、依赖必须打进包；勿引入需在线下载的运行时资源
+- spec 须显式 datas 各 `modules/*/__init__.py`（本地包不会自动抽到磁盘）
+- 打包后执行 `build/fix_dist.py`（paddleocr patch、删 `opencv_videoio_ffmpeg*.dll`）
+- OCR 模型路径：`modules/cmm_filler/models/paddleocr/`（兼容旧 `CMMFiller/models/paddleocr/`）
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `PaddleOCREngine.__init__` 局部 `setdefault`，勿在 main 全局污染
+- 改 spec / hook / fix_dist 后说明需全量重打安装包验证，不要假设热更新即可
