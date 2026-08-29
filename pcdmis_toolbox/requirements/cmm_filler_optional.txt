@@ -1,0 +1,3 @@
+# 可选依赖：文字型 PDF 通用表格提取（扫描件请用 OCR 流程）
+# 安装: pip install pdfplumber
+pdfplumber>=0.11.0

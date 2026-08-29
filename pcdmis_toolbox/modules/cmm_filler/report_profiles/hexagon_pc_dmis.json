@@ -1,0 +1,8 @@
+{
+  "name": "hexagon_pc_dmis",
+  "label": "Hexagon PC-DMIS",
+  "item_prefixes": ["FAI", "DIM", "CC", "CHECK", "尺寸"],
+  "skip_lines": ["毫米", "mm", "中", "Units", "UNIT"],
+  "ocr_roi": {"top": 0.18, "left": 0, "bottom": 0.02, "right": 0},
+  "confidence_threshold": 0.80
+}

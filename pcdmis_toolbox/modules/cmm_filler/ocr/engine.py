@@ -15,10 +15,30 @@ OCR 引擎抽象层
 
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from abc import ABC, abstractmethod
 
 from utils.error_codes import ErrorCode, ToolboxError
+
+
+@dataclass
+class OCRBox:
+    """OCR 识别结果（含坐标，用于表格对齐解析）"""
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    confidence: float = 0.0
+
+    @property
+    def y_center(self) -> float:
+        return (self.y0 + self.y1) / 2
+
+    @property
+    def x_center(self) -> float:
+        return (self.x0 + self.x1) / 2
 
 
 def _get_user_ocr_settings() -> tuple:
@@ -194,13 +214,23 @@ class PaddleOCREngine(OCREngine):
         logger.info('PaddleOCR 引擎就绪')
 
     def recognize(self, img_path: str) -> list[str]:
+        return [box.text for box in self.recognize_detailed(img_path)]
+
+    def recognize_detailed(self, img_path: str) -> list[OCRBox]:
         result = self._ocr.ocr(img_path, rec=True)
-        lines = []
+        boxes: list[OCRBox] = []
         if result and result[0]:
             for line in result[0]:
-                text, conf = line[1]
-                lines.append(text)
-        return lines
+                bbox, (text, conf) = line[0], line[1]
+                xs = [p[0] for p in bbox]
+                ys = [p[1] for p in bbox]
+                boxes.append(OCRBox(
+                    text=text,
+                    x0=min(xs), y0=min(ys),
+                    x1=max(xs), y1=max(ys),
+                    confidence=float(conf),
+                ))
+        return boxes
 
 
 class EasyOCREngine(OCREngine):

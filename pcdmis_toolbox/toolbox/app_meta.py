@@ -6,7 +6,7 @@ cm2xl — 统一版本与元数据
 from utils.theme import TOOLBOX_THEME  # noqa: F401  # 唯一主题定义点，兼容旧引用
 
 APP_TITLE = "cm2xl"
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 APP_BUILD = "1"
 
 # PCDMIS BASIC SCRIPT 命令 ID（固定，由 PCDMIS 菜单项引用）

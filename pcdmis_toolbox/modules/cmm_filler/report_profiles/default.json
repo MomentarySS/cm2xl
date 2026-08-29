@@ -1,0 +1,8 @@
+{
+  "name": "default",
+  "label": "默认 (FAI/FAL/DIM)",
+  "item_prefixes": ["FAI", "FAL", "FAIL", "尺寸", "CC", "DIM", "CHECK"],
+  "skip_lines": ["毫米", "mm", "中", "A/2", "1/1"],
+  "ocr_roi": {"top": 0, "left": 0, "bottom": 0, "right": 0},
+  "confidence_threshold": 0.85
+}

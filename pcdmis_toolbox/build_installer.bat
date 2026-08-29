@@ -40,11 +40,11 @@ if "%ISCC%"=="" (
 "%ISCC%" installer\cm2xl.iss
 
 REM ── 3. 检查输出 ───────────────────────────────────────────────────
-if exist "installer\output\cm2xl_Setup_1.0.6.exe" (
+if exist "installer\output\cm2xl_Setup_1.0.7.exe" (
     echo.
     echo ========================================
     echo   安装包构建成功！
-    echo   输出: installer\output\cm2xl_Setup_1.0.6.exe
+    echo   输出: installer\output\cm2xl_Setup_1.0.7.exe
     echo ========================================
 ) else (
     echo.

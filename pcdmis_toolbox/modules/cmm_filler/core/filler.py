@@ -20,14 +20,31 @@ import json
 from pathlib import Path
 from collections import defaultdict
 
-import fitz
 import openpyxl
 from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 
-from ..ocr.engine import OCREngine, PaddleOCREngine
-from utils.file_io import glob_pdfs, fitz_open_context
+from ..ocr.engine import OCREngine, PaddleOCREngine, OCRBox
+from .pdf_extract import detect_pdf_type, extract_text_lines, pdf_to_images
+from .parse_measurements import (
+    parse_from_text_lines, parse_from_ocr_boxes,
+    measure_dict_key, measure_dict_label, measure_dict_row_index,
+    _measurement_sort_key,
+)
+from .report_profile import load_profile, roi_cache_suffix, merge_item_prefixes, parse_prefix_text
+from .fixed_page_layout import (
+    build_sheet_row_index, resolve_measure_location,
+    load_axis_preferences_from_template,
+)
+from .sub_item_conflict import (
+    SKIP_SUB_ITEM, WORST_NG_SUB_ITEM,
+    build_parent_auto_picks, detect_parent_row_conflicts,
+    merge_parent_picks, resolve_measure_write_location,
+    resolve_parent_picks,
+)
+from .ng_analysis import collect_ng_stats, export_ng_workbook, format_ng_summary_text
+from utils.file_io import glob_pdfs
 from utils.paths import paths
 from utils.settings import save_settings_json_atomic
 
@@ -195,7 +212,8 @@ def month_cn_to_num(month_cn: str) -> str:
 
 
 class CMMReportFiller:
-    def __init__(self, template_path, dpi=300, ocr_engine=None):
+    def __init__(self, template_path, dpi=300, ocr_engine=None,
+                 report_profile=None, ocr_roi=None, custom_item_prefixes=None):
         self.template_path = template_path
         self.dpi = dpi
         self.ocr = ocr_engine or PaddleOCREngine()
@@ -206,14 +224,42 @@ class CMMReportFiller:
         # 循环内检测到 True 时提前退出，返回结构带 cancelled=True
         self.cancel_check = None
 
+        # 报告 Profile（前缀、ROI、置信度阈值）
+        settings = load_settings()
+        profile_name = report_profile or settings.get('report_profile', 'default')
+        self.profile = load_profile(profile_name)
+        extra_prefixes = self._resolve_custom_prefixes(settings, custom_item_prefixes)
+        self.item_prefixes = merge_item_prefixes(
+            self.profile.get('item_prefixes', ITEM_PREFIXES),
+            extra_prefixes,
+        )
+        self.skip_lines = set(self.profile.get('skip_lines', OCR_SKIP_LINES))
+        self.confidence_threshold = float(self.profile.get('confidence_threshold', 0.85))
+        # ROI：显式传入 > settings.json > Profile 默认值
+        self.ocr_roi = ocr_roi or settings.get('ocr_roi') or self.profile.get('ocr_roi', {})
+
         # 加载配置后智能合并（自动检测模板结构补全缺失项）
         raw_config = self._load_config()
         self.config = self._smart_config(raw_config)
+
         self._sheet_name_cache = None  # 缓存 sheet 名，避免重复打开工作簿
+        self._axis_prefs_cache: dict[str, str] | None = None
+
+    @staticmethod
+    def _resolve_custom_prefixes(settings: dict, override) -> list[str]:
+        if override is not None:
+            if isinstance(override, list):
+                return override
+            return parse_prefix_text(str(override))
+        raw = settings.get('custom_item_prefixes', [])
+        if isinstance(raw, str):
+            return parse_prefix_text(raw)
+        return list(raw or [])
 
     def invalidate_sheet_cache(self):
-        """模板切换后调用，清除缓存的 sheet 名"""
+        """模板切换后调用，清除缓存的 sheet 名与轴偏好"""
         self._sheet_name_cache = None
+        self._axis_prefs_cache = None
 
     def _load_config(self):
         path = _get_config_path()
@@ -258,6 +304,7 @@ class CMMReportFiller:
                 'upper_limit': ['上限', 'MAX', '最大'],
                 'lower_limit': ['下限', 'MIN', '最小'],
                 'instrument': ['仪器', '设备', 'Instrument'],
+                'axis': ['轴', 'AX', 'Axis', '测量轴'],
             }
             for field, keywords in keyword_map.items():
                 for header_name, col_letter in headers.items():
@@ -385,10 +432,45 @@ class CMMReportFiller:
 
     def _get_field_location(self, field):
         """获取字段写入位置（如 'A5'），优先用配置文件，否则用默认值"""
+        tpl_locs = self._get_template_layout_config().get('field_locations', {})
+        if field in tpl_locs:
+            return tpl_locs[field]
         config_locs = self.config.get('field_locations', {})
         if field in config_locs:
             return config_locs[field]
         return DEFAULT_FIELD_LOCATIONS.get(field, 'A3')
+
+    def _overflow_samples_enabled(self) -> bool:
+        """是否启用样品溢出自动复制 Sheet（默认关，出货表模板直接按原表写入）。"""
+        return bool(self.config.get('overflow_samples', False))
+
+    def _get_template_layout_config(self) -> dict:
+        """模板版式配置（兼容旧 fixed_pages 字段）。"""
+        defaults = {
+            'sheets': None,
+            'max_data_row': None,
+            'sample_id_plain': True,
+            'field_locations': {},
+        }
+        merged = dict(defaults)
+        merged.update(self.config.get('fixed_pages', {}))
+        merged.update(self.config.get('template', {}))
+        return merged
+
+    def _get_template_sheet_names(self) -> list[str]:
+        configured = self._get_template_layout_config().get('sheets')
+        if configured:
+            return list(configured)
+        skip = {'CPK', 'cpk'}
+        try:
+            wb = openpyxl.load_workbook(self.template_path, read_only=True)
+            names = [s for s in wb.sheetnames if s not in skip and not s.startswith('~')]
+            wb.close()
+            if names:
+                return names
+        except Exception:
+            pass
+        return [self._get_sheet_name()]
 
     def _load_cache(self):
         if os.path.exists(CACHE_PATH):
@@ -432,10 +514,7 @@ class CMMReportFiller:
         """OCR 识别，失败自动重试"""
         for attempt in range(1, max_retries + 1):
             try:
-                lines = self.ocr.recognize(img_path)
-                self.cache[os.path.basename(img_path)] = lines
-                self._save_cache()
-                return lines
+                return self.ocr.recognize(img_path)
             except Exception as e:
                 if attempt < max_retries:
                     logger.warning(f'[OCR 重试] {Path(img_path).name} 识别失败，重试中 ({attempt}/{max_retries}): {e}')
@@ -449,10 +528,27 @@ class CMMReportFiller:
         part = data.get('part_name', '未知')
         date = data.get('date', '未知')
         measures = data.get('measurements', [])
-        logger.info(f'  [预览] {Path(pdf_path).name}: 零件={part}, 日期={date}, {len(measures)} 项测量')
+        source = data.get('_source', 'unknown')
+        source_labels = {
+            'text': '文字层',
+            'ocr-table': 'OCR表格',
+            'ocr-line': 'OCR行解析',
+        }
+        src_label = source_labels.get(source, source)
+        low_conf = sum(1 for m in measures if m.get('low_confidence'))
+        extra = f', 低置信 {low_conf} 项' if low_conf else ''
+        logger.info(
+            f'  [预览] {Path(pdf_path).name}: 零件={part}, 日期={date}, '
+            f'{len(measures)} 项测量, 来源={src_label}{extra}'
+        )
         for m in measures:
             ng = ' [NG!]' if m.get('ng') else ''
-            logger.info(f'    FAI_{m["num"]:02d}: {m["desc"]} | {m["nominal"]} +{m["upper_tol"]}/-{abs(m["lower_tol"]):.3f} => {m["measured"]}{ng}')
+            low = ' [低置信]' if m.get('low_confidence') else ''
+            label = measure_dict_label(m)
+            logger.info(
+                f'    {label}: {m["desc"]} | {m["nominal"]} '
+                f'+{m["upper_tol"]}/-{abs(m["lower_tol"]):.3f} => {m["measured"]}{ng}{low}'
+            )
 
     @staticmethod
     def _is_ng(nominal, upper, lower, measured):
@@ -510,15 +606,244 @@ class CMMReportFiller:
         logger.warning(f'样品列 {label} 未配置，回退 H 列')
         return column_index_from_string('H')
 
+    def _is_fixed_pages_mode(self) -> bool:
+        """已废弃：保留别名，始终按模板序号列写入。"""
+        return True
+
+    def _get_fixed_pages_config(self) -> dict:
+        """已废弃：请用 _get_template_layout_config。"""
+        return self._get_template_layout_config()
+
     def _get_main_sample_count(self):
-        """主表样品位数（1#-N# 写主 Sheet，超出溢出到 Sheet B）。
-        可通过配置 main_sample_count 调整（1-20），默认 5。"""
-        n = self.config.get('main_sample_count', DEFAULT_MAIN_SAMPLE_COUNT)
-        try:
-            n = int(n)
-        except (TypeError, ValueError):
-            n = DEFAULT_MAIN_SAMPLE_COUNT
-        return max(1, min(n, 20))
+        """样品位数量，由 template_config 的 sample_cols / main_sample_count 决定。"""
+        configured = self.config.get('main_sample_count')
+        if configured is not None:
+            try:
+                return max(1, min(int(configured), 50))
+            except (TypeError, ValueError):
+                pass
+        sample_cols = self.config.get('sample_cols', {})
+        if sample_cols:
+            return max(1, min(len(sample_cols), 50))
+        return DEFAULT_MAIN_SAMPLE_COUNT
+
+    def _chunk_samples(self, items: list, chunk_size: int) -> list[list]:
+        """将样品列表按 chunk_size 分块（每块对应一个 Sheet）。"""
+        return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+    @staticmethod
+    def _batch_output_filename(date_str: str, batch_start: int, batch_end: int, *, multi_batch: bool) -> str:
+        """多样品拆分输出文件名。"""
+        if not multi_batch:
+            return f'{date_str}_项目汇总.xlsx'
+        return f'{date_str}_项目汇总_样品{batch_start}-{batch_end}.xlsx'
+
+    def _prepare_sample_batches(self, items: list, main_count: int) -> list[list]:
+        """
+        按模板样品位容量分批。overflow_samples 模式不拆分（整批走旧版 Sheet 复制逻辑）。
+        """
+        if self._overflow_samples_enabled() or len(items) <= main_count:
+            return [items]
+        batches = self._chunk_samples(items, main_count)
+        logger.info(
+            f'[模板] {len(items)} 个样品超过模板容量 {main_count} 列，'
+            f'将拆分为 {len(batches)} 个 Excel 文件'
+        )
+        return batches
+
+    @staticmethod
+    def _renumber_batch_items(batch: list, local_start: int = 1) -> list[dict]:
+        """每份出货表内样品位从 1# 起编号。"""
+        out: list[dict] = []
+        for offset, item in enumerate(batch):
+            row = dict(item)
+            row['sample_num'] = local_start + offset
+            out.append(row)
+        return out
+
+    def _allocate_overflow_sheet_name(self, wb, chunk_index: int) -> str:
+        """为第 chunk_index 个溢出块分配 Sheet 名（chunk_index=1 → 第一块溢出）。"""
+        used = set(wb.sheetnames)
+        base = self._get_sheet_name()
+        if chunk_index == 1:
+            candidate = self._get_sheet_b_name()
+            if candidate not in used:
+                return candidate
+        for letter in 'BCDEFGHIJKLMNOPQRSTUVWXYZ':
+            name = letter if letter != base else f'{letter}2'
+            if name not in used:
+                return name
+        return f'样品{chunk_index}'[:31]
+
+    def _prepare_overflow_sheet(self, wb, base_ws, sheet_name: str, sample_col_slots, sample_row, max_data_row):
+        """从主 Sheet 复制创建溢出 Sheet，并清空样品位数据。"""
+        new_ws = wb.copy_worksheet(base_ws)
+        new_ws.title = sheet_name
+        for col in sample_col_slots:
+            _write_cell(new_ws, f'{get_column_letter(col)}{sample_row}', None)
+        data_start = self._get_data_start_row()
+        for row in range(data_start, max_data_row + 1):
+            for col in sample_col_slots:
+                new_ws.cell(row=row, column=col).value = None
+        return new_ws
+
+    def _fill_samples_on_sheet(
+        self, ws, samples, sample_col_slots, sample_row, data_start_row,
+        max_data_row, excluded_measures, edited_measures, sheet_label: str,
+    ):
+        """在指定 Sheet 上填入一组样品的序号和实测值。"""
+        for slot_idx, item in enumerate(samples):
+            if slot_idx >= len(sample_col_slots):
+                logger.warning(
+                    f'[样品位不足] {item["path"].name} 超出 Sheet {sheet_label} 列容量，已跳过'
+                )
+                continue
+            sample_num = item['sample_num']
+            sample_col = sample_col_slots[slot_idx]
+            _write_cell(ws, f'{get_column_letter(sample_col)}{sample_row}', f'{sample_num:03d}')
+            logger.info(
+                f'  Sheet {sheet_label}: {item["path"].name} -> {sample_num}# '
+                f'(列{sample_col}, 序号{sample_num:03d})'
+            )
+            for measure in item['data'].get('measurements', []):
+                eff = self._get_effective_measure(
+                    measure, item['stem'], excluded_measures, edited_measures,
+                )
+                if eff is None:
+                    continue
+                row = data_start_row - 1 + self._measure_row(eff)
+                if row > max_data_row:
+                    lbl = measure_dict_label(eff)
+                    logger.warning(
+                        f'[超出数据区] {lbl} 落在行 {row}（数据区上限 {max_data_row}），已跳过'
+                    )
+                    continue
+                ws.cell(row=row, column=sample_col, value=eff['measured'])
+
+    def _fill_template_for_date_group(
+        self,
+        wb,
+        items: list,
+        date_str: str,
+        sample_col_slots: list[int],
+        sample_row: int,
+        data_start_row: int,
+        max_data_row: int,
+        excluded_measures: dict,
+        edited_measures: dict,
+        parent_picks: dict[str, str | None] | None = None,
+    ) -> tuple[int, int]:
+        """
+        按出货表模板写入：根据各 Sheet 序号列定位行，填入规格/公差与实测值。
+        返回 (写入单元格数, 未匹配项数)。
+        """
+        tpl = self._get_template_layout_config()
+        sheet_names = self._get_template_sheet_names()
+        serial_col = column_index_from_string(self._get_column_letter('serial'))
+        row_index = build_sheet_row_index(
+            wb, sheet_names, serial_col, data_start_row, max_data_row,
+        )
+        if not row_index:
+            logger.warning('[模板] 未在序号列中扫描到任何尺寸行')
+
+        part_name = ''
+        for item in items:
+            if item['data'].get('part_name'):
+                part_name = item['data']['part_name']
+                break
+
+        plain_ids = bool(tpl.get('sample_id_plain', True))
+        for sheet_name in sheet_names:
+            if sheet_name not in wb.sheetnames:
+                continue
+            ws = wb[sheet_name]
+            if part_name:
+                _write_cell(ws, self._get_field_location('part_name'), part_name)
+            if date_str:
+                _write_cell(ws, self._get_field_location('date'), date_str)
+
+        spec_col = column_index_from_string(self._get_column_letter('spec'))
+        upper_col = column_index_from_string(self._get_column_letter('upper_tol'))
+        lower_col = column_index_from_string(self._get_column_letter('lower_tol'))
+
+        # 规格/公差：与动态模式一致，从 PDF 去重后按模板序号列定位写入
+        all_measurements: list[dict] = []
+        seen_keys: set[str] = set()
+        for item in items:
+            for m in item['data'].get('measurements', []):
+                key = measure_dict_key(m)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_measurements.append(m)
+        all_measurements.sort(key=_measurement_sort_key)
+
+        spec_filled = 0
+        for measure in all_measurements:
+            loc = resolve_measure_write_location(measure, row_index, parent_picks)
+            if not loc:
+                continue
+            sheet_name, row = loc
+            if row > max_data_row:
+                continue
+            ws = wb[sheet_name]
+            ws.cell(row=row, column=spec_col, value=measure['nominal'])
+            ws.cell(row=row, column=upper_col, value=measure['upper_tol'])
+            ws.cell(row=row, column=lower_col, value=measure['lower_tol'])
+            spec_filled += 1
+        if spec_filled:
+            logger.info(f'[模板] 已填入 {spec_filled} 项规格/公差')
+
+        written = 0
+        unmatched = 0
+        for slot_idx, item in enumerate(items):
+            if slot_idx >= len(sample_col_slots):
+                logger.warning(
+                    f'[模板] 样品位不足，跳过 {item["path"].name} '
+                    f'（模板最多 {len(sample_col_slots)} 个样品列）'
+                )
+                continue
+            sample_col = sample_col_slots[slot_idx]
+            sample_label = (
+                item['sample_num'] if plain_ids else f'{item["sample_num"]:03d}'
+            )
+            for sheet_name in sheet_names:
+                if sheet_name not in wb.sheetnames:
+                    continue
+                _write_cell(
+                    wb[sheet_name],
+                    f'{get_column_letter(sample_col)}{sample_row}',
+                    sample_label,
+                )
+            logger.info(
+                f'  样品 {item["path"].name} -> {item["sample_num"]}# '
+                f'(列 {get_column_letter(sample_col)})'
+            )
+
+            for measure in item['data'].get('measurements', []):
+                eff = self._get_effective_measure(
+                    measure, item['stem'], excluded_measures, edited_measures,
+                )
+                if eff is None:
+                    continue
+                loc = resolve_measure_write_location(eff, row_index, parent_picks)
+                if not loc:
+                    if self._is_skipped_sub_competitor(eff, row_index, parent_picks):
+                        continue
+                    unmatched += 1
+                    logger.warning(
+                        f'[模板] 模板中未找到 {measure_dict_label(eff)} 对应行'
+                    )
+                    continue
+                sheet_name, row = loc
+                if row > max_data_row:
+                    logger.warning(
+                        f'[模板] {measure_dict_label(eff)} 行 {row} 超出上限 {max_data_row}'
+                    )
+                    continue
+                wb[sheet_name].cell(row=row, column=sample_col, value=eff['measured'])
+                written += 1
+
+        return written, unmatched
 
     def _get_sample_col_slots(self):
         """主表全部样品位的列号列表（支持非连续列，如 H,K,N）"""
@@ -531,13 +856,14 @@ class CMMReportFiller:
         return self.config.get('sample_row', DEFAULT_SAMPLE_ROW)
 
     def _get_max_data_row(self):
-        """数据区最后一行：优先配置 max_data_row，否则扫描模板规格列连续数据的末尾
-        （加 50 行缓冲，兼容新增测量项），扫描不到时回退默认值。"""
-        configured = self.config.get('max_data_row')
+        """数据区最后一行：优先 template 配置，否则扫描模板规格列。"""
+        configured = self._get_template_layout_config().get('max_data_row')
+        if configured is None:
+            configured = self.config.get('max_data_row')
         if configured:
             return int(configured)
 
-        default_max = self._get_data_start_row() + 28  # 历史行为：起始行 + 28 行数据
+        default_max = self._get_data_start_row() + 28
         try:
             wb = openpyxl.load_workbook(self.template_path)
             ws = wb[self._get_sheet_name()]
@@ -555,29 +881,125 @@ class CMMReportFiller:
             pass
         return default_max
 
+    def _get_axis_preferences(self) -> dict[str, str]:
+        """从模板「轴」列读取各序号应取的测量轴（D/X/Y/M/A 等）。"""
+        if self._axis_prefs_cache is not None:
+            return self._axis_prefs_cache
+
+        axis_col_letter = self.config.get('columns', {}).get('axis')
+        if not axis_col_letter:
+            self._axis_prefs_cache = {}
+            return self._axis_prefs_cache
+
+        sheet_names = self._get_template_sheet_names()
+
+        self._axis_prefs_cache = load_axis_preferences_from_template(
+            self.template_path,
+            sheet_names,
+            column_index_from_string(self._get_column_letter('serial')),
+            column_index_from_string(axis_col_letter),
+            self._get_data_start_row(),
+            self._get_max_data_row(),
+        )
+        return self._axis_prefs_cache
+
+    def build_template_row_index(self, wb: openpyxl.Workbook | None = None) -> dict[str, tuple[str, int]]:
+        """扫描模板序号列，建立 lookup_key -> (sheet, row)。"""
+        own_wb = wb is None
+        if own_wb:
+            wb = openpyxl.load_workbook(self.template_path, read_only=True, data_only=True)
+        try:
+            return build_sheet_row_index(
+                wb,
+                self._get_template_sheet_names(),
+                column_index_from_string(self._get_column_letter('serial')),
+                self._get_data_start_row(),
+                self._get_max_data_row(),
+            )
+        finally:
+            if own_wb:
+                wb.close()
+
+    def analyze_sub_item_conflicts(self, analyze_items: list) -> list[dict]:
+        """分析预览数据中的「多子编号争同一模板序号」冲突。"""
+        measurements: list[dict] = []
+        for item in analyze_items:
+            if item.get('error'):
+                continue
+            measurements.extend(item.get('measurements', []))
+        if not measurements:
+            return []
+        row_index = self.build_template_row_index()
+        return detect_parent_row_conflicts(measurements, row_index)
+
+    def _build_parent_picks(
+        self,
+        measurements: list[dict],
+        row_index: dict[str, tuple[str, int]],
+        sub_item_choices: dict[str, str] | None,
+    ) -> dict[str, str | None] | None:
+        conflicts = detect_parent_row_conflicts(measurements, row_index)
+        auto = build_parent_auto_picks(measurements, row_index)
+        resolved = resolve_parent_picks(conflicts, sub_item_choices)
+        merged = merge_parent_picks(auto, resolved)
+        if not merged:
+            return None
+        for tk, pick in sorted(merged.items()):
+            if pick is None:
+                logger.info(f'  [子编号] 模板序号 {tk}：用户选择不填入')
+            else:
+                logger.info(f'  [子编号] 模板序号 {tk} → {pick}')
+        return merged
+
+    @staticmethod
+    def _is_skipped_sub_competitor(
+        measure: dict,
+        row_index: dict[str, tuple[str, int]],
+        parent_picks: dict[str, str | None] | None,
+    ) -> bool:
+        if not parent_picks:
+            return False
+        sub = measure.get('sub') or ''
+        if not sub:
+            return False
+        parent_key = str(measure['num'])
+        if parent_key not in row_index or parent_key not in parent_picks:
+            return False
+        if resolve_measure_location(row_index, measure):
+            return False
+        pick = parent_picks[parent_key]
+        if pick is None:
+            return True
+        return measure_dict_key(measure) != pick
+
     def _compute_required_max_row(self, items):
         """根据所有 PDF 解析出的最大测量编号，计算写入所需的最大行号。
         用于 batch_process_by_date 动态扩展上限，避免固定 buffer 截断有效数据。"""
         max_num = 0
         for item in items:
             for m in item['data'].get('measurements', []):
-                if m['num'] > max_num:
-                    max_num = m['num']
+                if self._measure_row(m) > max_num:
+                    max_num = self._measure_row(m)
         if max_num == 0:
             return None
         return self._get_data_start_row() - 1 + max_num
 
     def pdf_to_image(self, pdf_path):
-        with fitz_open_context(pdf_path) as doc:
-            page = doc[0]
-            pix = page.get_pixmap(dpi=self.dpi)
-            img_name = f'{Path(pdf_path).stem}.png'
-            img_path = str(CACHE_DIR / img_name)
-            pix.save(img_path)
-        return img_path
+        """渲染 PDF 第 1 页为图片（向后兼容）。"""
+        images = pdf_to_images(pdf_path, CACHE_DIR, dpi=self.dpi, roi=self.ocr_roi)
+        return images[0]
+
+    def pdf_to_all_images(self, pdf_path):
+        """渲染 PDF 所有页为图片。"""
+        return pdf_to_images(pdf_path, CACHE_DIR, dpi=self.dpi, roi=self.ocr_roi)
+
+    def _pdf_cache_key(self, pdf_path: str) -> str:
+        """PDF 级缓存 key（基于完整路径 MD5）。"""
+        import hashlib
+        return hashlib.md5(str(Path(pdf_path).resolve()).encode('utf-8')).hexdigest()[:16]
 
     def _cache_key(self, img_path: str) -> str:
-        """生成缓存 key：完整路径的 MD5（避免同名 PDF 不同路径冲突）"""
+        """生成缓存 key：完整路径的 MD5（避免同名 PDF 不同路径冲突）。"""
         import hashlib
         return hashlib.md5(img_path.encode('utf-8')).hexdigest()[:16]
 
@@ -591,110 +1013,160 @@ class CMMReportFiller:
         self._save_cache()
         return lines
 
-    def parse_from_text(self, ocr_lines):
-        text = '\n'.join(ocr_lines)
-        data = {'part_name': '', 'date': '', 'measurements': []}
-        warnings = []
+    def ocr_image_detailed(self, img_path) -> list[OCRBox]:
+        """OCR 识别并返回带坐标的 OCRBox 列表。"""
+        cache_key = f'det:{self._cache_key(img_path)}'
+        if cache_key in self.cache:
+            return [OCRBox(**b) for b in self.cache[cache_key]]
 
-        # 零件名
-        m = re.search(r'零件名[：:]\s*\n?\s*(\S+)', text)
-        if m:
-            data['part_name'] = m.group(1).strip()
+        boxes = self._ocr_detailed_with_retry(img_path)
+        self.cache[cache_key] = [
+            {'text': b.text, 'x0': b.x0, 'y0': b.y0, 'x1': b.x1, 'y1': b.y1, 'confidence': b.confidence}
+            for b in boxes
+        ]
+        self._save_cache()
+        return boxes
+
+    def _ocr_detailed_with_retry(self, img_path, max_retries=2) -> list[OCRBox]:
+        """OCR 识别（含坐标），失败自动重试。"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                return self.ocr.recognize_detailed(img_path)
+            except Exception as e:
+                if attempt < max_retries:
+                    logger.warning(
+                        f'[OCR 重试] {Path(img_path).name} 坐标识别失败，重试中 ({attempt}/{max_retries}): {e}'
+                    )
+                    time.sleep(1)
+                else:
+                    logger.error(
+                        f'[OCR 失败] {Path(img_path).name} 坐标识别失败（已重试 {max_retries} 次）: {e}'
+                    )
+                    raise
+
+    def extract_pdf_data(self, pdf_path: str) -> dict:
+        """
+        统一 PDF 提取入口：
+        1. 文字型 PDF → get_text() 快速通道
+        2. 扫描件 → 多页 OCR + 坐标表格解析
+        3. 表格解析无结果 → 回退行文本解析
+        """
+        pdf_path = str(pdf_path)
+        profile_tag = self.profile.get('name', 'default')
+        roi_tag = roi_cache_suffix(self.ocr_roi)
+        axis_prefs = self._get_axis_preferences()
+        axis_tag = ''
+        if axis_prefs:
+            import hashlib
+            axis_tag = hashlib.md5(
+                json.dumps(axis_prefs, sort_keys=True).encode('utf-8')
+            ).hexdigest()[:8]
+        cache_key = f'pdf:{self._pdf_cache_key(pdf_path)}:{profile_tag}:{roi_tag}:ax{axis_tag}'
+        if cache_key in self.cache:
+            cached = self.cache[cache_key]
+            if isinstance(cached, dict) and 'measurements' in cached:
+                return cached
+
+        pdf_type = detect_pdf_type(pdf_path)
+        source = 'text'
+
+        if pdf_type == 'text':
+            lines = extract_text_lines(pdf_path, roi=self.ocr_roi)
+            data = self.parse_from_text(lines)
+            logger.info(f'  [提取] {Path(pdf_path).name}: 文字层快速通道 ({len(lines)} 行)')
         else:
-            warnings.append('未识别到零件名')
+            all_lines: list[str] = []
+            page_box_groups: list[list[OCRBox]] = []
+            img_paths = self.pdf_to_all_images(pdf_path)
+            for img_path in img_paths:
+                boxes = self.ocr_image_detailed(img_path)
+                page_box_groups.append(boxes)
+                all_lines.extend(b.text for b in boxes)
 
-        # 日期（支持多种常见格式，按优先级尝试匹配）
-        date_parsed = False
-        # 格式1：ISO / 分隔符（2024-01-02、2024/01/02、2024.01.02）
-        for sep in ('-', '/', '.'):
-            m = re.search(rf'(\d{{4}})\{sep}(\d{{1,2}})\{sep}(\d{{1,2}})', text)
-            if m:
-                data['date'] = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
-                date_parsed = True
-                break
-        # 格式2：中文年/月/日（2024年1月2日）
-        if not date_parsed:
-            m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', text)
-            if m:
-                data['date'] = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
-                date_parsed = True
-        # 格式3：中文月份名（十二月 2, 2024）
-        if not date_parsed:
-            m = re.search(r'(一月|二月|三月|四月|五月|六月|七月|八月|九月|十月|十一月|十二月)\s*(\d{1,2}),?\s*(\d{4})', text)
-            if m:
-                month_num = month_cn_to_num(m.group(1))
-                data['date'] = f"{m.group(3)}-{month_num}-{m.group(2).zfill(2)}"
-                date_parsed = True
-        if not date_parsed:
-            warnings.append('未识别到日期')
+            merged_measurements: list[dict] = []
+            seen_keys: set[str] = set()
+            table_data: dict = {'part_name': '', 'date': '', 'measurements': []}
+            for boxes in page_box_groups:
+                page_data = parse_from_ocr_boxes(
+                    boxes, self.item_prefixes, self.skip_lines,
+                    self._is_ng, month_cn_to_num,
+                    confidence_threshold=self.confidence_threshold,
+                    axis_preferences=axis_prefs or None,
+                )
+                if not table_data.get('part_name') and page_data.get('part_name'):
+                    table_data['part_name'] = page_data['part_name']
+                if not table_data.get('date') and page_data.get('date'):
+                    table_data['date'] = page_data['date']
+                for m in page_data.get('measurements', []):
+                    key = m['item_key']
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        merged_measurements.append(m)
+            table_data['measurements'] = merged_measurements
+            data = table_data
 
-        # 测量项
-        current = None
-        numbers = []
-        prefix_pattern = '|'.join(re.escape(p) for p in ITEM_PREFIXES)
-        for line in ocr_lines:
-            line = line.strip()
-            if not line:
-                continue
-            m = re.match(rf'(?:{prefix_pattern})[_\s]*(\d+)[-\s]*(.+)', line, re.IGNORECASE)
-            if m:
-                if current and len(numbers) >= 4:
-                    upper = numbers[1]
-                    lower = numbers[2]
-                    if upper > 0 and lower > 0 and upper == lower:
-                        logger.info(f'  [公差对称] FAI_{current["num"]:02d} 上下公差均为 {upper}，假设为对称公差（下公差设为 -{upper}）')
-                        lower = -upper
-                    data['measurements'].append({
-                        'num': current['num'],
-                        'desc': current['desc'],
-                        'nominal': numbers[0],
-                        'upper_tol': upper,
-                        'lower_tol': lower,
-                        'measured': numbers[3],
-                        'ng': self._is_ng(numbers[0], upper, lower, numbers[3]),
-                    })
-                elif current and len(numbers) > 0 and len(numbers) < 4:
-                    warnings.append(f'FAI_{current["num"]:02d} 数据不完整（只识别到 {len(numbers)} 个数字）')
-                current = {'num': int(m.group(1)), 'desc': m.group(2).strip()}
-                numbers = []
+            line_data = self.parse_from_text(all_lines)
+            table_count = len(data.get('measurements', []))
+            line_count = len(line_data.get('measurements', []))
+
+            if table_count >= line_count and table_count > 0:
+                source = 'ocr-table'
+                if not data.get('part_name') and line_data.get('part_name'):
+                    data['part_name'] = line_data['part_name']
+                if not data.get('date') and line_data.get('date'):
+                    data['date'] = line_data['date']
+                logger.info(
+                    f'  [提取] {Path(pdf_path).name}: OCR 坐标表格解析 '
+                    f'({len(img_paths)} 页, {table_count} 项, 行解析 {line_count} 项)'
+                )
             else:
-                if line in OCR_SKIP_LINES:
-                    continue
-                n = re.search(r'[-+]?\d+\.?\d*', line)
-                if n:
-                    token = n.group()
-                    # 测量项行头后紧跟的纯整数是表格行号伪影（如 FAI_12 后的 '1'），
-                    # 会把 理论值/公差/实测 4 数窗口整体错位，跳过。
-                    # 本报告格式的测量值总带小数点；已对 52 份缓存样本回归验证零误伤。
-                    if '.' not in token and not numbers:
-                        continue
-                    try:
-                        numbers.append(float(token))
-                    except (ValueError, TypeError) as e:
-                        logger.debug(f'[OCR 解析] 无法将 "{token}" 转为浮点数: {e}')
+                data = line_data
+                source = 'ocr-line'
+                if table_count > 0:
+                    logger.info(
+                        f'  [提取] {Path(pdf_path).name}: 表格解析 {table_count} 项 '
+                        f'少于行解析 {line_count} 项，回退行解析'
+                    )
+                else:
+                    logger.info(f'  [提取] {Path(pdf_path).name}: 坐标解析无结果，回退行解析')
 
-        if current and len(numbers) >= 4:
-            upper = numbers[1]
-            lower = numbers[2]
-            if upper > 0 and lower > 0 and upper == lower:
-                logger.info(f'  [公差对称] FAI_{current["num"]:02d} 上下公差均为 {upper}，假设为对称公差（下公差设为 -{upper}）')
-                lower = -upper
-            data['measurements'].append({
-                'num': current['num'],
-                'desc': current['desc'],
-                'nominal': numbers[0],
-                'upper_tol': upper,
-                'lower_tol': lower,
-                'measured': numbers[3],
-                'ng': self._is_ng(numbers[0], upper, lower, numbers[3]),
-            })
-        elif current and len(numbers) > 0:
-            warnings.append(f'FAI_{current["num"]:02d} 数据不完整（只识别到 {len(numbers)} 个数字）')
-
-        for w in warnings:
-            logger.warning(w)
-
+        data['_source'] = source
+        self.cache[cache_key] = data
+        self._save_cache()
         return data
+
+    @staticmethod
+    def _apply_measure_override(measure: dict, override: dict | None) -> dict:
+        """应用预览阶段的实测值修正。"""
+        if not override:
+            return measure
+        m = dict(measure)
+        for key in ('nominal', 'upper_tol', 'lower_tol', 'measured', 'desc'):
+            if key in override and override[key] is not None:
+                m[key] = override[key]
+        m['ng'] = CMMReportFiller._is_ng(
+            m['nominal'], m['upper_tol'], m['lower_tol'], m['measured'],
+        )
+        m['low_confidence'] = False
+        return m
+
+    def _measure_row(self, measure: dict) -> int:
+        """测量项对应的 Excel 数据行偏移。"""
+        return measure_dict_row_index(measure)
+
+    def _get_effective_measure(self, measure, stem, excluded_measures, edited_measures):
+        """合并剔除/修正后的测量项。"""
+        key = measure_dict_key(measure)
+        if key in excluded_measures.get(stem, set()):
+            return None
+        override = (edited_measures or {}).get(stem, {}).get(key)
+        return self._apply_measure_override(measure, override)
+
+    def parse_from_text(self, ocr_lines):
+        return parse_from_text_lines(
+            ocr_lines, self.item_prefixes, self.skip_lines,
+            self._is_ng, month_cn_to_num,
+        )
 
     def _scan_and_parse(self, pdf_folder, progress_callback=None):
         """扫描文件夹，过滤误操作文件，逐份 OCR+解析。
@@ -737,9 +1209,7 @@ class CMMReportFiller:
                 break
             _report(idx - 1, total, f'OCR 识别: {pdf.name}')
             try:
-                img_path = self.pdf_to_image(str(pdf))
-                ocr_lines = self.ocr_image(img_path)
-                data = self.parse_from_text(ocr_lines)
+                data = self.extract_pdf_data(str(pdf))
                 self._preview_pdf_data(pdf, data)
                 infos.append({
                     'path': pdf,
@@ -774,6 +1244,7 @@ class CMMReportFiller:
                 'part_name': data.get('part_name', ''),
                 'ng_count': sum(1 for m in ms if m.get('ng')),
                 'measurements': ms,
+                'source': data.get('_source', ''),
                 'error': None,
             })
         for f in result['failed']:
@@ -783,7 +1254,9 @@ class CMMReportFiller:
             })
         return items
 
-    def batch_process_by_date(self, pdf_folder, output_folder, progress_callback=None, excluded_measures=None):
+    def batch_process_by_date(self, pdf_folder, output_folder, progress_callback=None,
+                              excluded_measures=None, edited_measures=None,
+                              sub_item_choices: dict[str, str] | None = None):
         """
         按日期批量处理：
         - Sheet A: 样品1#-5#（001-005）
@@ -791,6 +1264,7 @@ class CMMReportFiller:
         - 忽略误操作文件（如 003-1.PDF）
         - excluded_measures: {pdf_stem: {measure_num, ...}}，这些 PDF 的对应测量项
           不写入实测值（用于预览时剔除误识别项）
+        - edited_measures: {pdf_stem: {measure_num: {measured, ...}}}，预览修正值
 
         progress_callback(current, total, message) 可选，用于 GUI 进度更新。
         返回处理摘要 dict。
@@ -829,13 +1303,16 @@ class CMMReportFiller:
             logger.warning('过滤后无有效 PDF 文件')
             return summary
 
-        # 动态扩展上限：若所有 PDF 的测量编号所需行数超过模板扫描值，使用较大者
-        required_max = self._compute_required_max_row(pdf_info)
+        # 按模板写入（默认）；overflow_samples=true 时启用旧版自动扩展 Sheet
+        required_max = None
+        if self._overflow_samples_enabled():
+            required_max = self._compute_required_max_row(pdf_info)
         if required_max is not None and required_max > max_data_row:
             logger.info(f'[数据区扩展] {max_data_row} → {required_max}（根据测量编号自动扩展）')
             max_data_row = required_max
 
         excluded_measures = excluded_measures or {}
+        edited_measures = edited_measures or {}
         total = scan['scanned_total']
         _report(total, total, '按日期分组并写入 Excel...')
 
@@ -856,151 +1333,144 @@ class CMMReportFiller:
                 break
             logger.info(f'\n=== 日期组: {date} ({len(items)} 个样品) ===')
 
-            # 按文件名排序，顺序分配样品编号
+            # 按文件名排序，顺序分配全局样品序号（用于拆分文件名）
             items.sort(key=lambda x: x['path'].name)
             for idx, item in enumerate(items, start=1):
                 item['sample_num'] = idx
 
-            # 使用该日期组所有PDF的测量项合并后初始化标准模板
-            # 先收集所有测量项，去重并按编号排序
-            all_measurements = []
-            seen_keys = set()
-            for item in items:
-                for m in item['data'].get('measurements', []):
-                    key = (m['num'], m['nominal'], m['upper_tol'], m['lower_tol'])
-                    if key not in seen_keys:
-                        seen_keys.add(key)
-                        all_measurements.append(m)
-            all_measurements.sort(key=lambda x: x['num'])
-
-            # 生成标准模板（基于原始模板，填入完整的规格/公差）
-            std_template = str(Path(self.template_path).with_name(f'标准模板_{date}_已填描述.xlsx'))
-            wb = openpyxl.load_workbook(self.template_path)
-            ws = wb[self._get_sheet_name()]
-
-            # 基本信息（取第一个有零件名的PDF）
-            part_name = ''
-            date_str = date
-            for item in items:
-                if item['data'].get('part_name'):
-                    part_name = item['data']['part_name']
-                    break
-            _write_cell(ws, self._get_field_location('part_name'), part_name)
-            _write_cell(ws, self._get_field_location('date'), date_str)
-
-            # 填入所有测量项的名义值、上公差、下公差
-            filled = 0
-            spec_col = column_index_from_string(self._get_column_letter("spec"))
-            upper_col = column_index_from_string(self._get_column_letter("upper_tol"))
-            lower_col = column_index_from_string(self._get_column_letter("lower_tol"))
-            for item in all_measurements:
-                row = data_start_row - 1 + item['num']
-                if row > max_data_row:
-                    logger.warning(f'[超出数据区] FAI_{item["num"]:02d} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
-                    continue
-                ws.cell(row=row, column=spec_col, value=item['nominal'])
-                ws.cell(row=row, column=upper_col, value=item['upper_tol'])
-                ws.cell(row=row, column=lower_col, value=item['lower_tol'])
-                filled += 1
-
-            logger.info(f'[初始化完成] 已填入 {filled} 项规格/公差（来自 {len(items)} 个PDF）')
-
-            # 4. 分离主样品(1#-N#)和溢出样品(N+1#+)；
-            #    N = main_sample_count（可配置），Sheet B 与主表样品位数相同
             main_count = self._get_main_sample_count()
-            sample_col_slots = self._get_sample_col_slots()
-            main_samples = [item for item in items if 1 <= item['sample_num'] <= main_count]
-            overflow_samples = [item for item in items if item['sample_num'] > main_count]
-
-            # 溢出超过 Sheet B 容量时截断（每组最多 2×N 个样品），并明确告警
-            overflow_capacity = main_count
-            dropped_overflow = overflow_samples[overflow_capacity:]
-            overflow_samples = overflow_samples[:overflow_capacity]
-            for item in dropped_overflow:
-                logger.warning(f'[样品位不足] {item["path"].name}（{item["sample_num"]}#）超出 Sheet B 容量，已跳过')
-                summary['skipped_pdfs'].append(item['path'].name)
-
-            logger.info(f'  主样品(1#-{main_count}#): {len(main_samples)} 个')
-            logger.info(f'  溢出样品({main_count + 1}#+): {len(overflow_samples)} 个')
-
-            # 5. 处理主样品（Sheet A），直接在内存中操作
-            out_wb = wb
-            out_ws = out_wb[self._get_sheet_name()]
+            sample_batches = self._prepare_sample_batches(items, main_count)
+            multi_batch = len(sample_batches) > 1
+            data_start_row = self._get_data_start_row()
             sample_row = self._get_sample_row()
+            sample_col_slots = self._get_sample_col_slots()[:main_count]
+            date_str = date
 
-            # 填入样品序号行
-            for item in main_samples:
-                sample_num = item['sample_num']
-                sample_col = sample_col_slots[sample_num - 1]
-                _write_cell(out_ws, f'{get_column_letter(sample_col)}{sample_row}', f'{sample_num:03d}')
-                logger.info(f'  Sheet A: {item["path"].name} -> {sample_num}# (列{sample_col}, 序号{sample_num:03d})')
+            row_index = self.build_template_row_index()
+            all_ms = []
+            for item in items:
+                all_ms.extend(item['data'].get('measurements', []))
+            parent_picks = self._build_parent_picks(all_ms, row_index, sub_item_choices)
 
-            # 填入实测值
-            for item in main_samples:
-                sample_num = item['sample_num']
-                sample_col = sample_col_slots[sample_num - 1]
-                for measure in item['data'].get('measurements', []):
-                    if measure['num'] in excluded_measures.get(item['stem'], set()):
-                        continue
-                    row = data_start_row - 1 + measure['num']
+            if self._overflow_samples_enabled():
+                if len(items) > main_count:
+                    logger.warning(
+                        f'样品数 {len(items)} 超过模板样品位 {main_count}，'
+                        f'将溢出到新 Sheet（overflow_samples 模式）'
+                    )
+                batch_items = items
+                wb = openpyxl.load_workbook(self.template_path)
+                part_name = ''
+                for item in batch_items:
+                    if item['data'].get('part_name'):
+                        part_name = item['data']['part_name']
+                        break
+
+                # ── 可选：样品溢出时自动复制 Sheet（旧版动态扩展）──
+                all_measurements = []
+                seen_keys = set()
+                for item in batch_items:
+                    for m in item['data'].get('measurements', []):
+                        key = (measure_dict_key(m),
+                               m['nominal'], m['upper_tol'], m['lower_tol'])
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            all_measurements.append(m)
+                all_measurements.sort(key=_measurement_sort_key)
+
+                ws = wb[self._get_sheet_name()]
+                _write_cell(ws, self._get_field_location('part_name'), part_name)
+                _write_cell(ws, self._get_field_location('date'), date_str)
+
+                filled = 0
+                spec_col = column_index_from_string(self._get_column_letter("spec"))
+                upper_col = column_index_from_string(self._get_column_letter("upper_tol"))
+                lower_col = column_index_from_string(self._get_column_letter("lower_tol"))
+                for item in all_measurements:
+                    row = data_start_row - 1 + measure_dict_row_index(item)
                     if row > max_data_row:
-                        logger.warning(f'[超出数据区] FAI_{measure["num"]:02d} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
+                        lbl = measure_dict_label(item)
+                        logger.warning(f'[超出数据区] {lbl} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
                         continue
-                    out_ws.cell(row=row, column=sample_col, value=measure['measured'])
+                    ws.cell(row=row, column=spec_col, value=item['nominal'])
+                    ws.cell(row=row, column=upper_col, value=item['upper_tol'])
+                    ws.cell(row=row, column=lower_col, value=item['lower_tol'])
+                    filled += 1
+                logger.info(f'[初始化完成] 已填入 {filled} 项规格/公差（来自 {len(batch_items)} 个PDF）')
 
-            # 6. 处理溢出样品（Sheet B，放在 Sheet A 后面，保持格式一致）
-            if overflow_samples:
-                # 使用 copy_worksheet 从 Sheet A 复制到 Sheet B，保持格式一致
-                sheet_b = out_wb.copy_worksheet(out_wb[self._get_sheet_name()])
-                sheet_b_name = self._get_sheet_b_name()
-                sheet_b.title = sheet_b_name
+                sample_chunks = self._chunk_samples(batch_items, main_count)
+                logger.info(
+                    f'  共 {len(batch_items)} 个样品，分 {len(sample_chunks)} 个 Sheet'
+                    f'（每 Sheet 最多 {main_count} 个）'
+                )
 
-                # 调整 Sheet 顺序为 A, B, CPK（B 在 A 后面，CPK 最后）
-                # CPK 不是必须的，只在存在时调整顺序
-                sheets = out_wb._sheets
-                b_sheet = next(s for s in sheets if s.title == sheet_b_name)
-                b_idx = sheets.index(b_sheet)
-                cpk_sheets = [s for s in sheets if s.title == 'CPK']
-                if cpk_sheets:
-                    cpk_idx = sheets.index(cpk_sheets[0])
-                    if b_idx > cpk_idx:
-                        sheets[b_idx], sheets[cpk_idx] = sheets[cpk_idx], sheets[b_idx]
+                out_wb = wb
+                out_ws = out_wb[self._get_sheet_name()]
+                base_sheet_name = self._get_sheet_name()
 
-                # 彻底清空样品序号行（按样品位列遍历，支持非连续列）
-                for col in sample_col_slots:
-                    _write_cell(sheet_b, f'{get_column_letter(col)}{sample_row}', None)
+                for chunk_idx, chunk in enumerate(sample_chunks):
+                    if chunk_idx == 0:
+                        target_ws = out_ws
+                        sheet_label = base_sheet_name
+                    else:
+                        sheet_name = self._allocate_overflow_sheet_name(out_wb, chunk_idx)
+                        target_ws = self._prepare_overflow_sheet(
+                            out_wb, out_ws, sheet_name, sample_col_slots, sample_row, max_data_row,
+                        )
+                        sheet_label = sheet_name
+                        cpk_sheets = [s for s in out_wb._sheets if s.title == 'CPK']
+                        if cpk_sheets:
+                            sheets = out_wb._sheets
+                            t_idx = sheets.index(target_ws)
+                            cpk_idx = sheets.index(cpk_sheets[0])
+                            if t_idx > cpk_idx:
+                                sheets[t_idx], sheets[cpk_idx] = sheets[cpk_idx], sheets[t_idx]
 
-                # 清空所有实测值列（样品位列，数据区范围）
-                for row in range(self._get_data_start_row(), max_data_row + 1):
-                    for col in sample_col_slots:
-                        cell = sheet_b.cell(row=row, column=col)
-                        cell.value = None
+                    self._fill_samples_on_sheet(
+                        target_ws, chunk, sample_col_slots, sample_row,
+                        data_start_row, max_data_row, excluded_measures, edited_measures,
+                        sheet_label,
+                    )
 
-                # 填入溢出样品：按顺序占用样品位（第1个溢出→1#位，第2个→2#位…）
-                for slot_idx, item in enumerate(overflow_samples):
-                    sample_num = item['sample_num']
-                    sample_col = sample_col_slots[slot_idx]
-                    _write_cell(sheet_b, f'{get_column_letter(sample_col)}{sample_row}', f'{sample_num:03d}')
-                    logger.info(f'  Sheet B: {item["path"].name} -> {sample_num}# (列{sample_col}, 序号{sample_num:03d})')
+                out_path = str(Path(output_folder) / self._batch_output_filename(
+                    date_str, 1, len(batch_items), multi_batch=False,
+                ))
+                self._safe_save(wb, out_path)
+                wb.close()
+                summary['output_files'].append(out_path)
+                logger.info(f'  [完成] {out_path}')
+            else:
+                for batch_idx, batch in enumerate(sample_batches):
+                    if self.cancel_check and self.cancel_check():
+                        logger.info('用户已取消处理')
+                        summary['cancelled'] = True
+                        break
 
-                # 填入实测值（同样按样品位映射，避免覆盖）
-                for slot_idx, item in enumerate(overflow_samples):
-                    sample_col = sample_col_slots[slot_idx]
-                    for measure in item['data'].get('measurements', []):
-                        if measure['num'] in excluded_measures.get(item['stem'], set()):
-                            continue
-                        row = data_start_row - 1 + measure['num']
-                        if row > max_data_row:
-                            logger.warning(f'[超出数据区] FAI_{measure["num"]:02d} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
-                            continue
-                        sheet_b.cell(row=row, column=sample_col, value=measure['measured'])
+                    global_start = batch_idx * main_count + 1
+                    global_end = global_start + len(batch) - 1
+                    batch_items = self._renumber_batch_items(batch, local_start=1)
 
-            # 保存
-            out_path = str(Path(output_folder) / f'{date}_项目汇总.xlsx')
-            self._safe_save(out_wb, out_path)
-            wb.close()
-            summary['output_files'].append(out_path)
-            logger.info(f'  [完成] {out_path}')
+                    wb = openpyxl.load_workbook(self.template_path)
+                    written, unmatched = self._fill_template_for_date_group(
+                        wb, batch_items, date_str, sample_col_slots, sample_row,
+                        data_start_row, max_data_row, excluded_measures, edited_measures,
+                        parent_picks=parent_picks,
+                    )
+                    logger.info(
+                        f'[模板] 样品 {global_start}-{global_end}：'
+                        f'已写入 {written} 个实测值，未匹配 {unmatched} 项'
+                    )
+
+                    out_path = str(Path(output_folder) / self._batch_output_filename(
+                        date_str, global_start, global_end, multi_batch=multi_batch,
+                    ))
+                    self._safe_save(wb, out_path)
+                    wb.close()
+                    summary['output_files'].append(out_path)
+                    logger.info(f'  [完成] {out_path}')
+
+                if summary.get('cancelled'):
+                    break
 
         return summary
 
@@ -1056,11 +1526,10 @@ class CMMReportFiller:
                 break
             _report(idx - 1, total, f'提取规格: {pdf.name}')
             try:
-                img_path = self.pdf_to_image(str(pdf))
-                ocr_lines = self.ocr_image(img_path)
-                data = self.parse_from_text(ocr_lines)
+                data = self.extract_pdf_data(str(pdf))
                 for m in data.get('measurements', []):
-                    key = (m['num'], m['nominal'], m['upper_tol'], m['lower_tol'])
+                    key = (measure_dict_key(m),
+                           m['nominal'], m['upper_tol'], m['lower_tol'])
                     if key not in seen_keys:
                         seen_keys.add(key)
                         all_measurements.append(m)
@@ -1071,7 +1540,7 @@ class CMMReportFiller:
 
         _report(total, total, '写入标准模板...')
 
-        all_measurements.sort(key=lambda x: x['num'])
+        all_measurements.sort(key=_measurement_sort_key)
 
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self._get_sheet_name()]
@@ -1082,9 +1551,10 @@ class CMMReportFiller:
 
         filled = 0
         for item in all_measurements:
-            row = data_start_row - 1 + item['num']
+            row = data_start_row - 1 + measure_dict_row_index(item)
             if row > max_data_row:
-                logger.warning(f'[超出数据区] FAI_{item["num"]:02d} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
+                lbl = measure_dict_label(item)
+                logger.warning(f'[超出数据区] {lbl} 落在行 {row}（数据区上限 {max_data_row}），已跳过')
                 continue
             ws.cell(row=row, column=spec_col, value=item['nominal'])
             ws.cell(row=row, column=upper_col, value=item['upper_tol'])
@@ -1140,9 +1610,7 @@ class CMMReportFiller:
                 break
             _report(idx - 1, total, f'汇总提取: {pdf.name}')
             try:
-                img_path = self.pdf_to_image(str(pdf))
-                ocr_lines = self.ocr_image(img_path)
-                data = self.parse_from_text(ocr_lines)
+                data = self.extract_pdf_data(str(pdf))
                 infos.append({'path': pdf, 'data': data})
                 summary['processed_pdfs'] += 1
             except Exception as e:
@@ -1195,7 +1663,7 @@ class CMMReportFiller:
                 c.alignment = center
 
             # 行4+：数据（按测量项编号排序）
-            measures = sorted(data.get('measurements', []), key=lambda m: m['num'])
+            measures = sorted(data.get('measurements', []), key=_measurement_sort_key)
             ng_total += sum(1 for m in measures if m.get('ng'))
             for r, m in enumerate(measures, start=4):
                 dev = round(m['measured'] - m['nominal'], 4)
@@ -1233,4 +1701,59 @@ class CMMReportFiller:
         wb.close()
         summary['output_file'] = out_path
         logger.info(f'[汇总完成] {summary["sheet_count"]} 个 Sheet，NG {ng_total} 项，保存至: {out_path}')
+        return summary
+
+    def export_ng_analysis(self, pdf_folder, output_folder, progress_callback=None):
+        """
+        批量分析 PDF 文件夹，导出 NG 统计 Excel。
+
+        返回 {total_pdfs, processed_pdfs, failed_pdfs, output_file, ng_count, fai_count, top_ng}
+        """
+        summary = {
+            'total_pdfs': 0,
+            'processed_pdfs': 0,
+            'failed_pdfs': [],
+            'output_file': None,
+            'ng_count': 0,
+            'fai_count': 0,
+            'top_ng': [],
+            'cancelled': False,
+        }
+
+        scan = self._scan_and_parse(pdf_folder, progress_callback)
+        if scan is None:
+            return summary
+
+        summary['total_pdfs'] = scan['scanned_total']
+        summary['processed_pdfs'] = len(scan['infos'])
+        summary['failed_pdfs'] = scan['failed']
+        if scan.get('cancelled'):
+            summary['cancelled'] = True
+            return summary
+
+        if not scan['infos']:
+            logger.warning('无有效 PDF 数据，未生成 NG 统计')
+            return summary
+
+        stats = collect_ng_stats(scan['infos'])
+        summary['ng_count'] = stats['total_ng']
+        summary['fai_count'] = stats['fai_count']
+        summary['top_ng'] = [
+            {
+                'item_key': r.get('item_key', str(r['num'])),
+                'label': r.get('label', f"FAI_{r['num']:02d}"),
+                'num': r['num'],
+                'desc': r['desc'],
+                'ng_rate': r['ng_rate'],
+                'ng_count': r['ng_count'],
+            }
+            for r in stats['summary'][:5] if r['ng_count'] > 0
+        ]
+
+        Path(output_folder).mkdir(parents=True, exist_ok=True)
+        out_path = str(Path(output_folder) / f'NG统计_{time.strftime("%Y%m%d_%H%M")}.xlsx')
+        export_ng_workbook(stats, out_path)
+        summary['output_file'] = out_path
+
+        logger.info(format_ng_summary_text(stats))
         return summary

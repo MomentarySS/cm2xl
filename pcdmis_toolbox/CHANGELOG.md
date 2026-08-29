@@ -4,6 +4,32 @@
 
 ---
 
+## [1.0.7] — 2026-08-29
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.7`
+- 安装包输出文件名同步为 `cm2xl_Setup_1.0.7.exe`
+- 全项目自动化测试 **158 passed**（cmm_filler 58 项）
+
+### CMMFiller 模块
+
+- **PDF 提取与解析**：新增 `pdf_extract.py`、`parse_measurements.py`、`report_profile.py`；多页扫描、文字层快通道、OCR bbox 表格对齐；支持多前缀/多子编号（FAI、CC、DIM 等）
+- **模板写入**：默认按模板 A 列序号定位行（`fixed_page_layout.py`）；规格/公差与实测值同步写入
+- **样品超额拆分**：样品数超过模板列数时自动输出多个 Excel（如 `_样品1-6.xlsx`、`_样品7-10.xlsx`）
+- **PC-DMIS 专项**：公差归一化（形位下公差=0、尺寸对称修正）、模板 G 列轴偏好、CC 序号间隙推断
+- **子编号冲突**：`sub_item_conflict.py` + 预览紫色高亮；动态选项（FAI_1-1…FAI_1-N / 都不填 / 较差 NG），不限子项数量
+- **NG 分析**：`ng_analysis.py` + GUI「NG 分析」页 + CLI `ng-stats`
+- **可选能力**：`pdf_table_import.py`（pdfplumber）、`requirements/cmm_filler_optional.txt`
+- **CLI**：新增 `ng-stats`、`tables` 子命令；支持 `--profile` / `--roi` / `--extra-prefix`
+- **GUI**：移除固定分页/动态扩展切换；OCR 预览可编辑实测值；子编号冲突选择区
+
+### 文档
+
+- `PDF_ENHANCEMENT_PLAN.md`：Phase 1–5 全部标记完成，补充子编号冲突与 overflow 边界说明
+
+---
+
 ## [1.0.6] — 2026-08-28
 
 ### 整体

@@ -14,6 +14,14 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from pathlib import Path
 
 from .core.filler import CMMReportFiller, load_settings, save_settings
+from .core.parse_measurements import measure_dict_key
+from .core.sub_item_conflict import (
+    SKIP_SUB_ITEM,
+    WORST_NG_SUB_ITEM,
+    candidate_option_label,
+    conflict_summary_line,
+)
+from .core.report_profile import list_profiles, load_profile, user_profiles_dir, parse_prefix_text
 from .app_meta import __version__, APP_TITLE, APP_DESCRIPTION
 from utils.paths import paths
 from utils.app_icon import apply_window_icon
@@ -78,10 +86,20 @@ class CMMFillerGUI:
         if self.default_output_folder:
             os.makedirs(self.default_output_folder, exist_ok=True)
 
+        self.default_report_profile = settings.get('report_profile', 'default')
+        raw_prefixes = settings.get('custom_item_prefixes', '')
+        if isinstance(raw_prefixes, list):
+            self.default_custom_prefixes = ', '.join(raw_prefixes)
+        else:
+            self.default_custom_prefixes = raw_prefixes or ''
+        self.default_ocr_roi = settings.get('ocr_roi') or {
+            'top': 0, 'left': 0, 'bottom': 0, 'right': 0,
+        }
+
         self.filler = None
         self.processing = False
         self._worker = None                 # 当前工作线程（供关闭时取消）
-        self._preview_widgets = []          # [(stem, num, BooleanVar)]
+        self._preview_widgets = []          # [{stem, num, var, measured_var, original_measured}]
         self._preview_window = None
         self._summary_files = []            # 汇总导出选中的 PDF（list[Path]，保序）
 
@@ -102,11 +120,49 @@ class CMMFillerGUI:
         return {}
 
     def _save_paths(self):
+        roi = self._read_roi_from_ui()
         save_settings({
             'template_path': self.template_var.get().strip(),
             'pdf_folder': self.pdf_var.get().strip(),
             'output_folder': self.output_var.get().strip(),
+            'report_profile': self._get_selected_profile_name(),
+            'custom_item_prefixes': self._read_custom_prefixes_from_ui(),
+            'ocr_roi': roi,
         })
+
+    def _get_selected_profile_name(self) -> str:
+        label = self.profile_var.get()
+        for p in self._profile_options:
+            if p['label'] == label:
+                return p['name']
+        return 'default'
+
+    def _read_roi_from_ui(self) -> dict:
+        def _pct(var):
+            try:
+                return max(0.0, min(100.0, float(var.get()))) / 100.0
+            except (ValueError, TypeError):
+                return 0.0
+        return {
+            'top': _pct(self.roi_top_var),
+            'bottom': _pct(self.roi_bottom_var),
+            'left': _pct(self.roi_left_var),
+            'right': _pct(self.roi_right_var),
+        }
+
+    def _read_custom_prefixes_from_ui(self) -> str:
+        return self.custom_prefix_var.get().strip()
+
+    def _read_custom_prefixes_list(self) -> list[str]:
+        return parse_prefix_text(self._read_custom_prefixes_from_ui())
+
+    def _create_filler(self, template: str) -> CMMReportFiller:
+        return CMMReportFiller(
+            template, dpi=300,
+            report_profile=self._get_selected_profile_name(),
+            ocr_roi=self._read_roi_from_ui(),
+            custom_item_prefixes=self._read_custom_prefixes_list(),
+        )
 
     def _on_close(self):
         if self.processing:
@@ -115,6 +171,27 @@ class CMMFillerGUI:
             self._save_paths()
         if self._owns_root:
             self.root.destroy()
+
+    def _on_profile_changed(self, _choice=None):
+        """切换 Profile 时自动填充推荐 ROI。"""
+        name = self._get_selected_profile_name()
+        profile = load_profile(name)
+        roi = profile.get('ocr_roi', {})
+        self.roi_top_var.set(str(int(roi.get('top', 0) * 100)))
+        self.roi_bottom_var.set(str(int(roi.get('bottom', 0) * 100)))
+        self.roi_left_var.set(str(int(roi.get('left', 0) * 100)))
+        self.roi_right_var.set(str(int(roi.get('right', 0) * 100)))
+        self._save_paths()
+
+    def _open_user_profiles_dir(self):
+        """打开用户自定义 Profile 目录。"""
+        import subprocess
+        path = user_profiles_dir()
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.startfile(str(path))
+        except OSError:
+            subprocess.Popen(['explorer', str(path)])
 
     # ── UI 构建 ─────────────────────────────────
     def _build_ui(self):
@@ -141,10 +218,12 @@ class CMMFillerGUI:
         self.tabs.pack(pady=(6, 0), padx=12, fill='both', expand=True)
         self.tab_process = self.tabs.add('处理')
         self.tab_summary = self.tabs.add('汇总导出')
+        self.tab_ng = self.tabs.add('NG 分析')
         self.tab_result = self.tabs.add('结果')
 
         self._build_process_tab()
         self._build_summary_tab()
+        self._build_ng_tab()
         self._build_result_tab()
         self._show_welcome()
 
@@ -188,6 +267,65 @@ class CMMFillerGUI:
         self.output_entry.pack(side='left', fill='x', expand=True, padx=(0, 8))
         self._setup_dnd(self.output_entry, 'output')
         ctk.CTkButton(out_frame, text='浏览', width=56, height=32, command=self._browse_output).pack(side='left')
+
+        # 报告 Profile
+        profile_frame = ctk.CTkFrame(config_card, fg_color="transparent")
+        profile_frame.pack(pady=3, padx=14, fill='x')
+        ctk.CTkLabel(profile_frame, text='📋 报告版式:', width=95, anchor='w').pack(side='left')
+        self._profile_options = list_profiles()
+        profile_labels = [p['label'] for p in self._profile_options]
+        default_label = next(
+            (p['label'] for p in self._profile_options if p['name'] == self.default_report_profile),
+            profile_labels[0] if profile_labels else '默认',
+        )
+        self.profile_var = ctk.StringVar(value=default_label)
+        self.profile_menu = ctk.CTkOptionMenu(
+            profile_frame, variable=self.profile_var, values=profile_labels,
+            width=220, command=self._on_profile_changed,
+        )
+        self.profile_menu.pack(side='left', padx=(0, 8))
+        ctk.CTkLabel(
+            profile_frame, text='切换后重新识别生效',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(side='left')
+
+        # 额外尺寸前缀（叠加在 Profile 之上）
+        prefix_frame = ctk.CTkFrame(config_card, fg_color="transparent")
+        prefix_frame.pack(pady=3, padx=14, fill='x')
+        ctk.CTkLabel(prefix_frame, text='🏷️ 额外前缀:', width=95, anchor='w').pack(side='left')
+        self.custom_prefix_var = ctk.StringVar(value=self.default_custom_prefixes)
+        self.custom_prefix_entry = ctk.CTkEntry(
+            prefix_frame, textvariable=self.custom_prefix_var, height=32,
+            placeholder_text='如：检具, SIZE, GD&T（逗号分隔，叠加到 Profile）',
+        )
+        self.custom_prefix_entry.pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ctk.CTkButton(
+            prefix_frame, text='Profile 目录', width=88, height=32,
+            command=self._open_user_profiles_dir,
+        ).pack(side='left')
+        ctk.CTkLabel(
+            prefix_frame, text='可放自定义 JSON Profile',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(side='left', padx=(8, 0))
+
+        # OCR ROI 裁剪（百分比，裁去页眉/页脚等区域）
+        roi_frame = ctk.CTkFrame(config_card, fg_color="transparent")
+        roi_frame.pack(pady=3, padx=14, fill='x')
+        ctk.CTkLabel(roi_frame, text='✂️ OCR 裁剪:', width=95, anchor='w').pack(side='left')
+        roi = self.default_ocr_roi
+        self.roi_top_var = ctk.StringVar(value=str(int(roi.get('top', 0) * 100)))
+        self.roi_bottom_var = ctk.StringVar(value=str(int(roi.get('bottom', 0) * 100)))
+        self.roi_left_var = ctk.StringVar(value=str(int(roi.get('left', 0) * 100)))
+        self.roi_right_var = ctk.StringVar(value=str(int(roi.get('right', 0) * 100)))
+        for label, var in [('上%', self.roi_top_var), ('下%', self.roi_bottom_var),
+                           ('左%', self.roi_left_var), ('右%', self.roi_right_var)]:
+            ctk.CTkLabel(roi_frame, text=label, width=28, anchor='e',
+                         font=ctk.CTkFont(size=11)).pack(side='left', padx=(4, 0))
+            ctk.CTkEntry(roi_frame, textvariable=var, width=42, height=28).pack(side='left', padx=(2, 6))
+        ctk.CTkLabel(
+            roi_frame, text='跳过页眉/页脚，仅 OCR 测量区',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(side='left', padx=(4, 0))
 
         # 拖拽提示 + 预览开关
         tip_frame = ctk.CTkFrame(config_card, fg_color="transparent")
@@ -306,6 +444,171 @@ class CMMFillerGUI:
         self.summary_progress = ctk.CTkProgressBar(run_card, mode='determinate')
         self.summary_progress.set(0)
         self.summary_progress.pack(fill='x', padx=14, pady=(2, 8))
+
+    def _build_ng_tab(self):
+        """NG 统计分析页"""
+        t = self.tab_ng
+
+        info_card = ctk.CTkFrame(t)
+        info_card.pack(pady=10, padx=14, fill='x')
+        ctk.CTkLabel(
+            info_card,
+            text='批量分析 PDF 文件夹中各 FAI 项目的 NG 率排行，导出统计 Excel',
+            font=ctk.CTkFont(size=12), text_color=('gray30', 'gray70'),
+            wraplength=700, justify='left',
+        ).pack(anchor='w', padx=14, pady=12)
+
+        hint_card = ctk.CTkFrame(t)
+        hint_card.pack(pady=(0, 6), padx=14, fill='x')
+        ctk.CTkLabel(
+            hint_card,
+            text='使用「处理」页的 PDF 文件夹和输出文件夹，以及当前报告版式 / OCR 裁剪设置',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(anchor='w', padx=14, pady=8)
+
+        run_card = ctk.CTkFrame(t)
+        run_card.pack(pady=(0, 10), padx=14, fill='x')
+        run_inner = ctk.CTkFrame(run_card, fg_color='transparent')
+        run_inner.pack(pady=10, padx=14, fill='x')
+        self.ng_btn = ctk.CTkButton(
+            run_inner, text='▶ 导出 NG 统计 Excel',
+            font=ctk.CTkFont(size=14, weight='bold'),
+            height=40, command=self._ng_start,
+        )
+        self.ng_btn.pack(side='left')
+        ctk.CTkLabel(
+            run_inner, text='含 NG 排行、详细记录、FAI 明细 三个 Sheet',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(side='left', padx=10)
+
+        self.ng_progress_label = ctk.CTkLabel(run_card, text='', font=ctk.CTkFont(size=11), anchor='w')
+        self.ng_progress_label.pack(fill='x', padx=14)
+        self.ng_progress = ctk.CTkProgressBar(run_card, mode='determinate')
+        self.ng_progress.set(0)
+        self.ng_progress.pack(fill='x', padx=14, pady=(2, 8))
+
+        # 通用 PDF 表格提取（可选 pdfplumber）
+        table_card = ctk.CTkFrame(t)
+        table_card.pack(pady=(0, 10), padx=14, fill='x')
+        ctk.CTkLabel(
+            table_card, text='通用表格提取（文字型 PDF）',
+            font=ctk.CTkFont(size=13, weight='bold'),
+        ).pack(anchor='w', padx=14, pady=(10, 4))
+        ctk.CTkLabel(
+            table_card,
+            text='需安装 pdfplumber；扫描件请用 OCR 流程。从汇总导出页选中的 PDF 提取表格。',
+            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+        ).pack(anchor='w', padx=14, pady=(0, 8))
+        self.table_extract_btn = ctk.CTkButton(
+            table_card, text='提取表格 → Excel', height=34,
+            command=self._table_extract_start,
+        )
+        self.table_extract_btn.pack(anchor='w', padx=14, pady=(0, 12))
+
+    def _ng_start(self):
+        if self.processing:
+            messagebox.showwarning('提示', '正在处理中，请稍候...')
+            return
+        valid = self._validate_paths(require_template=False)
+        if not valid:
+            return
+        _, pdf_folder, output_folder = valid
+        self._save_paths()
+        audit('cmm_ng_analysis_start', pdf_folder=pdf_folder)
+        self._begin_work()
+        self.ng_btn.configure(state='disabled')
+        self._start_worker(self._run_ng_analysis, pdf_folder, output_folder)
+
+    def _run_ng_analysis(self, pdf_folder, output_folder):
+        gui = self
+        try:
+            from .core.filler import set_gui_logger, TEMPLATE_PATH
+            set_gui_logger(gui)
+            template = gui.template_var.get().strip()
+            if not template or not os.path.isfile(template):
+                template = TEMPLATE_PATH
+            gui.filler = gui._create_filler(template)
+            gui.filler.cancel_check = gui._is_worker_cancelled
+            summary = gui.filler.export_ng_analysis(
+                pdf_folder, output_folder,
+                progress_callback=lambda c, t, m: gui._update_ng_progress(c, t, m),
+            )
+            if gui._is_worker_cancelled():
+                gui.root.after(0, lambda: gui._log('已取消 NG 分析'))
+                return
+            text = gui._format_ng_summary(summary)
+            gui.root.after(0, lambda: gui._log(text))
+            gui.root.after(0, lambda: gui._set_status('NG 分析完成'))
+            gui.root.after(0, lambda t=text: messagebox.showinfo('NG 分析完成', t))
+            gui.root.after(0, lambda: gui.tabs.set('结果'))
+        except Exception as exc:
+            err_msg = str(exc)
+            gui.root.after(0, lambda msg=err_msg: gui._log(f'错误: {msg}'))
+            gui.root.after(0, lambda msg=err_msg: messagebox.showerror('错误', msg))
+        finally:
+            gui.root.after(0, gui._processing_done)
+            gui.root.after(0, lambda: gui.ng_btn.configure(state='normal'))
+
+    def _update_ng_progress(self, current, total, message):
+        self.root.after(0, lambda: self._set_ng_progress(current, total, message))
+
+    def _set_ng_progress(self, current, total, message):
+        if total > 0:
+            self.ng_progress.set(current / total)
+        self.ng_progress_label.configure(text=message or '')
+
+    @staticmethod
+    def _format_ng_summary(summary: dict) -> str:
+        lines = [
+            f'分析 PDF: {summary.get("processed_pdfs", 0)}/{summary.get("total_pdfs", 0)}',
+            f'FAI 项目: {summary.get("fai_count", 0)}',
+            f'NG 总次数: {summary.get("ng_count", 0)}',
+        ]
+        if summary.get('output_file'):
+            lines.append(f'输出: {summary["output_file"]}')
+        top = summary.get('top_ng', [])
+        if top:
+            lines.append('\nNG 率 TOP:')
+            for i, r in enumerate(top, 1):
+                lines.append(
+                    f'  {i}. FAI_{r["num"]:02d} — NG {r["ng_count"]} ({r["ng_rate"]:.1%})'
+                )
+        fails = summary.get('failed_pdfs', [])
+        if fails:
+            lines.append(f'\n失败 {len(fails)} 个: ' + ', '.join(f['file'] for f in fails[:3]))
+        return '\n'.join(lines)
+
+    def _table_extract_start(self):
+        if not self._summary_files:
+            messagebox.showwarning('提示', '请先在「汇总导出」页添加 PDF 文件')
+            return
+        valid = self._validate_paths(require_template=False)
+        if not valid:
+            return
+        _, _, output_folder = valid
+        paths = [str(p) for p in self._summary_files]
+        self._begin_work()
+        self.table_extract_btn.configure(state='disabled')
+        self._start_worker(self._run_table_extract, paths, output_folder)
+
+    def _run_table_extract(self, pdf_paths, output_folder):
+        gui = self
+        try:
+            from .core.pdf_table_import import batch_export_pdf_tables, pdfplumber_available
+            if not pdfplumber_available():
+                raise ImportError('pdfplumber 未安装。请运行: pip install pdfplumber')
+            summary = batch_export_pdf_tables(pdf_paths, output_folder)
+            text = (
+                f'表格提取完成: {summary["processed"]}/{summary["total"]}\n'
+                + '\n'.join(Path(f).name for f in summary.get('output_files', [])[:5])
+            )
+            gui.root.after(0, lambda: gui._log(text))
+            gui.root.after(0, lambda t=text: messagebox.showinfo('表格提取完成', t))
+        except Exception as exc:
+            gui.root.after(0, lambda msg=str(exc): messagebox.showerror('错误', msg))
+        finally:
+            gui.root.after(0, gui._processing_done)
+            gui.root.after(0, lambda: gui.table_extract_btn.configure(state='normal'))
 
     # ── 汇总导出：文件列表管理 ──────────────────
     def _summary_add_files(self):
@@ -684,7 +987,7 @@ class CMMFillerGUI:
         if self.preview_switch.get():
             self._start_worker(self._run_analyze, template, pdf_folder)
         else:
-            self._start_worker(self._run_batch, template, pdf_folder, output_folder, None)
+            self._start_worker(self._run_batch, template, pdf_folder, output_folder, None, None)
 
     # ── 工作线程管理（取消支持）──────────────────
     def _start_worker(self, target, *args, **kwargs):
@@ -707,6 +1010,7 @@ class CMMFillerGUI:
         self.processing = True
         self.start_btn.configure(state='disabled')
         self.summary_btn.configure(state='disabled')
+        self.ng_btn.configure(state='disabled')
         self.progress.set(0)
         self.summary_progress.set(0)
         self._set_status('正在处理...', processing=True)
@@ -720,7 +1024,7 @@ class CMMFillerGUI:
         try:
             from .core.filler import set_gui_logger
             set_gui_logger(gui)
-            gui.filler = CMMReportFiller(template, dpi=300)
+            gui.filler = gui._create_filler(template)
             gui.filler.cancel_check = gui._is_worker_cancelled
             gui.root.after(0, lambda: gui._log('正在识别 PDF（只识别不写入，完成后弹预览，可剔除误识别项）...'))
             items = gui.filler.analyze_pdfs(
@@ -758,6 +1062,16 @@ class CMMFillerGUI:
         apply_window_icon(win)
         self._preview_window = win
         self._preview_widgets = []
+        self._sub_item_choice_vars = {}
+        self._sub_item_choice_maps = {}
+
+        conflicts = []
+        if self.filler is not None:
+            conflicts = self.filler.analyze_sub_item_conflicts(items)
+        conflict_keys: set[str] = set()
+        for conflict in conflicts:
+            for candidate in conflict['candidates']:
+                conflict_keys.add(measure_dict_key(candidate))
 
         header = ctk.CTkFrame(win)
         header.pack(fill='x', padx=14, pady=(12, 4))
@@ -765,10 +1079,59 @@ class CMMFillerGUI:
             header, text='识别结果预览（开始前核对）',
             font=ctk.CTkFont(size=15, weight='bold'),
         ).pack(side='left')
+        hint = '取消勾选 = 剔除；实测值列可直接修改；橙色行 = 低置信度'
+        if conflict_keys:
+            hint += '；紫色行 = 子编号冲突'
         ctk.CTkLabel(
-            header, text='取消勾选 = 剔除该项（不写入 Excel）',
+            header, text=hint,
             font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
         ).pack(side='right')
+
+        if conflicts:
+            conflict_panel = ctk.CTkFrame(win, corner_radius=8, fg_color='#F5EEF8')
+            conflict_panel.pack(fill='x', padx=14, pady=(0, 6))
+            ctk.CTkLabel(
+                conflict_panel,
+                text='子编号冲突：多个子项对应模板同一序号，请为每组选择填入项',
+                font=ctk.CTkFont(size=12, weight='bold'),
+                anchor='w',
+            ).pack(fill='x', padx=10, pady=(8, 4))
+            for conflict in conflicts:
+                row = ctk.CTkFrame(conflict_panel, fg_color='transparent')
+                row.pack(fill='x', padx=10, pady=3)
+                ctk.CTkLabel(
+                    row,
+                    text=conflict_summary_line(conflict),
+                    font=ctk.CTkFont(size=11),
+                    anchor='w',
+                    wraplength=420,
+                    justify='left',
+                ).pack(side='left', fill='x', expand=True, padx=(0, 8))
+
+                labels = [candidate_option_label(c) for c in conflict['candidates']]
+                labels.append('都不填')
+                labels.append('较差(NG)项')
+                choice_map = {
+                    candidate_option_label(c): measure_dict_key(c)
+                    for c in conflict['candidates']
+                }
+                choice_map['都不填'] = SKIP_SUB_ITEM
+                choice_map['较差(NG)项'] = WORST_NG_SUB_ITEM
+                default_label = '较差(NG)项'
+                var = ctk.StringVar(value=default_label)
+                ctk.CTkOptionMenu(
+                    row, values=labels, variable=var, width=360,
+                ).pack(side='right')
+                template_key = conflict['template_key']
+                self._sub_item_choice_vars[template_key] = var
+                self._sub_item_choice_maps[template_key] = choice_map
+            ctk.CTkLabel(
+                conflict_panel,
+                text='选项按识别到的子项动态生成（如 FAI_1-1 … FAI_1-N），默认选较差(NG)项',
+                font=ctk.CTkFont(size=10),
+                text_color=('gray40', 'gray60'),
+                anchor='w',
+            ).pack(fill='x', padx=10, pady=(2, 8))
 
         btn_row = ctk.CTkFrame(win, fg_color="transparent")
         btn_row.pack(fill='x', padx=14, pady=(4, 4))
@@ -787,7 +1150,7 @@ class CMMFillerGUI:
         scroll.pack(fill='both', expand=True, padx=10, pady=(0, 6))
 
         for it in items:
-            self._build_preview_card(scroll, it)
+            self._build_preview_card(scroll, it, conflict_keys)
 
         foot = ctk.CTkFrame(win, fg_color="transparent")
         foot.pack(fill='x', padx=14, pady=(0, 12))
@@ -807,7 +1170,8 @@ class CMMFillerGUI:
 
         self._preview_update_count()
 
-    def _build_preview_card(self, parent, item):
+    def _build_preview_card(self, parent, item, conflict_keys=None):
+        conflict_keys = conflict_keys or set()
         card = ctk.CTkFrame(parent, corner_radius=10)
         card.pack(fill='x', padx=4, pady=3)
 
@@ -821,8 +1185,13 @@ class CMMFillerGUI:
                 font=ctk.CTkFont(size=11), text_color=self.COLORS['err'],
             ).pack(side='left', padx=8)
         else:
+            source_labels = {'text': '文字层', 'ocr-table': 'OCR表格', 'ocr-line': 'OCR行解析'}
+            src = source_labels.get(item.get('source', ''), item.get('source', ''))
+            meta = f"{item['part_name']} | {item['date']}"
+            if src:
+                meta += f' | {src}'
             ctk.CTkLabel(
-                head, text=f"{item['part_name']} | {item['date']}",
+                head, text=meta,
                 font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
             ).pack(side='left', padx=8)
             if item['ng_count']:
@@ -843,9 +1212,26 @@ class CMMFillerGUI:
         body.pack(fill='x', padx=4, pady=(0, 6))
         for m in item['measurements']:
             var = ctk.BooleanVar(value=True)
-            self._preview_widgets.append((item['stem'], m['num'], var))
+            measured_var = ctk.StringVar(value=f"{m['measured']:g}")
+            ikey = m.get('item_key') or f"{m['num']}"
+            label = m.get('label') or f'FAI_{m["num"]:02d}'
+            widget = {
+                'stem': item['stem'], 'num': m['num'], 'item_key': ikey, 'var': var,
+                'measured_var': measured_var,
+                'original_measured': m['measured'],
+                'nominal': m['nominal'], 'upper_tol': m['upper_tol'], 'lower_tol': m['lower_tol'],
+            }
+            self._preview_widgets.append(widget)
 
-            row = ctk.CTkFrame(body, fg_color="transparent")
+            low_conf = m.get('low_confidence', False)
+            is_conflict = ikey in conflict_keys
+            if is_conflict:
+                row_bg = '#F5EEF8'
+            elif low_conf:
+                row_bg = '#FFF3E0'
+            else:
+                row_bg = 'transparent'
+            row = ctk.CTkFrame(body, fg_color=row_bg, corner_radius=4)
             row.pack(fill='x', padx=6, pady=1)
             ctk.CTkCheckBox(
                 row, text=' ', width=24, variable=var, command=self._preview_update_count,
@@ -853,15 +1239,23 @@ class CMMFillerGUI:
 
             ng = m.get('ng', False)
             desc_color = self.COLORS['ng'] if ng else ('gray15', 'gray85')
-            desc_font = ctk.CTkFont(size=11, weight='bold') if ng else ctk.CTkFont(size=11)
+            if is_conflict and not ng:
+                desc_color = '#7D3C98'
+            elif low_conf and not ng:
+                desc_color = self.COLORS['warn']
+            desc_font = ctk.CTkFont(size=11, weight='bold') if (ng or low_conf) else ctk.CTkFont(size=11)
 
             cols = ctk.CTkFrame(row, fg_color="transparent")
             cols.pack(side='left', fill='x', expand=True)
             cols.grid_columnconfigure(1, weight=1)
 
-            ctk.CTkLabel(cols, text=f'FAI_{m["num"]:02d}', width=64, anchor='w',
+            ctk.CTkLabel(cols, text=label, width=80, anchor='w',
                          font=ctk.CTkFont(size=11)).grid(row=0, column=0, sticky='w', padx=(2, 6))
             desc_val = m.get('desc', '')
+            if is_conflict:
+                desc_val = f'⚡ {desc_val}'
+            elif low_conf:
+                desc_val = f'⚠ {desc_val}'
             ctk.CTkLabel(cols, text=desc_val, anchor='w',
                          font=desc_font, text_color=desc_color).grid(row=0, column=1, sticky='w', padx=(0, 6))
             tol_val = f"{m['nominal']:g} +{m['upper_tol']:g}/-{abs(m['lower_tol']):g}"
@@ -869,10 +1263,12 @@ class CMMFillerGUI:
                 cols, text=tol_val,
                 width=130, anchor='e', font=ctk.CTkFont(size=10), text_color=('gray45', 'gray55'),
             ).grid(row=0, column=2, sticky='e', padx=(0, 6))
-            meas_color = self.COLORS['ng'] if ng else 'default'
-            ctk.CTkLabel(cols, text=f"{m['measured']:g}", width=90, anchor='e',
-                         font=ctk.CTkFont(size=12, weight='bold'), text_color=meas_color).grid(
-                row=0, column=3, sticky='e', padx=(0, 2))
+            meas_entry = ctk.CTkEntry(
+                cols, textvariable=measured_var, width=90, height=28,
+                font=ctk.CTkFont(size=12, weight='bold'),
+                border_color=self.COLORS['warn'] if low_conf else None,
+            )
+            meas_entry.grid(row=0, column=3, sticky='e', padx=(0, 2))
             if ng:
                 ctk.CTkLabel(
                     cols, text='NG', width=30,
@@ -881,29 +1277,60 @@ class CMMFillerGUI:
                 ).grid(row=0, column=4, padx=(4, 0))
 
     def _preview_check_all(self):
-        for _, _, var in self._preview_widgets:
-            var.set(True)
+        for w in self._preview_widgets:
+            w['var'].set(True)
         self._preview_update_count()
-        # 全部勾选 = 用户已核对完毕，直接关闭预览、进入批量处理
         self.root.after(200, self._confirm_preview)
 
     def _preview_check_none(self):
-        for _, _, var in self._preview_widgets:
-            var.set(False)
+        for w in self._preview_widgets:
+            w['var'].set(False)
         self._preview_update_count()
 
     def _preview_update_count(self):
         if not hasattr(self, 'preview_confirm_label'):
             return
         total = len(self._preview_widgets)
-        kept = sum(1 for _, _, var in self._preview_widgets if var.get())
-        self.preview_confirm_label.configure(text=f'共 {total} 项，保留 {kept} 项，剔除 {total - kept} 项')
+        kept = sum(1 for w in self._preview_widgets if w['var'].get())
+        edited = sum(
+            1 for w in self._preview_widgets
+            if w['var'].get() and self._preview_measured_changed(w)
+        )
+        extra = f'，已修正 {edited} 项' if edited else ''
+        self.preview_confirm_label.configure(
+            text=f'共 {total} 项，保留 {kept} 项，剔除 {total - kept} 项{extra}'
+        )
+
+    @staticmethod
+    def _preview_measured_changed(widget) -> bool:
+        try:
+            return abs(float(widget['measured_var'].get()) - widget['original_measured']) > 1e-9
+        except (ValueError, TypeError):
+            return True
+
+    def _collect_preview_edits(self) -> dict:
+        """收集预览中修改过的实测值 {stem: {num: {measured: ...}}}。"""
+        edits = defaultdict(dict)
+        for w in self._preview_widgets:
+            if not w['var'].get():
+                continue
+            if self._preview_measured_changed(w):
+                try:
+                    edits[w['stem']][w['item_key']] = {'measured': float(w['measured_var'].get())}
+                except ValueError:
+                    pass
+        return dict(edits)
 
     def _confirm_preview(self):
         excluded = defaultdict(set)
-        for stem, num, var in self._preview_widgets:
-            if not var.get():
-                excluded[stem].add(num)
+        for w in self._preview_widgets:
+            if not w['var'].get():
+                excluded[w['stem']].add(w['item_key'])
+        edited_measures = self._collect_preview_edits()
+        sub_item_choices = {}
+        for template_key, var in getattr(self, '_sub_item_choice_vars', {}).items():
+            label = var.get()
+            sub_item_choices[template_key] = self._sub_item_choice_maps[template_key][label]
         template = self.template_var.get().strip()
         pdf_folder = self.pdf_var.get().strip()
         output_folder = self.output_var.get().strip()
@@ -914,21 +1341,32 @@ class CMMFillerGUI:
                 pass
         if excluded:
             self._log(f'将剔除 {sum(len(v) for v in excluded.values())} 项误识别数据')
-        self._start_worker(self._run_batch, template, pdf_folder, output_folder, dict(excluded))
+        if edited_measures:
+            n_edits = sum(len(v) for v in edited_measures.values())
+            self._log(f'将应用 {n_edits} 项实测值修正')
+        if sub_item_choices:
+            self._log(f'子编号冲突：已设置 {len(sub_item_choices)} 组填入规则')
+        self._start_worker(
+            self._run_batch, template, pdf_folder, output_folder,
+            dict(excluded), edited_measures, sub_item_choices or None,
+        )
 
     # ── 批量处理阶段 ─────────────────────────────
-    def _run_batch(self, template, pdf_folder, output_folder, excluded_measures):
+    def _run_batch(self, template, pdf_folder, output_folder, excluded_measures,
+                   edited_measures=None, sub_item_choices=None):
         gui = self
         try:
             from .core.filler import set_gui_logger
             set_gui_logger(gui)
             if gui.filler is None:
-                gui.filler = CMMReportFiller(template, dpi=300)
+                gui.filler = gui._create_filler(template)
             gui.filler.cancel_check = gui._is_worker_cancelled
             summary = gui.filler.batch_process_by_date(
                 pdf_folder, output_folder,
                 progress_callback=lambda c, t, m: gui._update_progress(c, t, m),
                 excluded_measures=excluded_measures,
+                edited_measures=edited_measures,
+                sub_item_choices=sub_item_choices,
             )
 
             if gui._is_worker_cancelled():
@@ -967,7 +1405,7 @@ class CMMFillerGUI:
         try:
             from .core.filler import set_gui_logger
             set_gui_logger(gui)
-            gui.filler = CMMReportFiller(template, dpi=300)
+            gui.filler = gui._create_filler(template)
             gui.filler.cancel_check = gui._is_worker_cancelled
             summary = gui.filler.export_standard_template(
                 pdf_folder, output_folder,
@@ -1274,6 +1712,10 @@ class CMMFillerGUI:
         self.processing = False
         self.start_btn.configure(state='normal')
         self.summary_btn.configure(state='normal')
+        if hasattr(self, 'ng_btn'):
+            self.ng_btn.configure(state='normal')
+        if hasattr(self, 'table_extract_btn'):
+            self.table_extract_btn.configure(state='normal')
         self._preview_window = None
         if self.status_bar.cget('text').startswith('处理中'):
             self._set_status('就绪')

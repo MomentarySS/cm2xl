@@ -1,0 +1,32 @@
+{
+  "data_start_row": 6,
+  "sample_row": 5,
+  "columns": {
+    "serial": "A",
+    "spec": "B",
+    "upper_tol": "C",
+    "lower_tol": "D",
+    "upper_limit": "E",
+    "lower_limit": "F",
+    "instrument": "G",
+    "axis": "G"
+  },
+  "sample_cols": {
+    "1#": "H",
+    "2#": "I",
+    "3#": "J"
+  },
+  "main_sample_count": 3,
+  "template": {
+    "sheets": ["A", "B"],
+    "max_data_row": 33,
+    "sample_id_plain": true,
+    "field_locations": {
+      "part_name": "C3",
+      "date": "L3"
+    }
+  },
+  "overflow_samples": false,
+  "_comment_split": "样品数 > sample_cols 数量时，自动拆成多个 Excel（如 _样品1-6.xlsx、_样品7-10.xlsx）",
+  "_comment_sub_item": "多子编号争同一模板序号时，在 GUI 预览中选择填入项；CLI 默认取较差(NG)项"
+}
