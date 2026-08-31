@@ -9,6 +9,18 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION
+from toolbox.ui_components import (
+    UI_FONT_MONO,
+    card_bg_color,
+    close_modal,
+    muted_color,
+    primary_button_kwargs,
+    secondary_button_kwargs,
+    section_header,
+    setup_modal,
+    text_color,
+    ui_font,
+)
 from utils.app_icon import apply_window_icon, get_logo_image
 from utils.paths import paths
 from utils.theme import TOOLBOX_THEME
@@ -17,8 +29,6 @@ from utils.theme import TOOLBOX_THEME
 APP_DESCRIPTION = "整合 CMMFiller（OCR 报告填充）+ pc_to_excel（PCDMIS 数据导出）"
 COPYRIGHT = "© 2026 cm2xl"
 
-_FONT = "Microsoft YaHei"
-_FONT_PATH = "Consolas"
 _FS_HEAD = 22
 _FS_VERSION = 14
 _FS_DESC = 13
@@ -54,7 +64,7 @@ class AboutDialog:
         self._win.resizable(True, True)
         self._win.transient(parent)
         apply_window_icon(self._win)
-        self._win.after(120, self._win.grab_set)
+        setup_modal(self._win, parent)
 
         self._build()
         self._win.bind("<Configure>", self._on_configure, add="+")
@@ -62,10 +72,8 @@ class AboutDialog:
 
     def _build(self) -> None:
         win = self._win
-        text_color = [TOOLBOX_THEME["text"], "#E8E6E1"]
-        muted = [TOOLBOX_THEME["text_muted"], "#9CA3AF"]
-        accent = [TOOLBOX_THEME["accent"], "#0F766E"]
-        accent_h = [TOOLBOX_THEME["accent_hover"], "#14B8A6"]
+        label_color = text_color()
+        muted = muted_color()
 
         header = ctk.CTkFrame(win, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=(16, 8))
@@ -81,49 +89,49 @@ class AboutDialog:
 
         ctk.CTkLabel(
             title_frame, text=APP_TITLE,
-            font=ctk.CTkFont(family=_FONT, size=_FS_HEAD, weight="bold"),
-            text_color=text_color,
+            font=ui_font(_FS_HEAD, "bold"),
+            text_color=label_color,
         ).pack()
 
         ctk.CTkLabel(
             header, text=f"版本 {APP_VERSION}",
-            font=ctk.CTkFont(family=_FONT, size=_FS_VERSION),
-            text_color=text_color,
+            font=ui_font(_FS_VERSION),
+            text_color=label_color,
         ).pack(pady=(2, 0))
 
         self._add_wrapped_label(
             header, APP_DESCRIPTION,
-            font=ctk.CTkFont(family=_FONT, size=_FS_DESC),
+            font=ui_font(_FS_DESC),
             text_color=muted, justify="center",
         ).pack(pady=(8, 0))
 
         body = ctk.CTkScrollableFrame(win, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=16, pady=(4, 8))
 
-        self._section_title(body, "CMM 识别预览 · 颜色说明", text_color)
+        self._section_title(body, "CMM 识别预览 · 颜色说明", label_color)
         self._add_wrapped_label(
             body,
             "在「处理前预览识别结果」窗口中，各行颜色含义如下：",
-            font=ctk.CTkFont(family=_FONT, size=_FS_BODY),
+            font=ui_font(_FS_BODY),
             text_color=muted, anchor="w", justify="left",
         ).pack(fill="x", padx=4, pady=(0, 6))
 
-        for bg, label_color, title, desc in _PREVIEW_LEGEND:
-            self._legend_row(body, bg, label_color, title, desc, text_color, muted)
+        for bg, label_color_item, title, desc in _PREVIEW_LEGEND:
+            self._legend_row(body, bg, label_color_item, title, desc, label_color, muted)
 
         self._add_wrapped_label(
             body,
             "提示：取消勾选可剔除该行；实测值可直接修改；确认前请对照 PDF 原报告。",
-            font=ctk.CTkFont(family=_FONT, size=_FS_HINT),
+            font=ui_font(_FS_HINT),
             text_color=muted, anchor="w", justify="left",
         ).pack(fill="x", padx=4, pady=(4, 10))
 
         ctk.CTkFrame(body, height=1, fg_color=muted).pack(fill="x", padx=4, pady=8)
 
-        self._section_title(body, "用户数据与日志", text_color)
+        self._section_title(body, "用户数据与日志", label_color)
         self._add_wrapped_label(
             body, paths.user_data_location_hint(),
-            font=ctk.CTkFont(family=_FONT, size=_FS_BODY),
+            font=ui_font(_FS_BODY),
             text_color=muted, justify="left", anchor="w",
         ).pack(fill="x", padx=4, pady=(0, 8))
 
@@ -138,7 +146,7 @@ class AboutDialog:
             ("用户文档", paths.docs_dir),
         ])
         for label, value in path_items:
-            self._path_row(body, label, value, text_color, muted)
+            self._path_row(body, label, value, label_color, muted)
 
         footer = ctk.CTkFrame(win, fg_color="transparent")
         footer.pack(fill="x", padx=20, pady=(0, 12))
@@ -147,27 +155,26 @@ class AboutDialog:
         btn_row.pack(fill="x", pady=(0, 8))
         ctk.CTkButton(
             btn_row, text="复制日志路径", width=120, height=32,
-            font=ctk.CTkFont(family=_FONT, size=_FS_BTN),
-            fg_color=accent, hover_color=accent_h, text_color="white",
+            font=ui_font(_FS_BTN),
             command=self._copy_log_dir,
+            **secondary_button_kwargs(),
         ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(
             btn_row, text="打开日志文件夹", width=120, height=32,
-            font=ctk.CTkFont(family=_FONT, size=_FS_BTN),
-            fg_color="transparent", border_width=1,
-            border_color=muted, text_color=text_color,
+            font=ui_font(_FS_BTN),
             command=self._open_log_dir,
+            **secondary_button_kwargs(),
         ).pack(side="left")
         ctk.CTkButton(
             btn_row, text="关闭", width=96, height=32,
-            font=ctk.CTkFont(family=_FONT, size=_FS_BTN),
-            fg_color=accent, hover_color=accent_h, text_color="white",
+            font=ui_font(_FS_BTN),
             command=self._close,
+            **primary_button_kwargs(),
         ).pack(side="right")
 
         ctk.CTkLabel(
             footer, text=COPYRIGHT,
-            font=ctk.CTkFont(family=_FONT, size=_FS_COPYRIGHT),
+            font=ui_font(_FS_COPYRIGHT),
             text_color=muted,
         ).pack(anchor="w")
 
@@ -191,24 +198,20 @@ class AboutDialog:
                 pass
 
     @staticmethod
-    def _section_title(parent, title: str, text_color) -> None:
-        ctk.CTkLabel(
-            parent, text=title,
-            font=ctk.CTkFont(family=_FONT, size=_FS_SECTION, weight="bold"),
-            text_color=text_color, anchor="w",
-        ).pack(fill="x", padx=4, pady=(0, 4))
+    def _section_title(parent, title: str, label_color) -> None:
+        section_header(parent, title, label_color=label_color).pack(fill="x", padx=4, pady=(0, 4))
 
     def _path_row(self, parent, label: str, value, text_color, muted) -> None:
         block = ctk.CTkFrame(parent, fg_color="transparent")
         block.pack(fill="x", padx=4, pady=(0, 6))
         ctk.CTkLabel(
             block, text=label,
-            font=ctk.CTkFont(family=_FONT, size=_FS_BODY, weight="bold"),
+            font=ui_font(_FS_BODY, "bold"),
             text_color=text_color, anchor="w",
         ).pack(fill="x")
         self._add_wrapped_label(
             block, str(value),
-            font=ctk.CTkFont(family=_FONT_PATH, size=_FS_PATH),
+            font=ui_font(_FS_PATH, family=UI_FONT_MONO),
             text_color=muted, anchor="w", justify="left",
         ).pack(fill="x", padx=(8, 0))
 
@@ -216,7 +219,7 @@ class AboutDialog:
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", padx=4, pady=3)
 
-        swatch_bg = bg if bg != "transparent" else [TOOLBOX_THEME["card_bg"], "#252B3A"]
+        swatch_bg = bg if bg != "transparent" else card_bg_color()
         swatch = ctk.CTkFrame(row, width=32, height=32, corner_radius=6, fg_color=swatch_bg)
         swatch.pack(side="left", padx=(0, 10))
         swatch.pack_propagate(False)
@@ -227,12 +230,12 @@ class AboutDialog:
         title_color = label_color if not isinstance(label_color, tuple) else label_color
         ctk.CTkLabel(
             text_frame, text=title,
-            font=ctk.CTkFont(family=_FONT, size=_FS_BODY, weight="bold"),
+            font=ui_font(_FS_BODY, "bold"),
             text_color=title_color, anchor="w",
         ).pack(fill="x")
         self._add_wrapped_label(
             text_frame, desc,
-            font=ctk.CTkFont(family=_FONT, size=_FS_HINT),
+            font=ui_font(_FS_HINT),
             text_color=muted, anchor="w", justify="left",
         ).pack(fill="x")
 
@@ -259,8 +262,4 @@ class AboutDialog:
             )
 
     def _close(self) -> None:
-        try:
-            self._win.grab_release()
-        except Exception:
-            pass
-        self._win.destroy()
+        close_modal(self._win)

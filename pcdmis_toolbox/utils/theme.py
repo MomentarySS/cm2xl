@@ -27,6 +27,20 @@ TOOLBOX_THEME = {
     # 文字
     "text": "#1A2332",
     "text_muted": "#4B5563",
+    # 深色模式语义色（与 theme.json dark 侧、壳层 UI 配对）
+    "text_dark": "#E8E6E1",
+    "text_muted_dark": "#9CA3AF",
+    "card_bg_dark": "#252B3A",
+    "page_bg_dark": "#1A1F2B",
+    "card_border_dark": "#374151",
+    "accent_pressed_dark": "#0D9488",
+    "disabled_dark": "#64748B",
+    "splash_card": "#FFFFFF",
+    "splash_card_dark": "#1C2330",
+    "splash_progress_track_dark": "#2A3545",
+    "splash_sep_dark": "#28303F",
+    "on_accent": "#FFFFFF",
+    "on_accent_dark": "#F1F5F9",
 }
 
 TOOLBOX_THEME_JSON_PATH = Path(__file__).parent / "theme.json"
@@ -45,18 +59,22 @@ def _build_theme_json(dest: Path | None = None) -> None:
     """
     accent = TOOLBOX_THEME["accent"]
     accent_h = TOOLBOX_THEME["accent_hover"]
+    accent_pressed_d = TOOLBOX_THEME["accent_pressed_dark"]
     primary = TOOLBOX_THEME["primary"]
     page_bg_l = TOOLBOX_THEME["page_bg"]
-    page_bg_d = "#1A1F2B"           # 深石板（非纯黑）
+    page_bg_d = TOOLBOX_THEME["page_bg_dark"]
     card_bg_l = TOOLBOX_THEME["card_bg"]
-    card_bg_d = "#252B3A"           # 深石板卡片
+    card_bg_d = TOOLBOX_THEME["card_bg_dark"]
     card_bd = TOOLBOX_THEME["card_border"]
-    card_bd_d = "#374151"
+    card_bd_d = TOOLBOX_THEME["card_border_dark"]
     entry_bg_l = TOOLBOX_THEME["entry_bg"]
     entry_bd_l = TOOLBOX_THEME["entry_border"]
     text_l = TOOLBOX_THEME["text"]
-    text_d = "#E8E6E1"              # 暖白文字（非冷蓝白）
+    text_d = TOOLBOX_THEME["text_dark"]
     muted = TOOLBOX_THEME["text_muted"]
+    muted_d = TOOLBOX_THEME["disabled_dark"]
+    on_accent_l = TOOLBOX_THEME["on_accent"]
+    on_accent_d = TOOLBOX_THEME["on_accent_dark"]
     checkbox_bd_l = "#7B8794"
 
     theme = {
@@ -74,10 +92,10 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "border_width": 0,
             "border_color": [accent, accent_h],
             "fg_color": [accent, accent],
-            "hover_color": [accent_h, "#0D9488"],
+            "hover_color": [accent_h, accent_pressed_d],
             "pressed_color": [primary, primary],
-            "text_color": ["#FFFFFF", "#F1F5F9"],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color": [on_accent_l, on_accent_d],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkLabel": {
             "corner_radius": 0,
@@ -94,15 +112,15 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "border_color": [entry_bd_l, card_bd_d],
             "fg_color": [entry_bg_l, page_bg_d],
             "text_color": [text_l, text_d],
-            "placeholder_text_color": [muted, "#64748B"],
+            "placeholder_text_color": [muted, muted_d],
         },
         "CTkOptionMenu": {
             "corner_radius": 6,
             "fg_color": [accent, accent],
             "button_color": [primary, primary],
-            "button_hover_color": [accent_h, "#0D9488"],
-            "text_color": ["#FFFFFF", "#F1F5F9"],
-            "text_color_disabled": [muted, "#64748B"],
+            "button_hover_color": [accent_h, accent_pressed_d],
+            "text_color": [on_accent_l, on_accent_d],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkProgressBar": {
             "corner_radius": 6,
@@ -120,7 +138,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "button_color": ["#FFFFFF", "#E2E8F0"],
             "button_hover_color": ["#F1F5F9", "#CBD5E1"],
             "text_color": [text_l, text_d],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkSlider": {
             "corner_radius": 6,
@@ -130,7 +148,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "fg_color": [page_bg_l, page_bg_d],
             "progress_color": [accent, accent],
             "button_color": [accent, accent],
-            "button_hover_color": [accent_h, "#0D9488"],
+            "button_hover_color": [accent_h, accent_pressed_d],
         },
         "CTkComboBox": {
             "corner_radius": 6,
@@ -138,9 +156,9 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "border_color": [card_bd, card_bd_d],
             "fg_color": [page_bg_l, page_bg_d],
             "button_color": [primary, primary],
-            "button_hover_color": [accent_h, "#0D9488"],
+            "button_hover_color": [accent_h, accent_pressed_d],
             "text_color": [text_l, text_d],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkCheckBox": {
             "corner_radius": 6,
@@ -148,10 +166,10 @@ def _build_theme_json(dest: Path | None = None) -> None:
             # fg_color = 勾选后方框填充色（须与白色勾形成对比，不能用浅底）
             "border_color": [checkbox_bd_l, card_bd_d],
             "fg_color": [accent, accent],
-            "hover_color": [accent_h, "#0D9488"],
-            "checkmark_color": ["#FFFFFF", "#F1F5F9"],
+            "hover_color": [accent_h, accent_pressed_d],
+            "checkmark_color": [on_accent_l, on_accent_d],
             "text_color": [text_l, text_d],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkRadioButton": {
             "corner_radius": 6,
@@ -159,20 +177,20 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "border_width_unchecked": 3,
             "fg_color": [page_bg_l, page_bg_d],
             "border_color": [accent, accent],
-            "hover_color": [accent_h, "#0D9488"],
+            "hover_color": [accent_h, accent_pressed_d],
             "text_color": [text_l, text_d],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkSegmentedButton": {
             "corner_radius": 6,
             "border_width": 0,
             "fg_color": [page_bg_l, page_bg_d],
             "selected_color": [accent, accent],
-            "selected_hover_color": [accent_h, "#0D9488"],
+            "selected_hover_color": [accent_h, accent_pressed_d],
             "unselected_color": [card_bg_l, card_bg_d],
             "unselected_hover_color": [TOOLBOX_THEME["card_border"], "#475569"],
             "text_color": [text_l, text_d],
-            "text_color_disabled": [muted, "#64748B"],
+            "text_color_disabled": [muted, muted_d],
         },
         "CTkTextbox": {
             "corner_radius": 6,
@@ -181,7 +199,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "fg_color": [card_bg_l, card_bg_d],
             "text_color": [text_l, text_d],
             "scrollbar_button_color": [primary, primary],
-            "scrollbar_button_hover_color": [accent_h, "#0D9488"],
+            "scrollbar_button_hover_color": [accent_h, accent_pressed_d],
         },
         "CTkScrollableFrame": {
             "label_fg_color": [accent, accent],
@@ -191,11 +209,11 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "border_spacing": 6,
             "fg_color": [page_bg_l, page_bg_d],
             "button_color": [card_bd, card_bd_d],
-            "button_hover_color": [accent_h, "#0D9488"],
+            "button_hover_color": [accent_h, accent_pressed_d],
         },
         "DropdownMenu": {
             "fg_color": [card_bg_l, card_bg_d],
-            "hover_color": [accent_h, "#0D9488"],
+            "hover_color": [accent_h, accent_pressed_d],
             "text_color": [text_l, text_d],
         },
         "CTkFont": {

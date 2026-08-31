@@ -32,6 +32,18 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from toolbox.ui_components import (
+    accent_color,
+    accent_hover_color,
+    close_modal,
+    muted_color,
+    primary_button_kwargs,
+    secondary_button_kwargs,
+    section_header,
+    setup_modal,
+    text_color,
+    ui_font,
+)
 from utils.app_icon import apply_window_icon
 from utils.audit import audit
 from utils.log_maintenance import cleanup_logs, directory_size_bytes, iter_log_files
@@ -44,7 +56,6 @@ from utils.settings import (
     load_toolbox_settings,
     save_toolbox_settings,
 )
-from utils.theme import TOOLBOX_THEME
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +78,7 @@ class SettingsDialog:
         self._win.minsize(560, 520)
         self._win.transient(parent)
         apply_window_icon(self._win)
-        self._win.after(120, self._win.grab_set)
+        setup_modal(self._win, parent)
 
         # 工作副本（未保存不写盘）
         self._working = load_toolbox_settings()
@@ -78,17 +89,16 @@ class SettingsDialog:
     # ── 构建 ────────────────────────────────────────────────────────────────
 
     def _build(self) -> None:
-        text_color = [TOOLBOX_THEME["text"], "#E8E6E1"]
-        muted = [TOOLBOX_THEME["text_muted"], "#9CA3AF"]
-        accent = [TOOLBOX_THEME["accent"], "#0F766E"]
-        accent_h = [TOOLBOX_THEME["accent_hover"], "#14B8A6"]
+        accent = accent_color()
+        accent_h = accent_hover_color()
+        muted = muted_color()
+        label_color = text_color()
 
-        # 滚动容器（如设置项增多可启用 ScrollableFrame）
-        body = ctk.CTkFrame(self._win, fg_color="transparent")
+        body = ctk.CTkScrollableFrame(self._win, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=20, pady=(16, 8))
 
         # 1. 外观分组
-        self._build_section(body, "外观", text_color).pack(fill="x", pady=(0, 10))
+        section_header(body, "外观", label_color=label_color).pack(fill="x", pady=(0, 10))
         self._appearance_var = ctk.StringVar(value=self._label_for(self.APPEARANCE_OPTIONS, self._working.get("appearance_mode", "system")))
         ctk.CTkSegmentedButton(
             body, values=[label for label, _ in self.APPEARANCE_OPTIONS],
@@ -97,7 +107,7 @@ class SettingsDialog:
         ).pack(fill="x", padx=4)
 
         # 2. OCR 模型分组
-        self._build_section(body, "OCR 模型", text_color).pack(fill="x", pady=(10, 6))
+        section_header(body, "OCR 模型", label_color=label_color).pack(fill="x", pady=(10, 6))
         # 精度选择
         self._ocr_tier_var = ctk.StringVar(
             value=self._label_for(self.OCR_TIER_OPTIONS, self._working.get("ocr_model_tier", "server"))
@@ -109,7 +119,7 @@ class SettingsDialog:
         ).pack(fill="x", padx=4)
         ctk.CTkLabel(
             body, text="高精度(Server)：质量最佳，适合正式报告；轻量(Mobile)：速度更快，精度略低",
-            font=ctk.CTkFont(family="Microsoft YaHei", size=10),
+            font=ui_font(10),
             text_color=muted,
         ).pack(anchor="w", padx=4, pady=(2, 6))
         # 路径选择
@@ -121,7 +131,7 @@ class SettingsDialog:
         ctk.CTkButton(ocr_row, text="重置", width=70, height=30, command=self._reset_ocr_dir).pack(side="left", padx=(2, 0))
         self._ocr_hint = ctk.CTkLabel(
             body, text="",
-            font=ctk.CTkFont(family="Microsoft YaHei", size=11),
+            font=ui_font(11),
             text_color=muted,
         )
         self._ocr_hint.pack(anchor="w", padx=4, pady=(4, 0))
@@ -130,14 +140,13 @@ class SettingsDialog:
         self._refresh_ocr_hint()
         ctk.CTkButton(
             body, text="清理 OCR 缓存", height=30,
-            font=ctk.CTkFont(family="Microsoft YaHei", size=12),
-            fg_color="transparent", border_width=1,
-            border_color=muted, text_color=text_color,
+            font=ui_font(12),
             command=self._cleanup_ocr_cache,
+            **secondary_button_kwargs(),
         ).pack(fill="x", padx=4, pady=(6, 0))
 
         # 3. 日志分组
-        self._build_section(body, "日志", text_color).pack(fill="x", pady=(10, 6))
+        section_header(body, "日志", label_color=label_color).pack(fill="x", pady=(10, 6))
         self._log_level_var = ctk.StringVar(value=self._working.get("log_level", "INFO"))
         ctk.CTkSegmentedButton(
             body, values=self.LOG_LEVEL_OPTIONS,
@@ -146,30 +155,29 @@ class SettingsDialog:
         ).pack(fill="x", padx=4)
         self._log_size_hint = ctk.CTkLabel(
             body, text="",
-            font=ctk.CTkFont(family="Microsoft YaHei", size=10),
+            font=ui_font(10),
             text_color=muted, justify="left",
         )
         self._log_size_hint.pack(anchor="w", padx=4, pady=(4, 4))
         self._refresh_log_size_hint()
         ctk.CTkButton(
             body, text="清理日志文件", height=30,
-            font=ctk.CTkFont(family="Microsoft YaHei", size=12),
-            fg_color="transparent", border_width=1,
-            border_color=muted, text_color=text_color,
+            font=ui_font(12),
             command=self._cleanup_logs,
+            **secondary_button_kwargs(),
         ).pack(fill="x", padx=4, pady=(0, 2))
 
         # 4. 兼容性分组
-        self._build_section(body, "兼容性", text_color).pack(fill="x", pady=(10, 6))
+        section_header(body, "兼容性", label_color=label_color).pack(fill="x", pady=(10, 6))
         ctk.CTkButton(
             body, text="导出旧版配置 (1.x 格式)", height=32,
-            font=ctk.CTkFont(family="Microsoft YaHei", size=12),
-            fg_color=accent, hover_color=accent_h, text_color="white",
+            font=ui_font(12),
             command=self._export_legacy_settings,
+            **primary_button_kwargs(),
         ).pack(fill="x", padx=4)
         ctk.CTkLabel(
             body, text="导出 cmm_filler + pc_to_excel 配置为 1.x 格式，给旧工具使用",
-            font=ctk.CTkFont(family="Microsoft YaHei", size=11),
+            font=ui_font(11),
             text_color=muted,
         ).pack(anchor="w", padx=4, pady=(4, 0))
 
@@ -178,33 +186,19 @@ class SettingsDialog:
         btn_bar.pack(fill="x", padx=20, pady=(0, 16))
         ctk.CTkButton(
             btn_bar, text="恢复默认", width=100, height=32,
-            fg_color="transparent", border_width=1,
-            border_color=muted, text_color=text_color,
             command=self._restore_defaults,
+            **secondary_button_kwargs(),
         ).pack(side="left")
         ctk.CTkButton(
             btn_bar, text="取消", width=100, height=32,
-            fg_color="transparent", border_width=1,
-            border_color=muted, text_color=text_color,
             command=self._cancel,
+            **secondary_button_kwargs(),
         ).pack(side="right", padx=(0, 8))
         ctk.CTkButton(
             btn_bar, text="保存", width=100, height=32,
-            fg_color=accent, hover_color=accent_h, text_color="white",
             command=self._save,
+            **primary_button_kwargs(),
         ).pack(side="right")
-
-    @staticmethod
-    def _build_section(parent, title: str, text_color):
-        """分组标题（用细线 + Label 模拟 group header）。"""
-        bar = ctk.CTkFrame(parent, fg_color="transparent")
-        ctk.CTkLabel(
-            bar, text=title,
-            font=ctk.CTkFont(family="Microsoft YaHei", size=12, weight="bold"),
-            text_color=text_color,
-        ).pack(side="left", padx=(4, 0))
-        ctk.CTkFrame(bar, height=1, fg_color=[TOOLBOX_THEME["card_border"], "#374151"]).pack(side="left", fill="x", expand=True, padx=(8, 0))
-        return bar
 
     @staticmethod
     def _label_for(options, value):
@@ -368,11 +362,7 @@ class SettingsDialog:
         self._close()
 
     def _close(self) -> None:
-        try:
-            self._win.grab_release()
-        except Exception:
-            pass
-        self._win.destroy()
+        close_modal(self._win)
 
     @staticmethod
     def _value_for(options, label):

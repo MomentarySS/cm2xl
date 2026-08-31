@@ -11,6 +11,15 @@ from typing import Optional
 import customtkinter as ctk
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION
+from toolbox.ui_components import (
+    accent_hover_color,
+    card_bg_color,
+    muted_color,
+    on_accent_color,
+    page_bg_color,
+    primary_button_kwargs,
+    text_color,
+)
 from utils.app_icon import apply_window_icon, get_logo_image
 from utils.paths import paths
 from utils.audit import audit
@@ -108,9 +117,7 @@ class Shell:
         # 顶栏 — 改用中性 surface 色（白/暗石板），把青绿留给 accent
         self._header = ctk.CTkFrame(root, height=48, corner_radius=0)
         self._header.pack(fill="x", side="top")
-        self._header.configure(
-            fg_color=[TOOLBOX_THEME["card_bg"], "#252B3A"]
-        )
+        self._header.configure(fg_color=card_bg_color())
 
         title_frame = ctk.CTkFrame(self._header, fg_color="transparent")
         title_frame.pack(side="left", padx=16, pady=0)
@@ -125,26 +132,20 @@ class Shell:
             title_frame,
             text=f"{APP_TITLE} {APP_VERSION}",
             font=("Microsoft YaHei", 14, "bold"),
-            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
+            text_color=text_color(),
         ).pack(side="left", pady=0)
 
         # 顶栏右侧：关于 + 设置（清理日志 / OCR 缓存见设置面板）
         ctk.CTkButton(
             self._header, text="关于", width=70, height=28,
             font=("Microsoft YaHei", 11),
-            fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
-            hover_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
-            text_color="white",
-            command=self._show_about,
+            **{**primary_button_kwargs(), "command": self._show_about},
         ).pack(side="right", padx=(6, 6), pady=10)
 
         ctk.CTkButton(
             self._header, text="设置", width=70, height=28,
             font=("Microsoft YaHei", 11),
-            fg_color=[TOOLBOX_THEME["accent"], "#0F766E"],
-            hover_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
-            text_color="white",
-            command=self._show_settings,
+            **{**primary_button_kwargs(), "command": self._show_settings},
         ).pack(side="right", padx=(6, 12), pady=10)
 
         # 主区域：左侧导航 + 内容
@@ -155,7 +156,7 @@ class Shell:
         self._nav = ctk.CTkFrame(self._body, width=self.NAV_WIDTH, corner_radius=0)
         self._nav.pack(fill="y", side="left", padx=0, pady=0)
         self._nav.pack_propagate(False)
-        self._nav.configure(fg_color=[TOOLBOX_THEME["card_bg"], "#252B3A"])
+        self._nav.configure(fg_color=card_bg_color())
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
         self._content_frame = ctk.CTkFrame(self._body, corner_radius=0)
@@ -164,15 +165,13 @@ class Shell:
         # 状态栏 — 改用 page_bg（柔和灰/深蓝），文字跟随主题
         self._statusbar = ctk.CTkFrame(root, height=28, corner_radius=0)
         self._statusbar.pack(fill="x", side="bottom")
-        self._statusbar.configure(
-            fg_color=[TOOLBOX_THEME["page_bg"], "#1A1F2B"]
-        )
+        self._statusbar.configure(fg_color=page_bg_color())
 
         self._pcdmis_label = ctk.CTkLabel(
             self._statusbar,
             text="PC-DMIS: 未连接",
             font=("Microsoft YaHei", 11),
-            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
+            text_color=muted_color(),
         )
         self._pcdmis_label.pack(side="left", padx=(12, 24))
 
@@ -180,7 +179,7 @@ class Shell:
             self._statusbar,
             text="",
             font=("Microsoft YaHei", 11),
-            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
+            text_color=text_color(),
         )
         self._module_label.pack(side="left", padx=0)
 
@@ -188,7 +187,7 @@ class Shell:
             self._statusbar,
             text="就绪",
             font=("Microsoft YaHei", 11),
-            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
+            text_color=muted_color(),
         )
         self._msg_label.pack(side="right", padx=12)
 
@@ -197,7 +196,7 @@ class Shell:
             self._content_frame,
             text="未选择模块",
             font=("Microsoft YaHei", 16),
-            text_color=[TOOLBOX_THEME["text_muted"], "#9CA3AF"],
+            text_color=muted_color(),
         )
         self._placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -224,8 +223,8 @@ class Shell:
             font=("Microsoft YaHei", 13),
             anchor="w",
             fg_color="transparent",
-            hover_color=[TOOLBOX_THEME["accent_hover"], "#0D9488"],
-            text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
+            hover_color=accent_hover_color(),
+            text_color=text_color(),
             command=lambda n=name: self._activate_module(n),
         )
         btn.pack(fill="x", pady=0, padx=0)
@@ -260,13 +259,13 @@ class Shell:
         for n, btn in self._nav_buttons.items():
             if n == name:
                 btn.configure(
-                    fg_color=[TOOLBOX_THEME["accent_hover"], "#14B8A6"],
-                    text_color="white",
+                    fg_color=accent_hover_color(),
+                    text_color=on_accent_color(),
                 )
             else:
                 btn.configure(
                     fg_color="transparent",
-                    text_color=[TOOLBOX_THEME["text"], "#E8E6E1"],
+                    text_color=text_color(),
                 )
 
         # 清空内容区
@@ -332,12 +331,12 @@ class Shell:
         level: 'info' | 'ok' | 'warn' | 'error'
         """
         color_map = {
-            "info": "#9CA3AF",
+            "info": muted_color(),
             "ok": TOOLBOX_THEME["ok"],
             "warn": TOOLBOX_THEME["warn"],
             "error": TOOLBOX_THEME["bad"],
         }
-        self._msg_label.configure(text=text, text_color=color_map.get(level, "#9CA3AF"))
+        self._msg_label.configure(text=text, text_color=color_map.get(level, muted_color()))
 
     def update_pcdmis_status(self, connected: bool, version: str | None = None):
         """更新 PCDMIS 连接状态。"""
@@ -350,7 +349,7 @@ class Shell:
         else:
             self._pcdmis_label.configure(
                 text=f"🔴 PC-DMIS: 未连接",
-                text_color="#9CA3AF",
+                text_color=muted_color(),
             )
 
     # ── 关闭处理 ──────────────────────────────────────────────────────────

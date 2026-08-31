@@ -17,12 +17,9 @@ import time
 import customtkinter as ctk
 
 from toolbox.app_meta import APP_VERSION
+from toolbox.ui_components import muted_color, ui_font
 from utils.app_icon import apply_window_icon, get_logo_image
-
-# ── 主题色（与 utils/theme.py 保持一致）───────────────────────────────────────
-_ACCENT      = "#0F766E"
-_ACCENT_LITE = "#14B8A6"
-_MUTED       = "#6B7280"
+from utils.theme import TOOLBOX_THEME
 
 # 模拟启动阶段（init_fn 真正执行时这些被忽略，以实际进度为准）
 _BOOT_STEPS = [
@@ -123,7 +120,7 @@ class SplashScreen:
 
         card = ctk.CTkFrame(
             parent, corner_radius=14,
-            fg_color=["#FFFFFF", "#1C2330"],
+            fg_color=[TOOLBOX_THEME["splash_card"], TOOLBOX_THEME["splash_card_dark"]],
             border_width=0,
         )
         card.grid(row=0, column=0, sticky="nsew", padx=28, pady=28)
@@ -137,30 +134,34 @@ class SplashScreen:
         else:
             ctk.CTkLabel(
                 card, text="cm2xl",
-                font=ctk.CTkFont(family="Segoe UI", size=52, weight="bold"),
-                text_color=_ACCENT, fg_color="transparent",
+                font=ui_font(52, "bold"),
+                text_color=TOOLBOX_THEME["accent"], fg_color="transparent",
             ).grid(row=0, column=0, pady=(20, 2))
 
         ctk.CTkLabel(
             card, text=f"Version {APP_VERSION}",
-            font=ctk.CTkFont(family="Segoe UI", size=13),
-            text_color=_MUTED, fg_color="transparent",
+            font=ui_font(13),
+            text_color=muted_color(), fg_color="transparent",
         ).grid(row=1, column=0, pady=(0, 14))
 
-        sep = ctk.CTkFrame(card, height=1, fg_color=[_ACCENT_LITE, "#28303F"])
+        sep = ctk.CTkFrame(
+            card, height=1,
+            fg_color=[TOOLBOX_THEME["accent_hover"], TOOLBOX_THEME["splash_sep_dark"]],
+        )
         sep.grid(row=2, column=0, padx=16, sticky="ew")
         sep.configure(height=1)
 
         self._status = ctk.CTkLabel(
             card, text="正在启动...",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
-            text_color=_MUTED, fg_color="transparent",
+            font=ui_font(12),
+            text_color=muted_color(), fg_color="transparent",
         )
         self._status.grid(row=3, column=0, pady=(12, 6))
 
         self._progress = ctk.CTkProgressBar(
-            card, progress_color=_ACCENT,
-            fg_color=["#E5E7EB", "#2A3545"], corner_radius=6,
+            card, progress_color=TOOLBOX_THEME["accent"],
+            fg_color=[TOOLBOX_THEME["page_bg"], TOOLBOX_THEME["splash_progress_track_dark"]],
+            corner_radius=6,
         )
         self._progress.grid(row=4, column=0, padx=16, pady=(0, 20), sticky="ew")
         self._progress.set(0)
