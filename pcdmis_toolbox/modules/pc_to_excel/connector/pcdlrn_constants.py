@@ -1,17 +1,31 @@
-"""PC-DMIS COM 枚举常量 — 优先动态加载，失败时使用回退值。
+"""PC-DMIS COM 枚举常量 — 优先从本机 Pcdlrn.tlb 加载，失败时使用回退值。
 
 参考:
 - https://blog.iyatt.com/?p=18363
 - https://docs.hexagonmi.com/pcdmis/2024.1/en/helpcenter/mergedProjects/automationobjects/webframe.html
+
+TypeLib GUID 随大版本变化（2017 R2 / 2019 R2 / 2020 R2 / 2024.1 各不相同），
+不能只 EnsureModule 2019 的 GUID。字段号 2017 R2–2024.1 实测一致。
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+# 2019 R2 的 GUID（历史默认）；其它版本见本机 Pcdlrn.tlb
 PCDLRN_TYPELIB = "{10C96EB9-ED97-492D-BC67-700C7F18E394}"
+
+# 本机核实过的 (guid, major, minor)
+PCDLRN_TYPELIB_VERSIONS: tuple[tuple[str, int, int], ...] = (
+    ("{17D40C93-5349-4DEF-B20D-ADEEE5300E42}", 19, 1),  # 2024.1
+    ("{211D1786-AACC-455C-AB50-B233AF86B11D}", 15, 2),  # 2020 R2
+    ("{10C96EB9-ED97-492D-BC67-700C7F18E394}", 14, 2),  # 2019 R2
+    ("{AFFFD46A-E310-486E-B1AD-B47D05EC1229}", 12, 2),  # 2017 R2
+)
 
 
 class _FallbackConstants:
-    """常用 ENUM_FIELD_TYPES 回退值（2019–2024 各版本基本一致）。"""
+    """常用 ENUM_FIELD_TYPES 回退值（2017 R2–2024.1 各版本字段号一致）。"""
 
     AXIS = 132
     NOMINAL = 166
@@ -29,7 +43,7 @@ class _FallbackConstants:
     DISPLAY_ID = 184
     REF_ID = 3
     DIM_BONUS = 324
-    UNIT_TYPE = 49
+    UNIT_TYPE = 172
     THEO_DIAM = 34
     MEAS_DIAM = 29
     MEAS_D = 88
@@ -109,22 +123,100 @@ def set_active_prog_id(prog_id: str) -> None:
     _ACTIVE_PROG_ID = prog_id or ""
 
 
+def _snapshot_from_source(src: object) -> _FallbackConstants:
+    snap = _FallbackConstants()
+    for name in dir(snap):
+        if name.startswith("_"):
+            continue
+        if hasattr(src, name):
+            try:
+                setattr(snap, name, int(getattr(src, name)))
+            except (TypeError, ValueError):
+                continue
+    return snap
+
+
+def _constants_from_tlb_file(tlb_path: str) -> _FallbackConstants | None:
+    """直接读安装目录 Pcdlrn.tlb，不依赖注册表里的 TypeLib GUID。"""
+    try:
+        import pythoncom  # type: ignore[import-untyped]
+    except ImportError:
+        return None
+    try:
+        tlb = pythoncom.LoadTypeLib(tlb_path)
+    except Exception:
+        return None
+    snap = _FallbackConstants()
+    filled = False
+    for i in range(tlb.GetTypeInfoCount()):
+        ti = tlb.GetTypeInfo(i)
+        name = ti.GetDocumentation(-1)[0] or ""
+        if name not in ("ENUM_FIELD_TYPES", "FDATA_TYPES", "OBTYPE"):
+            continue
+        ta = ti.GetTypeAttr()
+        for j in range(ta.cVars):
+            vd = ti.GetVarDesc(j)
+            vn = ti.GetDocumentation(vd.memid)[0]
+            if not vn or not hasattr(snap, vn) or vd.value is None:
+                continue
+            try:
+                setattr(snap, vn, int(vd.value))
+                filled = True
+            except (TypeError, ValueError):
+                continue
+    return snap if filled else None
+
+
+def tlb_path_for_prog_id(prog_id: str) -> str:
+    """ProgID → 对应安装目录下的 Pcdlrn.tlb。"""
+    if not prog_id:
+        return ""
+    try:
+        from .com_detector import _exe_from_prog_id
+    except Exception:
+        return ""
+    exe = _exe_from_prog_id(prog_id)
+    if not exe:
+        return ""
+    tlb = Path(exe).parent / "Pcdlrn.tlb"
+    return str(tlb) if tlb.is_file() else ""
+
+
 def load_pcdlrn_constants(prog_id: str):
-    """按 ProgID 隔离缓存：尝试从本机 PCDLRN.tlb 加载常量，失败则返回回退对象。"""
+    """按 ProgID 隔离缓存：优先读该版本 Pcdlrn.tlb，再试已注册 TypeLib，最后回退。"""
     if prog_id in _CONSTANTS_BY_PROGID:
         return _CONSTANTS_BY_PROGID[prog_id]
+
+    tlb_path = tlb_path_for_prog_id(prog_id)
+    if tlb_path:
+        snap = _constants_from_tlb_file(tlb_path)
+        if snap is not None:
+            _CONSTANTS_BY_PROGID[prog_id] = snap
+            return snap
+
     try:
         import win32com.client.gencache as gencache
         from win32com.client import constants
 
+        pairs: list[tuple[str, int, int]] = list(PCDLRN_TYPELIB_VERSIONS)
         for major, minor in (
-            (19, 1), (19, 0), (18, 2), (18, 1), (18, 0),
-            (17, 1), (17, 0), (16, 0), (15, 0), (14, 2),
+            (21, 1), (21, 0), (20, 2), (20, 1), (19, 2), (19, 1), (19, 0),
+            (18, 2), (18, 1), (18, 0), (17, 2), (17, 1), (17, 0),
+            (16, 2), (16, 1), (16, 0), (15, 2), (15, 1), (15, 0),
+            (14, 2), (14, 1), (13, 2), (13, 1), (12, 2), (12, 1),
         ):
+            pairs.append((PCDLRN_TYPELIB, major, minor))
+        seen: set[tuple[str, int, int]] = set()
+        for guid, major, minor in pairs:
+            key = (guid.upper(), major, minor)
+            if key in seen:
+                continue
+            seen.add(key)
             try:
-                gencache.EnsureModule(PCDLRN_TYPELIB, 0, major, minor)
-                _CONSTANTS_BY_PROGID[prog_id] = constants
-                return constants
+                gencache.EnsureModule(guid, 0, major, minor)
+                snap = _snapshot_from_source(constants)
+                _CONSTANTS_BY_PROGID[prog_id] = snap
+                return snap
             except Exception:
                 continue
     except Exception:

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from contextlib import contextmanager
 
-from ..app_meta import PROG_ID_CANDIDATES
+from ..app_meta import PROG_ID_CANDIDATES, PROG_ID_GENERIC
 from utils.error_codes import ErrorCode, ToolboxError
 
 SEARCH_TERMS = ["PCDLRN", "PC-DMIS", "PCDMIS", "Hexagon"]
@@ -28,6 +28,13 @@ INSTALL_PATHS = [
     r"D:\Hexagon\PC-DMIS",
     r"D:\PF\PCDMIS-2024.1",
 ]
+HEXAGON_ROOTS = [
+    r"C:\Program Files\Hexagon",
+    r"C:\Program Files (x86)\Hexagon",
+    r"D:\Program Files\Hexagon",
+    r"D:\Hexagon",
+]
+_PROG_ID_VER_RE = re.compile(r"^PCDLRN\.Application(?:\.(\d+)\.(\d+))?$", re.I)
 
 
 @dataclass
@@ -47,6 +54,7 @@ class DetectionResult:
             if pid not in seen:
                 seen.add(pid)
                 merged.append(pid)
+        merged.sort(key=_prog_id_sort_key)
         return merged
 
 
@@ -75,13 +83,20 @@ def discover_prog_ids_fast() -> list[str]:
         if key.upper().startswith("PCDLRN.APPLICATION"):
             found.append(key)
 
-    def sort_key(pid: str) -> tuple[int, int, str]:
-        upper = pid.upper()
-        is_generic = upper in ("PCDLRN.APPLICATION", "PCDLRN.APPLICATION.1")
-        return (1 if is_generic else 0, -len(pid), pid)
-
-    found.sort(key=sort_key)
+    found.sort(key=_prog_id_sort_key)
     return found
+
+
+def _prog_id_sort_key(pid: str) -> tuple[int, int, int, str]:
+    """版本 ProgID 新→旧；无版本号的 PCDLRN.Application 放最后。"""
+    match = _PROG_ID_VER_RE.match(pid.strip())
+    if not match or match.group(1) is None:
+        return (1, 0, 0, pid)
+    return (0, -int(match.group(1)), -int(match.group(2)), pid)
+
+
+def _normalize_exe_path(raw: str) -> str:
+    return os.path.normcase(os.path.normpath(raw.strip().strip('"')))
 
 
 def _exe_from_prog_id(prog_id: str) -> str | None:
@@ -102,7 +117,14 @@ def _exe_from_prog_id(prog_id: str) -> str | None:
 
 def discover_install_dirs() -> list[str]:
     dirs: list[str] = [p for p in INSTALL_PATHS if os.path.isdir(p)]
-    for prog_id in discover_prog_ids_fast()[:3]:
+    for root in HEXAGON_ROOTS:
+        base = Path(root)
+        if not base.is_dir():
+            continue
+        for item in base.glob("PC-DMIS *"):
+            if (item / "PCDLRN.exe").is_file():
+                dirs.append(str(item))
+    for prog_id in discover_prog_ids_fast()[:8]:
         exe = _exe_from_prog_id(prog_id)
         if exe:
             dirs.append(str(Path(exe).parent))
@@ -113,7 +135,7 @@ def _prog_id_registered(prog_id: str) -> bool:
     return "REG_SZ" in _run_reg(["query", rf"HKCR\{prog_id}\CLSID", "/ve"])
 
 
-def get_connect_candidates() -> list[str]:
+def _registered_prog_ids() -> list[str]:
     discovered = discover_prog_ids_fast()
     seen: set[str] = set()
     merged: list[str] = []
@@ -122,6 +144,33 @@ def get_connect_candidates() -> list[str]:
             continue
         seen.add(pid)
         merged.append(pid)
+    merged.sort(key=_prog_id_sort_key)
+    return merged
+
+
+def match_running_prog_id(candidates: list[str] | None = None) -> str:
+    """用正在运行的 PCDLRN.exe 路径匹配版本 ProgID，避免连到另一套已安装版本。"""
+    exe = get_pcdmis_exe_path()
+    if not exe:
+        return ""
+    want = _normalize_exe_path(exe)
+    for pid in candidates or _registered_prog_ids():
+        if pid.upper() == PROG_ID_GENERIC.upper():
+            continue
+        found = _exe_from_prog_id(pid)
+        if found and _normalize_exe_path(found) == want:
+            return pid
+    generic_exe = _exe_from_prog_id(PROG_ID_GENERIC)
+    if generic_exe and _normalize_exe_path(generic_exe) == want:
+        return PROG_ID_GENERIC
+    return ""
+
+
+def get_connect_candidates() -> list[str]:
+    merged = _registered_prog_ids()
+    running = match_running_prog_id(merged)
+    if running:
+        return [running] + [p for p in merged if p != running]
     return merged
 
 
@@ -167,6 +216,31 @@ def get_pcdmis_pid() -> int | None:
             parts = [p.strip('"') for p in line.split(",")]
             if len(parts) >= 2 and parts[0].lower() == "pcdlrn.exe":
                 return int(parts[1])
+    except Exception:
+        return None
+    return None
+
+
+def get_pcdmis_exe_path() -> str | None:
+    """读取正在运行的 PCDLRN.exe 完整路径（限权查询，管理员进程也可读）。"""
+    pid = get_pcdmis_pid()
+    if pid is None:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None
+        try:
+            buf = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(32768)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return buf.value
+        finally:
+            kernel32.CloseHandle(handle)
     except Exception:
         return None
     return None
@@ -225,16 +299,23 @@ def com_apartment():
 
 
 def dispatch_pcdmis(prog_id: str):
-    """绑定 PCDMIS Application；优先 EnsureDispatch 以获取完整类型库接口。"""
+    """绑定 PCDMIS Application；已运行时先 GetActiveObject，避免 Dispatch 拉起另一套版本。"""
     import win32com.client  # type: ignore[import-untyped]
     import win32com.client.gencache as gencache  # type: ignore[import-untyped]
 
     errors: list[str] = []
-    for label, factory in (
-        ("EnsureDispatch", lambda: gencache.EnsureDispatch(prog_id)),
-        ("Dispatch", lambda: win32com.client.Dispatch(prog_id)),
-        ("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)),
-    ):
+    factories: list[tuple[str, object]] = []
+    if is_pcdmis_running():
+        factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
+    factories.extend(
+        (
+            ("EnsureDispatch", lambda: gencache.EnsureDispatch(prog_id)),
+            ("Dispatch", lambda: win32com.client.Dispatch(prog_id)),
+        )
+    )
+    if not is_pcdmis_running():
+        factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
+    for label, factory in factories:
         try:
             return factory()
         except Exception as exc:
@@ -294,7 +375,7 @@ def _format_connect_error(last_error: str, candidates: list[str]) -> str:
         hints.insert(0, "【最可能原因】权限级别不一致\n" + elev_msg)
 
     if not is_pcdmis_running():
-        hints.append("PCDMIS 未运行 — 请先启动 PC-DMIS（2022.1–2026.1）并打开测量程序。")
+        hints.append("PCDMIS 未运行 — 请先启动 PC-DMIS（2017 R2–2026.1，64 位）并打开测量程序。")
     elif "-2147221005" in last_error and ok:
         hints.append(
             "ProgID 在注册表中存在但 COM 激活失败。"
@@ -303,12 +384,12 @@ def _format_connect_error(last_error: str, candidates: list[str]) -> str:
     if "-2146959355" in last_error or "-2147221021" in last_error:
         if ok:
             hints.append(
-                "COM 无法附着到已运行的 PCDMIS — 将尝试 Dispatch 启动/连接，"
-                "请稍候约 10 秒。"
+                "COM 无法附着到已运行的 PCDMIS。"
+                "多版本同机时请只开一套，并以与本工具相同的权限运行。"
             )
     if python_bitness() != 64:
         hints.append(
-            f"当前 Python 为 {python_bitness()} 位，PC-DMIS 2022+（64-bit）需 64 位 Python。"
+            f"当前 Python 为 {python_bitness()} 位，PC-DMIS 2017 R2+（64-bit）需 64 位 Python。"
         )
 
     return f"{last_error}\n\n" + "\n\n".join(hints)
@@ -336,20 +417,23 @@ def try_connect_with_app(
     with com_apartment():
         last_error = ""
         for prog_id in candidates:
-            app = None
-            # Dispatch 最可靠；GetActiveObject 仅在 ROT 已注册时可用
-            for factory in (
-                lambda pid=prog_id: win32com.client.Dispatch(pid),
-                lambda pid=prog_id: win32com.client.GetActiveObject(pid),
-            ):
-                try:
-                    app = factory()
-                    break
-                except Exception as exc:
-                    last_error = str(exc)
-            if app is None:
-                continue
             try:
+                app = win32com.client.GetActiveObject(prog_id)
+                return True, prog_id, _read_version(app), "", app
+            except Exception as exc:
+                last_error = str(exc)
+
+        dispatch_ids = list(candidates)
+        if is_pcdmis_running():
+            matched = match_running_prog_id(candidates)
+            dispatch_ids = [matched] if matched else []
+            if not dispatch_ids:
+                message = _format_connect_error(last_error, candidates)
+                return False, "", "", message, None
+
+        for prog_id in dispatch_ids:
+            try:
+                app = win32com.client.Dispatch(prog_id)
                 return True, prog_id, _read_version(app), "", app
             except Exception as exc:
                 last_error = str(exc)
@@ -373,7 +457,7 @@ def run_detection(attempt_connect: bool = True) -> DetectionResult:
         result.message = "仅扫描注册表，未尝试连接"
         return result
 
-    ok, prog_id, version, error = try_connect(result.all_prog_ids)
+    ok, prog_id, version, error = try_connect()
     result.connected = ok
     result.active_prog_id = prog_id
     result.version = version

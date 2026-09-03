@@ -167,7 +167,7 @@ def _extract_tolerance_commands(
     cache: list[tuple[int, Any]],
     show_negative: bool,
 ) -> tuple[list[FeatureRecord], set[int]]:
-    """形位公差 — 2022.2+ ToleranceCommand（2024.1 推荐路径）。"""
+    """形位公差 — ToleranceCommand（COM 约 2022.1+；2017–2020 R2 走 IsFCFCommand）。"""
     records: list[FeatureRecord] = []
     indices: set[int] = set()
     for idx, cmd in cache:

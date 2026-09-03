@@ -20,7 +20,7 @@ def _check_bitness() -> None:
     if bits != 64:
         raise RuntimeError(
             f"[E1002] 当前 Python 为 {bits} 位，"
-            "PC-DMIS 2022+（64-bit）需要 64 位 Python。\n"
+            "PC-DMIS 2017 R2+（64-bit）需要 64 位 Python。\n"
             "请使用 64 位 Python 运行本工具。"
         )
 
@@ -115,16 +115,23 @@ def _migrate_module_settings() -> None:
         logger.warning(f"[settings] 启动迁移异常: {e}")
 
 
-def _acquire_instance_lock():
+def _acquire_instance_lock(*, handoff_auto_export: bool = False):
     """检测是否已有 Toolbox 实例（FileLock 超时 5s 则弹窗询问）。
 
     拿到锁的实例持有锁直到进程退出；用户选择"仍启动"则放弃锁继续运行。
+    工具栏 --auto-export 且已有实例时：写 IPC 后静默退出，由现有窗口导出。
     """
     from utils.settings import FileLock
+    from utils.ipc import clear_ipc_commands, write_auto_export_command
 
-    lock = FileLock(paths.data_dir / "toolbox.lock", timeout=5.0)
+    timeout = 0.3 if handoff_auto_export else 5.0
+    lock = FileLock(paths.data_dir / "toolbox.lock", timeout=timeout)
     locked = lock.__enter__()
     if not locked:
+        if handoff_auto_export:
+            write_auto_export_command()
+            logger.info("已有 cm2xl 实例，已转发自动导出指令")
+            sys.exit(0)
         from tkinter import messagebox
 
         again = messagebox.askyesno(
@@ -136,6 +143,7 @@ def _acquire_instance_lock():
         if not again:
             sys.exit(0)
         return None
+    clear_ipc_commands()
     # 持有锁直到进程退出
     atexit.register(lambda: lock.__exit__(None, None, None))
     return lock
@@ -148,7 +156,7 @@ def _preload_ocr():
     _OCR(use_angle_cls=True, lang='ch', show_log=False)
 
 
-def _create_shell():
+def _create_shell(launch):
     """在主线程创建 Shell 窗口（必须在主线程调用）。"""
     from toolbox.shell import Shell
 
@@ -159,30 +167,45 @@ def _create_shell():
     root.geometry("1100x700")
     root.minsize(900, 600)
     apply_window_icon(root)
-    shell = Shell(root)
+    shell = Shell(
+        root,
+        start_module=launch.module,
+        auto_export=launch.auto_export,
+    )
     root.protocol("WM_DELETE_WINDOW", lambda: shell.on_close(root))
     return root, shell
 
 
 def main():
-    logger.info("初始化 Shell...")
-    _acquire_instance_lock()
+    from toolbox.launch_args import parse_launch_args
+
+    launch = parse_launch_args(sys.argv[1:])
+    logger.info(
+        "初始化 Shell... module=%s auto_export=%s skip_ocr=%s",
+        launch.module,
+        launch.auto_export,
+        launch.skip_ocr,
+    )
+    _acquire_instance_lock(handoff_auto_export=launch.auto_export)
     _migrate_module_settings()
 
-    # Splash Screen：后台线程预加载 PaddleOCR，主线程显示进度
-    from toolbox.splash import SplashScreen
+    if launch.skip_ocr:
+        logger.info("跳过 OCR 预加载（工具栏 / PCDMIS 导出启动）")
+    else:
+        # Splash Screen：后台线程预加载 PaddleOCR，主线程显示进度
+        from toolbox.splash import SplashScreen
 
-    splash = SplashScreen(min_display_ms=1200)
-    try:
-        splash.show_and_wait(_preload_ocr)
-    except Exception as e:
-        logger.exception("PaddleOCR 初始化失败: %s", e)
-        raise
+        splash = SplashScreen(min_display_ms=1200)
+        try:
+            splash.show_and_wait(_preload_ocr)
+        except Exception as e:
+            logger.exception("PaddleOCR 初始化失败: %s", e)
+            raise
 
-    # Splash 已关闭，创建 Shell 窗口（主线程）
+    # Splash 已关闭（或已跳过），创建 Shell 窗口（主线程）
     logger.info("创建 Shell...")
     try:
-        root, shell = _create_shell()
+        root, shell = _create_shell(launch)
     except Exception as e:
         logger.exception("Shell 初始化失败")
         raise

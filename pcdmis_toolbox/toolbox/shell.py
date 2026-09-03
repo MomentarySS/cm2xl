@@ -47,17 +47,29 @@ class Shell:
 
     NAV_WIDTH = 180
 
-    def __init__(self, root: ctk.CTk):
+    def __init__(
+        self,
+        root: ctk.CTk,
+        *,
+        start_module: Optional[str] = None,
+        auto_export: bool = False,
+    ):
         self.root = root
         self._active_module: Optional[object] = None
         self._active_module_name: Optional[str] = None
         self._modules: dict[str, object] = {}
         self._running = True
+        self._start_module = start_module
+        self._auto_export = auto_export
+        self._ipc_after_id = None
 
         self._apply_toolbox_settings()    # 启动时应用外观/日志设置
         self._build_layout()
         self._load_modules()
-        self._select_first_module()
+        self._select_startup_module()
+        self._start_ipc_poll()
+        if auto_export:
+            self.root.after(500, self._run_auto_export)
         self._schedule_migration_notices()
         logger.info("Shell 初始化完成")
 
@@ -239,6 +251,60 @@ class Shell:
         if names:
             self._activate_module(names[0])
 
+    def _select_startup_module(self):
+        """按启动参数选模块；未指定或名称无效时回退第一个。"""
+        name = self._start_module
+        if name and name in self._modules:
+            self._activate_module(name)
+            return
+        self._select_first_module()
+
+    def _bring_to_front(self) -> None:
+        root = self.root
+        try:
+            root.deiconify()
+            root.lift()
+            root.focus_force()
+            root.attributes("-topmost", True)
+            root.after(700, lambda: root.attributes("-topmost", False))
+        except Exception:
+            logger.debug("前置窗口失败", exc_info=True)
+
+    def _run_auto_export(self) -> None:
+        """工具栏 / IPC：切到 PCDMIS 导出并触发一键导出。"""
+        if not self._running:
+            return
+        self._bring_to_front()
+        if self._active_module_name != "pc_to_excel":
+            self._activate_module("pc_to_excel")
+        mod = self._active_module
+        if mod is None or not hasattr(mod, "request_auto_export"):
+            self.update_status("自动导出失败：导出模块未就绪", "error")
+            return
+        self.update_status("工具栏一键导出…", "info")
+        try:
+            mod.request_auto_export()
+        except Exception as e:
+            logger.exception("自动导出触发失败: %s", e)
+            self.update_status(f"自动导出失败: {e}", "error")
+
+    def _start_ipc_poll(self) -> None:
+        self._poll_ipc()
+
+    def _poll_ipc(self) -> None:
+        if not self._running:
+            return
+        try:
+            from utils.ipc import CMD_AUTO_EXPORT, consume_command
+
+            cmd = consume_command()
+            if cmd and cmd.get("cmd") == CMD_AUTO_EXPORT:
+                logger.info("收到 IPC 自动导出指令")
+                self._run_auto_export()
+        except Exception:
+            logger.exception("IPC 轮询失败")
+        self._ipc_after_id = self.root.after(400, self._poll_ipc)
+
     # ── 模块激活 / 卸载 ───────────────────────────────────────────────────
 
     def _activate_module(self, name: str):
@@ -361,6 +427,12 @@ class Shell:
         disconnect）超过 2 秒则强制销毁窗口，避免用户面对假死的窗口。
         """
         self._running = False
+        if self._ipc_after_id is not None:
+            try:
+                root.after_cancel(self._ipc_after_id)
+            except Exception:
+                pass
+            self._ipc_after_id = None
         audit("app_close")
 
         # watchdog：2 秒后若仍未销毁则强制 root.destroy()

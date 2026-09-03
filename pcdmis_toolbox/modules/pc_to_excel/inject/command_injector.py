@@ -96,6 +96,15 @@ def deploy_bas_script(target_dir: Path | None = None) -> Path:
     )
     atomic_write_text(dest, source_text)
     _verify_bas_deployed(dest)
+    try:
+        from .toolbar_launcher import deploy_toolbar_launcher
+
+        deploy_toolbar_launcher(dest_dir)
+    except Exception:
+        # 工具栏启动器失败不影响 BAS 植入
+        import logging
+
+        logging.getLogger("pc_to_excel").exception("部署工具栏启动器失败")
     return dest
 
 

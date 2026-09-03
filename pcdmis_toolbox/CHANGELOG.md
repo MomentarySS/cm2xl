@@ -4,6 +4,27 @@
 
 ---
 
+## [1.0.11] — 2026-09-03
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.11`
+- 安装包输出文件名同步为 `cm2xl_Setup_1.0.11.exe`
+- **启动参数**：`cm2xl.exe --module pc_to_excel --auto-export` 跳过 OCR 启动画面，直接进入 PCDMIS 导出
+
+### pc_to_excel 模块
+
+- **PC-DMIS 工具栏一键出 Excel**：部署 `.vbs`/`.bat` 启动器，挂到 PC-DMIS 自定义工具栏后一点即导出（默认仅 Mark）
+- 已有 cm2xl 实例时通过文件 IPC 唤醒现有窗口再导，不另开第二份
+- 启动器优先指向 Inno 安装的 `cm2xl.exe`（本机常见 `D:\PF\cm2xl\`）
+- **COM 兼容**：支持 PC-DMIS **2017 R2–2026.1**，优先附着正在运行的实例
+
+### 文档
+
+- 用户手册与 `toolbox/docs/pc_to_excel.md` 补充工具栏挂载步骤
+
+---
+
 ## [1.0.10] — 2026-08-31
 
 ### 整体

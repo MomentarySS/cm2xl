@@ -29,6 +29,11 @@ from ..export.inspection_form_fill import (
 )
 from ..export.template_report import export_report
 from ..inject.command_injector import check_export_command, deploy_bas_script, inject_export_command
+from ..inject.toolbar_launcher import (
+    INSTALL_STEPS,
+    deploy_toolbar_launcher,
+    resolve_toolbar_argv,
+)
 from ..utils.action_hints import format_user_error
 from ..utils.admin import admin_status_text, is_admin
 from ..utils.local_settings import build_export_filename, ensure_default_dirs, load_settings, save_settings
@@ -589,17 +594,18 @@ class MainWindow:
             text_color=_C["subtle"],
         ).pack(side="left", padx=14)
 
-        # —— 植入 ——
+        # —— 植入 / 工具栏 ——
         inject = self._section(
             scroll,
-            "PRG 命令植入",
-            subtitle="测量中可把光标放到 PC2XL_EXPORT → 从光标执行",
+            "PRG 命令植入 / PC-DMIS 工具栏",
+            subtitle="工具栏一键出 xlsx；PRG 植入适合边测边出 CSV",
             collapsible=True,
             expanded=False,
         )
         self._hint(
             inject,
-            "在程序末尾插入导出命令。适合边测边出 CSV；需要完整 xlsx 列格式时请用上方「一键导出」。",
+            "推荐：部署工具栏启动器，挂到 PC-DMIS 自定义按钮，点一下即导出 Excel（仅 Mark）。"
+            "PRG 植入仍导出 CSV，完整列格式请用上方「一键导出」或工具栏。",
         )
         inj_row = ctk.CTkFrame(inject, fg_color="transparent")
         inj_row.pack(fill="x", pady=(4, 0))
@@ -608,6 +614,14 @@ class MainWindow:
             side="left", padx=8
         )
         self._btn_muted(inj_row, "检查是否已植入", self._check_inject, width=130).pack(side="left")
+        bar_row = ctk.CTkFrame(inject, fg_color="transparent")
+        bar_row.pack(fill="x", pady=(8, 0))
+        self._btn_accent(bar_row, "部署工具栏启动器", self._deploy_toolbar, width=168).pack(
+            side="left"
+        )
+        self._btn_muted(bar_row, "打开启动器目录", self._open_launcher_dir, width=130).pack(
+            side="left", padx=8
+        )
 
         # —— 说明 ——
         help_body = self._section(
@@ -618,7 +632,7 @@ class MainWindow:
         )
         help_text = ctk.CTkTextbox(
             help_body,
-            height=150,
+            height=210,
             font=ctk.CTkFont(family="Consolas", size=12),
             wrap="word",
             corner_radius=10,
@@ -628,13 +642,16 @@ class MainWindow:
         help_text.pack(fill="both", expand=True)
         help_text.insert(
             "1.0",
+            "【工具栏一键出 Excel】\n"
+            "1. 点击「部署工具栏启动器」（写入 LocalAppData 下 vbs/bat）。\n"
+            "2. PC-DMIS：视图 → 工具栏 → 自定义 → 创建项目 → 选 cm2xl_toolbar_export.vbs。\n"
+            "3. 从「用户自定义命令」拖到工具栏。测完点该按钮即可。\n"
+            "4. cm2xl 跳到本页并按「仅 Mark 命令」自动导出 xlsx。已打开则唤醒再导。\n\n"
+            "【PRG 植入 CSV】\n"
             "1. 点击「植入 / 更新导出命令」后保存 PRG。\n"
-            "2. 正常测量，测到一半也可导出。\n"
-            "3. 在 Edit 窗口将光标放在 PC2XL_EXPORT 命令行。\n"
-            "4. 菜单：文件 → 部分执行 → 从光标执行（或选中命令块 → 执行块）。\n"
-            "5. 脚本导出 CSV；BAS 在 %LOCALAPPDATA%\\PCDMIS_ExcelExporter\\scripts\\\n"
-            "   （避免路径含空格时 PCDMIS 报「未找到脚本文件」）。\n\n"
-            "注意：PC-DMIS Pro 无 BASIC 扩展，请用外部「一键导出」。\n"
+            "2. Edit 窗口光标放在 PC2XL_EXPORT → 文件 → 部分执行 → 从光标执行。\n"
+            "3. 脚本导出 CSV；完整 xlsx 请用工具栏或上方「一键导出」。\n\n"
+            "注意：PC-DMIS Pro 无 BASIC，工具栏请用 vbs/bat（不要用 .bas）。\n"
             "工具与 PCDMIS 须同为普通用户或同为管理员运行。",
         )
         help_text.configure(state="disabled")
@@ -1071,6 +1088,10 @@ class MainWindow:
         self._btn_accent(btn_row, "复制结果", _copy, width=110, height=34).pack(side="left")
         self._btn_muted(btn_row, "关闭", win.destroy, width=90, height=34).pack(side="right")
 
+    def request_auto_export(self) -> None:
+        """工具栏启动：稍等界面就绪后走与按钮相同的一键导出（含仅 Mark）。"""
+        self.root.after(200, self._export_excel)
+
     def _export_excel(self) -> None:
         if self._busy:
             return
@@ -1139,11 +1160,39 @@ class MainWindow:
     def _deploy_bas(self) -> None:
         try:
             path = deploy_bas_script()
-            audit("pcdmis_bas_deploy", path=str(path))
-            messagebox.showinfo("部署完成", f"脚本已更新:\n{path}")
+            launcher = deploy_toolbar_launcher()
+            target = resolve_toolbar_argv()[0]
+            audit("pcdmis_bas_deploy", path=str(path), launcher=str(launcher), target=target)
+            messagebox.showinfo(
+                "部署完成",
+                f"脚本已更新:\n{path}\n\n工具栏将启动：\n{target}\n\n启动器:\n{launcher}",
+            )
         except Exception as exc:
             logger.exception("BAS 部署失败: %s", exc)
             messagebox.showerror("部署失败", format_user_error("部署失败", exc))
+
+    def _deploy_toolbar(self) -> None:
+        try:
+            path = deploy_toolbar_launcher()
+            target = resolve_toolbar_argv()[0]
+            audit("pcdmis_toolbar_deploy", path=str(path), target=target)
+            messagebox.showinfo(
+                "工具栏启动器已部署",
+                INSTALL_STEPS + f"\n\n将启动：\n{target}\n\n启动器:\n{path}",
+            )
+        except Exception as exc:
+            logger.exception("工具栏启动器部署失败: %s", exc)
+            messagebox.showerror("部署失败", format_user_error("部署失败", exc))
+
+    def _open_launcher_dir(self) -> None:
+        folder = paths.bas_deploy_dir
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            import os
+
+            os.startfile(folder)  # noqa: S606 — 打开本机资源管理器
+        except Exception as exc:
+            messagebox.showerror("无法打开目录", format_user_error("无法打开目录", exc))
 
     def _inject_command(self) -> None:
         if self._busy:

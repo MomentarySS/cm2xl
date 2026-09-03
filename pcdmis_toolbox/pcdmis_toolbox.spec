@@ -74,6 +74,7 @@ _all_hidden = list(set(_extra_hidden + [
     "toolbox.shell",
     "toolbox.settings_dialog",
     "toolbox.about_dialog",
+    "toolbox.launch_args",
     "utils.theme",
     "utils.paths",
     "utils.logging",
@@ -82,6 +83,7 @@ _all_hidden = list(set(_extra_hidden + [
     "utils.settings",
     "utils.threading_utils",
     "utils.file_io",
+    "utils.ipc",
     # ── 动态加载的模块（modules/__init__.py 用 pkgutil 运行时发现）────────────
     "modules",
     "modules.cmm_filler",
@@ -111,6 +113,7 @@ _all_hidden = list(set(_extra_hidden + [
     "modules.pc_to_excel.inject",
     "modules.pc_to_excel.inject.command_injector",
     "modules.pc_to_excel.inject.save_helper",
+    "modules.pc_to_excel.inject.toolbar_launcher",
     "modules.pc_to_excel.utils",
     "modules.pc_to_excel.utils.action_hints",
     "modules.pc_to_excel.utils.admin",

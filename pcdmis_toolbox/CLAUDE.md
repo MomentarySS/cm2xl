@@ -15,7 +15,7 @@
 ## 开发约定
 
 ### Python 环境
-- **必须 64-bit Python 3.12+**（PC-DMIS 2022.1–2026.1 为 64 位应用；主测环境 2024.1）
+- **必须 64-bit Python 3.12+**（PC-DMIS 2017 R2–2026.1 为 64 位应用；主测环境 2024.1）
 - 主要依赖：`customtkinter`、`paddlepaddle==2.6.2`、`paddleocr==2.10.0`、`pymupdf`、`openpyxl`、`pywin32`、`tkinterdnd2`
 
 ### 导入路径
@@ -29,6 +29,8 @@ multiprocessing.freeze_support()             # PyInstaller 多进程必需
 # 此后才 import customtkinter / paddleocr / tkinterdnd2
 ```
 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 的 `PaddleOCREngine.__init__()` 局部设置（`setdefault`），不再需要 main.py 全局设置。
+
+工具栏一键导出：`cm2xl.exe --module pc_to_excel --auto-export`（跳过 OCR；已有实例则 IPC 转发给现有窗口）。
 
 ### 主题
 - **`apply_theme()` 只在 `main.py` 启动最早处调用一次**
