@@ -980,6 +980,14 @@ def extract_features(self):
 - 各模块调 COM 的工作线程**必须**用 `with com_apartment()` 包裹
 - 这个约束写在 `protocol.py` 模块接口注释里，提醒模块作者
 
+**COM 串行化（1.0.12）**：PC-DMIS COM 是 STA。后台抽数与主线程 `session_alive()` / `GetActiveObject` 同时进行会互锁，界面假死；工作线程里 `root.after` 刷进度还会触发 `main thread is not in main loop`，旧逻辑误当成 COM 失效去 `EnsureDispatch`（重建 gencache），第二次导出可卡住数十秒。
+
+- 全进程 `com_call_lock`（`RLock`）串行化 COM
+- PC-DMIS **已在运行**时只用 `GetActiveObject` / `Dispatch`，**禁止 `EnsureDispatch`**
+- `extract_features` 持锁抽数；`session_alive` / `get_active_part_name` 非阻塞拿锁失败则跳过或返回缓存
+- GUI 导出/填入在工作线程 `ensure_session`，抽数期间 `progress_cb=None`；状态轮询在 `_busy` 时跳过
+- `_is_com_session_error` 只认 RPC/COM 断开，不认 Tk `RuntimeError`
+
 ---
 
 ### 3.17 模板向导（template_wizard.py）
@@ -1015,26 +1023,26 @@ toolbox/
 
 ### 3.19 PCDMIS 状态主动轮询机制
 
-`pc to excel/connector/pcdmis_connector.py:89 session_alive()` 用于检测 COM 会话是否仍然可用（测第二件时常见会话失效）。
+`modules/pc_to_excel/connector/pcdmis_connector.py` 的 `session_alive()` 用于检测 COM 会话是否仍然可用。
 
 **集成后状态更新机制**：
 - 模块激活时（`on_activate`）调用 `connector.session_alive()` → 更新状态栏
-- 模块运行时启动**后台线程**，每 30 秒检测一次，发现失效立即通知 Shell
+- 模块运行时用 `root.after(30000)` 轮询（不是独立线程抢 COM），发现失效立即通知 Shell
+- **导出/填入进行中（`_busy`）跳过本轮探测**，避免与抽数互锁
+- `session_alive` 拿不到 `com_call_lock` 时视为仍存活（不抢抽数）
 - 断开连接时模块主动调 `shell.update_pcdmis_status(False)`
 
 ```python
-# modules/pc_to_excel/gui.py
-def on_activate(self):
-    self.connector.session_alive()  # 同步检测一次
-    self._start_status_watcher()    # 启动后台线程
+# modules/pc_to_excel/gui/main_window.py
+def _start_status_watcher(self) -> None:
+    self._status_watcher_running = True
+    self._schedule_status_watch()  # root.after(30000, ...)
 
-def _start_status_watcher(self):
-    def _watch():
-        while self._running:
-            alive = self.connector.session_alive()
-            self.shell.update_pcdmis_status(alive, self.connector.version)
-            time.sleep(30)
-    threading.Thread(target=_watch, daemon=True).start()
+def _status_watcher_tick(self) -> None:
+    if self._busy:
+        return  # 抽数中不探测
+    if self.connector.is_connected() and not self.connector.session_alive():
+        self.connector.disconnect()
 ```
 
 ---

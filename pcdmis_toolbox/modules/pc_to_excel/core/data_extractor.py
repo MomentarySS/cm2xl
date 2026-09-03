@@ -77,45 +77,48 @@ def extract_from_application(
     cmds = part.Commands
     show_negative = _minus_tol_show_negative(part)
     cache, by_idx = _build_command_cache(cmds, progress_cb)
-    records: list[FeatureRecord] = []
+    try:
+        records: list[FeatureRecord] = []
 
-    records.extend(_extract_features(cache))
-    records.extend(_extract_dimensions(cache, by_idx, show_negative))
-    tol_records, tol_indices = _extract_tolerance_commands(cache, show_negative)
-    records.extend(tol_records)
-    tol_names = {r.name for r in tol_records}
-    records.extend(
-        _extract_fcf_commands(
-            cache,
-            show_negative,
-            skip_names=tol_names,
-            skip_indices=tol_indices,
+        records.extend(_extract_features(cache))
+        records.extend(_extract_dimensions(cache, by_idx, show_negative))
+        tol_records, tol_indices = _extract_tolerance_commands(cache, show_negative)
+        records.extend(tol_records)
+        tol_names = {r.name for r in tol_records}
+        records.extend(
+            _extract_fcf_commands(
+                cache,
+                show_negative,
+                skip_names=tol_names,
+                skip_indices=tol_indices,
+            )
         )
-    )
-    records.extend(_extract_datum_markers(cache))
-    records.extend(_extract_assign_commands(cache))
+        records.extend(_extract_datum_markers(cache))
+        records.extend(_extract_assign_commands(cache))
 
-    if scope == "report":
-        from .report_filter import filter_report_window_records
+        if scope == "report":
+            from .report_filter import filter_report_window_records
 
-        records = filter_report_window_records(
-            records,
-            by_idx,
-            require_marked=require_marked,
+            records = filter_report_window_records(
+                records,
+                by_idx,
+                require_marked=require_marked,
+            )
+
+        records.sort(
+            key=lambda r: (
+                r.cmd_index or r.write_cmd_index or 10**9,
+                r.write_cmd_index or 0,
+                r.name or "",
+            )
         )
 
-    # 按 PRG 命令序号排序，保证形位公差与尺寸交错顺序与报告窗口一致
-    records.sort(
-        key=lambda r: (
-            r.cmd_index or r.write_cmd_index or 10**9,
-            r.write_cmd_index or 0,
-            r.name or "",
-        )
-    )
-
-    if progress_cb:
-        progress_cb(len(cache), len(cache), f"完成，共 {len(records)} 条")
-    return records
+        if progress_cb:
+            progress_cb(len(cache), len(cache), f"完成，共 {len(records)} 条")
+        return records
+    finally:
+        cache.clear()
+        by_idx.clear()
 
 
 def extract_from_part_program(

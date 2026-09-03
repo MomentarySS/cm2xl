@@ -4,6 +4,27 @@
 
 ---
 
+## [1.0.12] — 2026-09-03
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.0.12`
+- 安装包输出文件名同步为 `cm2xl_Setup_1.0.12.exe`
+
+### pc_to_excel 模块
+
+- **二次导出不再卡死**：抽数与界面探测共用 `com_call_lock`；导出进行中状态轮询不再抢 COM
+- **已运行的 PC-DMIS 禁止 `EnsureDispatch`**：只 `GetActiveObject` / `Dispatch` 附着，避免 gencache 重建导致假死
+- Tk 的 `main thread is not in main loop` 不再误判为 COM 失效去重连
+- 「部署工具栏启动器」放到「一键导出 Excel」同一行，不必展开折叠区
+- 抽数结束后清空命令缓存，避免多件连续导出占内存
+
+### 文档
+
+- 用户手册、`toolbox/docs/pc_to_excel.md`、`ARCHITECTURE.md` 补充 COM 串行化与二次导出说明
+
+---
+
 ## [1.0.11] — 2026-09-03
 
 ### 整体

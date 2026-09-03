@@ -99,3 +99,35 @@ def test_local_tlb_field_ids_stable(tlb_path: Path):
     assert snap.LINE2_MEAS == 688
     assert snap.GDT_SYMBOL == 708
     assert snap.BASIC_SCRIPT == 12346
+
+
+def test_dispatch_running_does_not_use_ensure_dispatch(monkeypatch):
+    """已运行实例禁止 EnsureDispatch，避免第二次导出卡死。"""
+    calls: list[str] = []
+
+    class _Win32:
+        @staticmethod
+        def GetActiveObject(prog_id):
+            calls.append("GetActiveObject")
+            return object()
+
+        @staticmethod
+        def Dispatch(prog_id):
+            calls.append("Dispatch")
+            raise AssertionError("不应回退到 Dispatch")
+
+    monkeypatch.setattr(cd, "is_pcdmis_running", lambda: True)
+    monkeypatch.setattr("win32com.client.GetActiveObject", _Win32.GetActiveObject)
+    monkeypatch.setattr("win32com.client.Dispatch", _Win32.Dispatch)
+    result = cd.dispatch_pcdmis("PCDLRN.Application.19.1")
+    assert result is not None
+    assert calls == ["GetActiveObject"]
+
+
+def test_com_session_error_detects_rpc_not_tk():
+    from ..connector.pcdmis_connector import _is_com_session_error
+    from utils.error_codes import ErrorCode, ToolboxError
+
+    assert _is_com_session_error(RuntimeError("RPC server is unavailable"))
+    assert _is_com_session_error(RuntimeError("main thread is not in main loop")) is False
+    assert _is_com_session_error(ToolboxError(ErrorCode.PCDMIS_NO_DATA, "empty")) is False

@@ -482,12 +482,20 @@ class MainWindow:
         btn_row = ctk.CTkFrame(export, fg_color="transparent")
         btn_row.pack(fill="x", pady=(16, 0))
         self._btn_primary(btn_row, "一键导出 Excel", self._export_excel, width=168, height=40).pack(side="left")
+        self._btn_accent(btn_row, "部署工具栏启动器", self._deploy_toolbar, width=168, height=40).pack(
+            side="left", padx=(10, 0)
+        )
+        self._btn_muted(btn_row, "打开启动器目录", self._open_launcher_dir, width=130, height=40).pack(
+            side="left", padx=(10, 0)
+        )
+
         ctk.CTkLabel(
-            btn_row,
-            text="尺寸 · 描述 · NOMINAL · MEAS · +TOL · −TOL · BONUS · DEV · OUTTOL",
+            export,
+            text="工具栏启动器：挂到 PC-DMIS 自定义按钮后，测完一点即按「仅 Mark」导出。完整列：NOMINAL / MEAS / ±TOL / BONUS / DEV / OUTTOL",
             font=self._font(11),
             text_color=_C["subtle"],
-        ).pack(side="left", padx=14)
+            anchor="w",
+        ).pack(fill="x", pady=(10, 0))
 
         # —— 出货表 ——
         form = self._section(
@@ -594,18 +602,17 @@ class MainWindow:
             text_color=_C["subtle"],
         ).pack(side="left", padx=14)
 
-        # —— 植入 / 工具栏 ——
+        # —— 植入 ——
         inject = self._section(
             scroll,
-            "PRG 命令植入 / PC-DMIS 工具栏",
-            subtitle="工具栏一键出 xlsx；PRG 植入适合边测边出 CSV",
+            "PRG 命令植入",
+            subtitle="测量中可把光标放到 PC2XL_EXPORT → 从光标执行（CSV）",
             collapsible=True,
             expanded=False,
         )
         self._hint(
             inject,
-            "推荐：部署工具栏启动器，挂到 PC-DMIS 自定义按钮，点一下即导出 Excel（仅 Mark）。"
-            "PRG 植入仍导出 CSV，完整列格式请用上方「一键导出」或工具栏。",
+            "在程序末尾插入导出命令。适合边测边出 CSV；完整 xlsx 请用上方「一键导出」或 PC-DMIS 工具栏。",
         )
         inj_row = ctk.CTkFrame(inject, fg_color="transparent")
         inj_row.pack(fill="x", pady=(4, 0))
@@ -614,14 +621,6 @@ class MainWindow:
             side="left", padx=8
         )
         self._btn_muted(inj_row, "检查是否已植入", self._check_inject, width=130).pack(side="left")
-        bar_row = ctk.CTkFrame(inject, fg_color="transparent")
-        bar_row.pack(fill="x", pady=(8, 0))
-        self._btn_accent(bar_row, "部署工具栏启动器", self._deploy_toolbar, width=168).pack(
-            side="left"
-        )
-        self._btn_muted(bar_row, "打开启动器目录", self._open_launcher_dir, width=130).pack(
-            side="left", padx=8
-        )
 
         # —— 说明 ——
         help_body = self._section(
@@ -890,8 +889,6 @@ class MainWindow:
                 return
             self.form_fill_var.set(True)
             self._save_settings_from_ui()
-        if not self._ensure_connected(action="填入出货检测表"):
-            return
 
         form_path, chained = self.settings.form_fill.resolve_input_form()
         if form_path is None:
@@ -935,8 +932,16 @@ class MainWindow:
 
         def work():
             try:
+                info = self.connector.ensure_session()
+                if not info.connected:
+                    from utils.error_codes import ErrorCode, ToolboxError
+
+                    raise ToolboxError(
+                        ErrorCode.PCDMIS_CONNECT_FAIL,
+                        info.message or "无法连接 PCDMIS COM",
+                    )
                 records = self.connector.extract_features(
-                    progress_cb=lambda i, n, m: self.root.after(0, lambda: self.progress_var.set(m)),
+                    progress_cb=None,
                     scope=export_scope,
                     require_marked=require_marked,
                 )
@@ -1096,8 +1101,6 @@ class MainWindow:
         if self._busy:
             return
         self._save_settings_from_ui()
-        if not self._ensure_connected(action="一键导出 Excel"):
-            return
         out_dir = Path(self.export_dir_var.get().strip() or paths.pc_excel_reports)
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -1108,15 +1111,26 @@ class MainWindow:
             )
             return
 
+        export_scope = self.settings.export_scope
+        require_marked = self.settings.require_marked
+        filename_pattern = self.settings.filename_pattern
         self._set_busy(True, "正在提取并导出…")
         self.status_var.set("导出中")
 
         def work():
             try:
+                info = self.connector.ensure_session()
+                if not info.connected:
+                    from utils.error_codes import ErrorCode, ToolboxError
+
+                    raise ToolboxError(
+                        ErrorCode.PCDMIS_CONNECT_FAIL,
+                        info.message or "无法连接 PCDMIS COM",
+                    )
                 records = self.connector.extract_features(
-                    progress_cb=lambda i, n, m: self.root.after(0, lambda: self.progress_var.set(m)),
-                    scope=self.settings.export_scope,
-                    require_marked=self.settings.require_marked,
+                    progress_cb=None,
+                    scope=export_scope,
+                    require_marked=require_marked,
                 )
                 if not records:
                     from utils.error_codes import ErrorCode, ToolboxError
@@ -1130,7 +1144,7 @@ class MainWindow:
                 header = self.connector.get_report_header_info()
                 filename = build_export_filename(
                     header.part_name or header.program_name or "report",
-                    self.settings.filename_pattern,
+                    filename_pattern,
                 )
                 out_path = out_dir / filename
                 export_report(
@@ -1284,6 +1298,8 @@ class MainWindow:
 
     def _status_watcher_tick(self) -> None:
         if not self._status_watcher_running:
+            return
+        if self._busy:
             return
         try:
             if self.connector.is_connected() and not self.connector.session_alive():

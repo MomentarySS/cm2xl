@@ -6,6 +6,7 @@ import os
 import re
 import struct
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from contextlib import contextmanager
@@ -35,6 +36,9 @@ HEXAGON_ROOTS = [
     r"D:\Hexagon",
 ]
 _PROG_ID_VER_RE = re.compile(r"^PCDLRN\.Application(?:\.(\d+)\.(\d+))?$", re.I)
+
+# 所有 PC-DMIS COM 调用串行化，避免主线程探测与后台抽数互相卡住。
+com_call_lock = threading.RLock()
 
 
 @dataclass
@@ -299,25 +303,26 @@ def com_apartment():
 
 
 def dispatch_pcdmis(prog_id: str):
-    """绑定 PCDMIS Application；已运行时先 GetActiveObject，避免 Dispatch 拉起另一套版本。"""
+    """绑定 PCDMIS Application。
+
+    PC-DMIS 已在运行时只用 GetActiveObject / Dispatch 附着，禁止 EnsureDispatch：
+    后者会重建 gencache，第二次导出可卡住数十秒甚至假死。
+    """
     import win32com.client  # type: ignore[import-untyped]
-    import win32com.client.gencache as gencache  # type: ignore[import-untyped]
 
     errors: list[str] = []
+    running = is_pcdmis_running()
     factories: list[tuple[str, object]] = []
-    if is_pcdmis_running():
+    if running:
         factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
-    factories.extend(
-        (
-            ("EnsureDispatch", lambda: gencache.EnsureDispatch(prog_id)),
-            ("Dispatch", lambda: win32com.client.Dispatch(prog_id)),
-        )
-    )
-    if not is_pcdmis_running():
+        factories.append(("Dispatch", lambda: win32com.client.Dispatch(prog_id)))
+    else:
+        factories.append(("Dispatch", lambda: win32com.client.Dispatch(prog_id)))
         factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
     for label, factory in factories:
         try:
-            return factory()
+            with com_call_lock:
+                return factory()
         except Exception as exc:
             errors.append(f"{label}: {exc}")
     raise ToolboxError(
@@ -414,29 +419,30 @@ def try_connect_with_app(
     if not ok_elev:
         return False, "", "", elev_msg, None
 
-    with com_apartment():
-        last_error = ""
-        for prog_id in candidates:
-            try:
-                app = win32com.client.GetActiveObject(prog_id)
-                return True, prog_id, _read_version(app), "", app
-            except Exception as exc:
-                last_error = str(exc)
+    last_error = ""
+    with com_call_lock:
+        with com_apartment():
+            for prog_id in candidates:
+                try:
+                    app = win32com.client.GetActiveObject(prog_id)
+                    return True, prog_id, _read_version(app), "", app
+                except Exception as exc:
+                    last_error = str(exc)
 
-        dispatch_ids = list(candidates)
-        if is_pcdmis_running():
-            matched = match_running_prog_id(candidates)
-            dispatch_ids = [matched] if matched else []
-            if not dispatch_ids:
-                message = _format_connect_error(last_error, candidates)
-                return False, "", "", message, None
+            dispatch_ids = list(candidates)
+            if is_pcdmis_running():
+                matched = match_running_prog_id(candidates)
+                dispatch_ids = [matched] if matched else []
+                if not dispatch_ids:
+                    message = _format_connect_error(last_error, candidates)
+                    return False, "", "", message, None
 
-        for prog_id in dispatch_ids:
-            try:
-                app = win32com.client.Dispatch(prog_id)
-                return True, prog_id, _read_version(app), "", app
-            except Exception as exc:
-                last_error = str(exc)
+            for prog_id in dispatch_ids:
+                try:
+                    app = win32com.client.Dispatch(prog_id)
+                    return True, prog_id, _read_version(app), "", app
+                except Exception as exc:
+                    last_error = str(exc)
 
     message = _format_connect_error(last_error, candidates)
     return False, "", "", message, None

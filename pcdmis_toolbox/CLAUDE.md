@@ -32,6 +32,8 @@ multiprocessing.freeze_support()             # PyInstaller 多进程必需
 
 工具栏一键导出：`cm2xl.exe --module pc_to_excel --auto-export`（跳过 OCR；已有实例则 IPC 转发给现有窗口）。
 
+PC-DMIS COM：所有调用走 `com_call_lock`；已运行实例只用 `GetActiveObject` / `Dispatch`，**禁止 `EnsureDispatch`**（会重建 gencache，第二次导出假死）。抽数时不要从工作线程 `root.after` 刷进度，状态轮询在 `_busy` 时跳过。Tk `main thread is not in main loop` 不是 COM 失效，不要因此重连。
+
 ### 主题
 - **`apply_theme()` 只在 `main.py` 启动最早处调用一次**
 - 各模块**禁止**再调 `ctk.set_default_color_theme` 或 `set_appearance_mode`
