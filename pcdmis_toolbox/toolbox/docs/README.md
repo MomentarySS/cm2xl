@@ -21,7 +21,7 @@
 ## 权限与位数
 
 - 须 **64 位 Windows** 与 **64 位 Python**（开发时）。
-- PCDMIS 若以管理员启动，本工具也需管理员权限（可用分发包中的 `run_as_admin.bat`）。
+- PCDMIS 若以管理员启动，本工具也需管理员权限（可用分发包中的 `run_as_admin.bat`，由 `build.bat` 自动打包）。
 
 ## 打包后文档位置
 

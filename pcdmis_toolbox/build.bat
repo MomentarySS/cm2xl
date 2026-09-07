@@ -50,12 +50,17 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/6] Remove unused OpenCV video DLLs (OCR never uses them, saves ~58 MB)...
+echo [4/6] Copy administrator launcher...
+copy /Y "run_as_admin.bat" "dist\cm2xl\run_as_admin.bat" >nul
+if errorlevel 1 echo [WARN] 管理员启动器复制失败
+
+echo.
+echo [5/6] Remove unused OpenCV video DLLs (OCR never uses them, saves ~58 MB)...
 del /q "dist\cm2xl\_internal\cv2\opencv_videoio_ffmpeg*.dll" >nul 2>&1
 
 echo.
-echo [5/6] Verify output...
-if exist "dist\cm2xl\cm2xl.exe" (
+echo [6/6] Verify output...
+if exist "dist\cm2xl\cm2xl.exe" if exist "dist\cm2xl\run_as_admin.bat" (
     echo.
     echo ========================================
     echo   Build OK: dist\cm2xl\

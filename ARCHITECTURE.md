@@ -1,5 +1,7 @@
 # cm2xl 架构设计
 
+> **当前实现说明（2026-09-07）**：本文主体记录迁移期设计与历史目录映射；当前可执行项目根为 `pcdmis_toolbox/`，版本为 v1.0.12。实际依赖文件位于 `pcdmis_toolbox/requirements/`，打包规格为 `pcdmis_toolbox/pcdmis_toolbox.spec`，管理员启动器为 `pcdmis_toolbox/run_as_admin.bat`。
+
 > **目标**：新建一个功能壳，将 `CMMFiller` 和 `pc to excel` 两个项目整合为统一的工具箱，同时保留各模块独立运行能力。
 >
 > **支持范围**：
@@ -2600,4 +2602,3 @@ cat pcdmis_toolbox/README.md  # 内容齐全，链接到 docs/
    - CMMFiller `__version__ = '1.0.0'`
    - pc to excel `APP_VERSION = '1.4.5'`
    - 整合后应用版本 `APP_VERSION = '1.0.2'`（`toolbox/app_meta.py`）；配置 schema `CONFIG_SCHEMA_VERSION = '2.0.0'`（独立）
-

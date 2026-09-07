@@ -36,7 +36,7 @@ SetupIconFile=..\cm2xl.ico
 LicenseFile=
 
 [Languages]
-; Inno Setup 6 默认不带 ChineseSimplified.isl（需额外语言包），用 english 保证能编译。
+; Inno Setup 7 默认不带 ChineseSimplified.isl（需额外语言包），用 english 保证能编译。
 ; 下方 Tasks / MsgBox 文案仍为中文。
 Name: "english"; MessagesFile: "compiler:Default.isl"
 

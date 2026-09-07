@@ -2,7 +2,7 @@
 
 > 整合 `CMMFiller`（CMM 报告 OCR 识别 + Excel 自动填充）和 `pc_to_excel`（PCDMIS 数据提取 + 公差判定 + 报告导出）两个独立工具的**统一工具箱**，同时保留各模块独立运行能力。
 
-![Architecture](preview/index.html)（启动本地 HTTP 服务 `python -m http.server 8765` 在 `preview/` 目录查看 UI 修复对比预览）
+[UI 修复对比预览](preview/index.html)（启动本地 HTTP 服务 `python -m http.server 8765`，在 `preview/` 目录查看）
 
 ---
 
@@ -34,7 +34,7 @@ cd pcdmis_toolbox
 build.bat
 # 产物：dist/cm2xl/cm2xl.exe
 
-# Step 2: 生成安装包（需先安装 Inno Setup 6）
+# Step 2: 生成安装包（需先安装 Inno Setup 7）
 build_installer.bat
 # 产物：installer/output/cm2xl_Setup_1.0.12.exe
 ```
@@ -51,7 +51,7 @@ build_installer.bat
 pcdmis_toolbox/
 ├── main.py                       # Toolbox 统一入口
 ├── pcdmis_toolbox.spec           # PyInstaller 打包规格
-├── build.bat / build_installer.bat
+├── build.bat / build_installer.bat / run_as_admin.bat
 ├── installer/cm2xl.iss           # Inno Setup 安装脚本
 ├── preview/index.html            # UI 修复对比预览（开发辅助）
 ├── scripts/export_current.bas*   # PCDMIS BAS 脚本模板
@@ -183,6 +183,9 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 3. **环境变量**：`PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` 由 `modules/cmm_filler/ocr/engine.py` 局部设置（`setdefault`），无需在 main.py 顶部设置
 4. **multiprocessing.freeze_support()**：必须在所有 import 之前
 5. **PyInstaller 后处理**：`build/fix_dist.py` 复制完整 paddleocr + patch 4 个文件
+
+管理员启动：若 PC-DMIS 以管理员身份运行，请使用打包目录中的 `run_as_admin.bat` 启动
+cm2xl；`build.bat` 会自动将该启动器复制到 `dist/cm2xl/`。
 
 ---
 

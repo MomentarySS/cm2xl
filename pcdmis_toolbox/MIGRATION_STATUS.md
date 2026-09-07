@@ -1,6 +1,6 @@
 # cm2xl — 迁移进度跟踪
 
-> **状态**: v1.0.2 已发布。Phase 0–8 全部完成。本文为迁移过程归档保留。
+> **状态**: v1.0.12 已发布。Phase 0–8 全部完成。本文为迁移过程归档保留。
 > 重点保留 **ARCHITECTURE 偏差记录**与 **关键 Bug 修复时间线**，供后续维护排错参考。
 >
 > 历史对应章节、提交 hash、详细偏差：见 git log 与 `ARCHITECTURE.md`。
@@ -21,7 +21,7 @@
 | **6** | 打包整合 | ✅ | `f108ba1` | `pcdmis_toolbox.spec`、`build/fix_dist.py`、`build/hooks/`、`installer/cm2xl.iss`、`build.bat` |
 | **7** | 保留独立入口 | ✅ | `c963bda` | 旧入口重定向脚本、`README.md`、`CLAUDE.md` |
 | **7.5** | 设置与关于对话框 | ✅ | `567ca07`, `5e5450c` | `toolbox/{settings_dialog,about_dialog}.py`、运行时外观/日志切换 |
-| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | `tests/phase8_smoke.py`（30）＋ `modules/pc_to_excel/tests/`（100），**130 passed, 0 failed** |
+| **8** | 测试 | ✅ | `db00d57`, `e0ec729` | 历史验收记录：Phase 8 共 **194 passed, 0 failed**（GUI/OCR/PCDMIS 仍需真机验证） |
 
 ### 打包产物
 
@@ -100,7 +100,7 @@
 
 ---
 
-*本归档完成于 2026-08-27。后续如新增 Phase 9+，建议在本文档追加简表即可，详细过程直接写在 commit message 里。*
+*本归档完成于 2026-08-27，后续版本状态已更新至 v1.0.12。后续如新增 Phase 9+，建议在本文档追加简表即可，详细过程直接写在 commit message 里。*
 
 ---
 
