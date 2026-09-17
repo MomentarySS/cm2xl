@@ -207,4 +207,4 @@ python -c "from utils.theme import _build_theme_json; _build_theme_json()"
 | 7.5 | ✅ 完成（设置 + 关于对话框，外观/OCR模型/日志级别） |
 | 8 | ✅ 完成（130 tests passed；GUI/OCR/PCDMIS 需人工真机验证） |
 
-详细参见 `MIGRATION_STATUS.md`。
+详细参见 `docs/MIGRATION_ARCHIVE.md`。

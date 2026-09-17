@@ -3,7 +3,7 @@
 > **状态**: v1.0.12 已发布。Phase 0–8 全部完成。本文为迁移过程归档保留。
 > 重点保留 **ARCHITECTURE 偏差记录**与 **关键 Bug 修复时间线**，供后续维护排错参考。
 >
-> 历史对应章节、提交 hash、详细偏差：见 git log 与 `ARCHITECTURE.md`。
+> 历史对应章节、提交 hash、详细偏差：见 git log 与 `docs/ARCHITECTURE.md`。
 
 ---
 
@@ -95,7 +95,7 @@
 - **项目结构与开发约定**：`pcdmis_toolbox/CLAUDE.md`
 - **快速开始与打包**：`pcdmis_toolbox/README.md`
 - **变更日志**：`pcdmis_toolbox/CHANGELOG.md`
-- **架构设计**：`ARCHITECTURE.md`（97 KB，项目主体设计文档）
+- **架构设计**：`docs/ARCHITECTURE.md`（97 KB，项目主体设计文档）
 - **代码考古**：本文件 + git log
 
 ---

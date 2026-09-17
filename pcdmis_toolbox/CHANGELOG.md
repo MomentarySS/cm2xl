@@ -21,7 +21,7 @@
 
 ### 文档
 
-- 用户手册、`toolbox/docs/pc_to_excel.md`、`ARCHITECTURE.md` 补充 COM 串行化与二次导出说明
+- 用户手册、`toolbox/docs/pc_to_excel.md`、`docs/ARCHITECTURE.md` 补充 COM 串行化与二次导出说明
 
 ---
 
@@ -78,7 +78,7 @@
 
 ### 文档 / 规划
 
-- **多轴拆行（待开发）**：`PDF_ENHANCEMENT_PLAN.md` Phase 6，记录圆柱 X/Y/D 分行填入的需求；当前默认仍每序号取一轴（D）
+- **多轴拆行（待开发）**：`docs/PDF_ENHANCEMENT_PLAN.md` Phase 6，记录圆柱 X/Y/D 分行填入的需求；当前默认仍每序号取一轴（D）
 - `toolbox/docs/cmm_filler.md`、`pc_to_excel.md` 补充多轴默认取 D 的说明
 
 ---
@@ -129,7 +129,7 @@
 
 ### 文档
 
-- `PDF_ENHANCEMENT_PLAN.md`：Phase 1–5 全部标记完成，补充子编号冲突与 overflow 边界说明
+- `docs/PDF_ENHANCEMENT_PLAN.md`：Phase 1–5 全部标记完成，补充子编号冲突与 overflow 边界说明
 
 ---
 
@@ -201,7 +201,7 @@
 - `main.py` / `cmm_filler/main.py`：移除全局 `PROTOCOL_BUFFERS`（由 `ocr/engine.py` 局部 `setdefault`）
 - `pcdmis_toolbox.spec`：OCR 模型优先 `modules/cmm_filler/models/paddleocr/`
 - `tests/phase8_smoke.py`：修正 `ROOT` 路径与 `test_defaults` 隔离
-- `ARCHITECTURE.md`：补「离线部署约束」章节（修复 README 死链）；安装脚本名/版本/路径与代码对齐
+- `docs/ARCHITECTURE.md`：补「离线部署约束」章节（修复 README 死链）；安装脚本名/版本/路径与代码对齐
 - `build.bat`：OCR 模型优先模块内路径；清理只删 `build\pcdmis_toolbox`（避免误删 `hooks/` 与 `fix_dist.py`）；`fix_dist.py` 调用路径修正
 - `build_installer.bat`：补充 `%LOCALAPPDATA%\Programs\Inno Setup 6` 探测
 - `installer/cm2xl.iss`：去掉未随 Inno Setup 6 分发的 `ChineseSimplified.isl`（避免编译失败；向导按钮为英文，自定义文案仍为中文）；旧版检测改为 CMMFiller GUID `...7890`（带 `_is1`），不再与自身 AppId 相同导致重装误报
@@ -250,10 +250,10 @@
 - `core/filler.py` **Cleanup**: 移除未使用的 `from abc import ABC, abstractmethod` 导入
 
 **文档更新**
-- `ARCHITECTURE.md`: PROTOCOL_BUFFERS 描述更新为 engine 局部 setdefault；Tkdnd 初始化逻辑更新；wizard.py 路径修正
+- `docs/ARCHITECTURE.md`: PROTOCOL_BUFFERS 描述更新为 engine 局部 setdefault；Tkdnd 初始化逻辑更新；wizard.py 路径修正
 - `CLAUDE.md`: PROTOCOL_BUFFERS 注释同步更新；TkinterDnD 描述更新
 - `README.md`: PROTOCOL_BUFFERS 不再列为 main.py 必要配置
-- `MIGRATION_STATUS.md`: PROTOCOL_BUFFERS 清单项更新
+- `docs/MIGRATION_ARCHIVE.md`: PROTOCOL_BUFFERS 清单项更新
 
 ### pc_to_excel 模块
 

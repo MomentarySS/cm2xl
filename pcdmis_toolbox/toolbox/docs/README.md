@@ -1,6 +1,6 @@
 # cm2xl 用户文档
 
-本目录为测量房离线部署后的**用户向说明**（非开发文档）。开发约定见仓库根目录 `ARCHITECTURE.md` 与 `pcdmis_toolbox/CLAUDE.md`。
+本目录为测量房离线部署后的**用户向说明**（非开发文档）。开发约定见 `docs/ARCHITECTURE.md` 与 `CLAUDE.md`。
 
 ## 文档索引
 

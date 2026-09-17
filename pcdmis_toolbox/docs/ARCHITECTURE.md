@@ -576,7 +576,7 @@ _MIGRATIONS: dict[str, dict[str, Migration]] = {
 
 3. **迁移主流程**
 
-> **实现偏差（2026-08-26）**：实际实现不再用 `_next_version` 末段+1 链式步进（缺中间版本会抛 RuntimeError），改为「每个 from_version 的迁移函数一次性升到当前 schema 版本」；无 `_version` 字段的旧文件按模块默认旧版本（cmm_filler 1.0.0 / pc_to_excel 1.4.5）走迁移。详情见 MIGRATION_STATUS.md。
+> **实现偏差（2026-08-26）**：实际实现不再用 `_next_version` 末段+1 链式步进（缺中间版本会抛 RuntimeError），改为「每个 from_version 的迁移函数一次性升到当前 schema 版本」；无 `_version` 字段的旧文件按模块默认旧版本（cmm_filler 1.0.0 / pc_to_excel 1.4.5）走迁移。详情见 MIGRATION_ARCHIVE.md。
 
 ```python
 def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
@@ -1649,7 +1649,7 @@ if str(_ROOT) not in sys.path:
 
 **集成后约束**：批量改导入为相对路径：
 
-> **实现偏差（2026-08-26）**：指向 toolbox 共享层的导入统一用 0 连点（`from utils.paths import paths`，要求 pcdmis_toolbox 在 sys.path 上，与 `main.py`/`cmm_filler` 一致），未采用 4 连点（`....utils.*`）——两者在任意单一运行方式下互斥。详情见 MIGRATION_STATUS.md。
+> **实现偏差（2026-08-26）**：指向 toolbox 共享层的导入统一用 0 连点（`from utils.paths import paths`，要求 pcdmis_toolbox 在 sys.path 上，与 `main.py`/`cmm_filler` 一致），未采用 4 连点（`....utils.*`）——两者在任意单一运行方式下互斥。详情见 MIGRATION_ARCHIVE.md。
 
 ```python
 # modules/pc_to_excel/connector/pcdmis_connector.py（迁移后）
@@ -1948,7 +1948,7 @@ sys.excepthook = global_exception_handler
 
 ## 六、模块适配层示例
 
-> **实现偏差（2026-08-26）**：`modules/pc_to_excel/gui.py`（适配层）与 `gui/` 子包同名冲突，Python 优先解析包导致适配层成死代码、模块永不注册。实际实现：适配层改名为 `modules/pc_to_excel/module.py`，`modules/__init__.py` 发现逻辑支持 `gui.py`/`module.py` 双入口。详情见 MIGRATION_STATUS.md。
+> **实现偏差（2026-08-26）**：`modules/pc_to_excel/gui.py`（适配层）与 `gui/` 子包同名冲突，Python 优先解析包导致适配层成死代码、模块永不注册。实际实现：适配层改名为 `modules/pc_to_excel/module.py`，`modules/__init__.py` 发现逻辑支持 `gui.py`/`module.py` 双入口。详情见 MIGRATION_ARCHIVE.md。
 
 ```python
 # modules/cmm_filler/gui.py
@@ -2147,7 +2147,7 @@ a = Analysis(
 D:\AI\work\a1\
 ├── CMMFiller/                    ← 旧项目，迁移源 1
 ├── pc to excel/                  ← 旧项目，迁移源 2
-├── ARCHITECTURE.md               ← 当前文档（保留不动）
+├── docs/ARCHITECTURE.md               ← 当前文档
 └── pcdmis_toolbox/               ← 新建，整合后项目根
     ├── main.py
     ├── pyproject.toml

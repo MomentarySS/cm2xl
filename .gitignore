@@ -45,6 +45,9 @@ pcdmis_toolbox/installer/output/
 # ZCode workspace
 .zcode/
 
+# Cursor configuration
+.cursor/
+
 # Mimosa session/state files (Claude Code plugin state, not project source)
 .mimosa/
 

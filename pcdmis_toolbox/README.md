@@ -175,7 +175,7 @@ python -m modules.pc_to_excel   # 仅 PCDMIS 导出
 
 ## 离线部署约束（测量房无网）
 
-参见 [ARCHITECTURE.md 离线部署约束](../ARCHITECTURE.md#离线部署约束)。
+参见 [ARCHITECTURE.md 离线部署约束](docs/ARCHITECTURE.md#离线部署约束)。
 
 关键点：
 1. **打包后体积 600-700 MB**：PaddlePaddle ~200MB + cv2/lmdb/lxml ~150MB + PaddleOCR 模型 18MB
@@ -233,7 +233,7 @@ cm2xl；`build.bat` 会自动将该启动器复制到 `dist/cm2xl/`。
 | 7.5 | 设置与关于对话框（外观/OCR模型/日志级别） | ✅ |
 | 8 | 测试（见 CHANGELOG 各版本 passed 数；GUI/OCR/PCDMIS 待人工真机验证） | ✅ |
 
-详细进度参见 [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md)。
+详细进度参见 [`MIGRATION_ARCHIVE.md`](docs/MIGRATION_ARCHIVE.md)。
 
 ---
 
