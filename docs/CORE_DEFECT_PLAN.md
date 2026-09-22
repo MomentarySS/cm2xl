@@ -27,7 +27,7 @@
 | P1-1 | 模板数据区上限截断（序号 >50 静默丢弃） | `cmm_filler/core/filler.py:858-882` | 静默丢数据 | ✅ | ✅ **已完成**（真机待验） |
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成**（真机待验） |
 | P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ✅ **已完成**（真机待验） |
-| P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ⬜ 未开始 |
+| P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
 | P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ✅ **已完成**（真机待验） |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-3 | 「最差 NG 子项」只比一个样品 | `cmm_filler/core/sub_item_conflict.py:17-21` | 判定错 | ✅ | ⬜ 未开始 |
@@ -265,6 +265,52 @@ reader 是 `OpenTextFile(CONFIG_PATH, 1, False, -1)`（`scripts/export_current.b
 
 **验证** — 单测断言文件以 BOM 开头、用 utf-16 能读回两行。
 真机：PC-DMIS 内跑一次 `PC2XL_EXPORT` —— **这条没有单测替代**。
+
+**实施记录（2026-09-22）**
+
+| 文件 | 改动 |
+|------|------|
+| `inject/command_injector.py:82` | `atomic_write_text(config_path, ..., encoding="utf-16")`，并就地写明「为何必须带 BOM、为何不改 BAS 第 4 参」 |
+| `modules/pc_to_excel/tests/test_command_injector.py` | +1 条 BOM/解码契约用例；**修正**原有 `test_deploy_bas_script_creates_export_config` 的读法 |
+
+**根因在本机的复核（改动前）**
+
+| 指标 | 实测 |
+|------|------|
+| 已部署 `export_config.txt` 字节数 | **74** |
+| 前 4 字节 | `44 3A 5C 41` = ASCII 的 `D:\A`（单字节编码） |
+| 是否 UTF-16 BOM | **否** |
+| 按 utf-8 读 | `D:\AI\work\a1\pcdmis_toolbox\data\reports\pcdmis_partial_export.csv` / `YES` |
+| 写入方数量（全仓 grep） | **1**（`command_injector.py`），无旁路 |
+
+**两个实施细节**
+
+1. **必须顺手修正原有那条测试的读法。** `test_deploy_bas_script_creates_export_config`
+   原先按 `encoding="utf-8"` 读回 —— 那正是缺陷本身（写 UTF-8、读 UTF-16）。
+   它过去「通过」恰恰是这个 bug 一直没被发现的原因。新用例内留了一条反向守卫，
+   断言「干净两行 + 第二行 YES」这个契约在旧写法下**不成立**（本机实测那份连行都断不开，
+   只解出 1 行 —— 这正是 `readExportConfig` 把乱码路径当有效值返回 True 的机制）。
+   反向守卫只断言契约不成立，不锁死具体失效形态（它取决于字节内容）。
+2. **不动 BAS 第 4 参**（边界 2 已定），也不加自检提示（边界 3 已定，改为在发布前的
+   CHANGELOG 条目里说明，已登记进「真机验证清单」末条）。
+
+**验证（含「守卫是否有牙」的证明）**
+
+- **证明有效**：`git stash push -- inject/command_injector.py` 退回修复前实现，
+  跑同一组测试 → **2 failed**：
+  - `test_export_config_is_utf16_with_bom`：`assert b'C:' == b'\xff\xfe'` —— 旧文件开头是路径本身；
+  - `test_deploy_bas_script_creates_export_config`：按 utf-16 读不回两行。
+  两条失败都直接指向「写侧编码错」这一个根因，没有夹带无关失败。
+- 全量 `278 passed`（277 + 1），行尾保持 CRLF。
+
+**真机验证的两个前置事实（避免白跑一趟）**
+
+1. 编码修复**不会自动生效**：已部署的机器必须重新点一次「部署 BAS 脚本」。
+2. 本机已部署配置的第 1 行指向**旧项目路径**
+   `D:\AI\work\a1\pcdmis_toolbox\data\reports\...`。重新部署会把它改成
+   `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv`
+   （`paths.pc_excel_reports` = `data_dir/reports`，dev 下 `data_dir` = 仓库根 `data/`）。
+   也就是说：**重新部署同时会换掉 CSV 的落盘位置** —— 这是期望行为，但核对时要按新路径找文件。
 
 ---
 
@@ -815,7 +861,11 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P1-1：一份 >50 项的 PDF 导出，核对序号 51+
 - [ ] P1-2：启动两次，确认只弹一次迁移提示且 3 个字段仍在
 - [ ] P1-3：汇总导出选两个不同目录的同名 PDF，核对第二个 Sheet
-- [ ] P1-4：PC-DMIS 内执行 `PC2XL_EXPORT`，确认 `pcdmis_partial_export.csv` 生成
+- [ ] P1-4：**先重新点一次「部署 BAS 脚本」**（编码修复不会自动生效），
+      再在 PC-DMIS 内执行 `PC2XL_EXPORT`，确认 `pcdmis_partial_export.csv` 生成。
+      注意重新部署会把配置第 1 行从旧项目路径
+      `D:\AI\work\a1\pcdmis_toolbox\data\reports\...` 改成
+      `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv`，按新路径找文件
 - [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差。
       **2026-09-22 实测：`马丁测试-2026-08-28-B版.PRG` 全程序 42 条记录里
       `minus_tol is None` = 0 条、COM 抛异常 0 处 ⇒ 这份程序复现不了，需另找/另造。**
@@ -825,9 +875,12 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
       （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 277 passed）
+- [ ] 全量回归：`python -m pytest -q`（当前 278 passed）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
+- [ ] **发布前写 CHANGELOG**：`export_config.txt` 写入编码改为 UTF-16 →
+      **已部署过的机器必须重新点一次「部署 BAS 脚本」**，否则 `PC2XL_EXPORT` 仍会弹
+      「写入文件失败」。见 P1-4 边界 3
 
 ---
 
@@ -850,3 +903,4 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **P2-1 续 + 真机诊断落地**：补「COM **抛异常**」路径（新增 `_safe_com_float()`）；新增 `dump-tols` 只读诊断子命令（三态 `ok`/`COM_FAILED`/`RAISED`，汇总「下公差不可用」的行）。+12 条测试，全量 `277 passed`。两条「有牙」证明：回退到 HEAD → 6 failed（全是抛异常用例）；回退到 `6f77f72`（P2-1 前）→ 16 failed（三种失效路径全覆盖）。**`SegmentAxis(j)` 遗留观察结案**（2024.1 上单参合法）。本文件基线 265 → 277 |
 | 2026-09-22 | **真机实测（PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`，242 命令）**：P2-1 条件**复现不了**（42 条记录 `minus_tol is None` = 0、抛异常 0）⇒ 真机清单该条需换程序。`CC_1`–`CC_4` 是被改动直接覆盖的区段区分支、下公差为真值 `0.0`，实测仍判**合格**（健康路径未被改坏）。`CC_15`/`CC_16` 成为 **P2-2 现成样本**，并暴露两个新边界：标量 plus/minus 与 `deviation.d` **不同源**、`outtol` 同样「首个写入者优先」导致超差短路失效（详见 P2-2「现场实测补充」） |
 | 2026-09-22 | 顺带确认实现前提：本机 `cmds.Item(i)` 对每个索引都抛 **TypeError**，必须靠 `_get_command_at()` 的回退链取命令（诊断子命令复用之，未另写一套） |
+| 2026-09-22 | **P1-4 实施完成**：`export_config.txt` 改按 UTF-16（带 BOM）写，对齐 BAS 读侧 `OpenTextFile(..., -1)`。本机复核根因：已部署文件 74 字节、前 4 字节 `44 3A 5C 41`、无 BOM；全仓仅一个写入方。+1 条测试，并**修正**原有那条按 utf-8 读回的测试（它过去通过正是 bug 被漏过的原因）。已用 `git stash` 证明「修复前 2 failed」（`assert b'C:' == b'\xff\xfe'`）。全量 `278 passed`。登记两条真机前置事实：编码修复不自动生效（需重新部署）；重新部署会同时把 CSV 落盘位置从旧项目路径换成 `cm2xl\data\reports`。本文件基线 277 → 278 |
