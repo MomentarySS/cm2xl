@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -12,7 +13,7 @@ import customtkinter as ctk
 logger = logging.getLogger("pc_to_excel")
 
 from ..app_meta import APP_TITLE, APP_VERSION
-from ..connector.com_detector import check_elevation_match, is_pcdmis_elevated, is_pcdmis_running
+from ..connector.com_detector import check_elevation_match, get_pcdmis_pid, is_pcdmis_running
 from ..connector.pcdmis_connector import PcdmisConnector
 from ..core.models import ToleranceConfig
 from ..core.tolerance import apply_tolerance
@@ -35,7 +36,7 @@ from ..inject.toolbar_launcher import (
     resolve_toolbar_argv,
 )
 from ..utils.action_hints import format_user_error
-from ..utils.admin import admin_status_text, is_admin
+from ..utils.admin import admin_status_text, is_admin, is_process_elevated
 from ..utils.local_settings import build_export_filename, ensure_default_dirs, load_settings, save_settings
 from utils.threading_utils import CancellableWorker
 from utils.audit import audit
@@ -89,6 +90,11 @@ class MainWindow:
         self._wizard_done = False  # 向导是否已被用户关闭
         self._status_watcher_running = False
         self._status_watcher_after_id = None
+        self._status_watcher_tick_id = None
+        # _perm_text() 的 (monotonic, text) 缓存：状态栏展示字段，2s TTL。
+        # 避免每次切换模块 / watcher tick 都 spawn tasklist（实测单次 ~190ms）。
+        self._perm_text_cache: tuple[float, str] | None = None
+        self._perm_text_ttl = 2.0
 
         # ── 挂载模式支持 ──────────────────────────────────────────────
         # parent=None → 自建根窗口（独立运行，行为不变）
@@ -670,17 +676,36 @@ class MainWindow:
         self.progress.set(0)
 
     def _perm_text(self) -> str:
+        """状态栏权限/运行状态字符串。
+
+        两次优化：
+        1. 只 spawn 一次 tasklist：原实现用 is_pcdmis_running() + 两次
+           is_pcdmis_elevated()，内部各调 get_pcdmis_pid()，同一次查询 spawn
+           3 个 tasklist.exe（实测 ~190ms/次，合计 ~560ms 阻塞主线程）。
+        2. 短 TTL 缓存：本方法被 mount / 连接 / 断开 / watcher tick 反复调用，
+           缓存后 2s 内的重复调用零成本。
+        """
+        now = time.monotonic()
+        if self._perm_text_cache is not None and now - self._perm_text_cache[0] < self._perm_text_ttl:
+            return self._perm_text_cache[1]
+
         tool = admin_status_text()
-        if is_pcdmis_running():
-            pcd = "PCDMIS:管理员" if is_pcdmis_elevated() else "PCDMIS:普通"
-            elevated = is_pcdmis_elevated()
-            match = (
-                "匹配 ✓"
-                if (elevated is not None and elevated == is_admin())
-                else "权限?"
-            )
-            return f"{tool}  ·  {pcd}  ·  {match}"
-        return f"{tool}  ·  PCDMIS 未运行"
+        pid = get_pcdmis_pid()
+        if pid is None:
+            text = f"{tool}  ·  PCDMIS 未运行"
+        else:
+            elevated = is_process_elevated(pid)
+            if elevated is True:
+                pcd = "PCDMIS:管理员"
+            elif elevated is False:
+                pcd = "PCDMIS:普通"
+            else:  # None：查不到 token，保留不确定状态而不是误报"普通"
+                pcd = "PCDMIS:?"
+            match = "匹配 ✓" if (elevated is not None and elevated == is_admin()) else "权限?"
+            text = f"{tool}  ·  {pcd}  ·  {match}"
+
+        self._perm_text_cache = (now, text)
+        return text
 
     def _set_busy(self, busy: bool, msg: str = "") -> None:
         self._busy = busy
@@ -1270,17 +1295,22 @@ class MainWindow:
 
     def _stop_status_watcher(self) -> None:
         self._status_watcher_running = False
-        if self._status_watcher_after_id is not None:
-            try:
-                self.root.after_cancel(self._status_watcher_after_id)
-            except Exception:
-                pass
-            self._status_watcher_after_id = None
+        for attr in ("_status_watcher_after_id", "_status_watcher_tick_id"):
+            after_id = getattr(self, attr, None)
+            if after_id is not None:
+                try:
+                    self.root.after_cancel(after_id)
+                except Exception:
+                    pass
+                setattr(self, attr, None)
 
     def _schedule_status_watch(self) -> None:
         if not self._status_watcher_running:
             return
-        self._status_watcher_tick()
+        # 首次 tick 推一帧：after(0) 意思是"当前 UI 事件处理完后下一轮事件循环"，
+        # 不是延迟 30 秒。让模块切换立即返回，慢探测在界面切过去之后再跑。
+        # 两个 id 分开存，_stop_status_watcher() 才能各自取消。
+        self._status_watcher_tick_id = self.root.after(0, self._status_watcher_tick)
         self._status_watcher_after_id = self.root.after(30_000, self._schedule_status_watch)
 
     def _status_watcher_tick(self) -> None:
