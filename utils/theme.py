@@ -7,40 +7,43 @@ import json
 from pathlib import Path
 
 TOOLBOX_THEME = {
-    # 基础色
+    # ── 基础色 ──
     "accent": "#0F766E",
-    "accent_hover": "#14B8A6",
-    "primary": "#115E59",
-    "primary_hover": "#0F766E",
-    # 状态色
+    "accent_hover": "#0D8A82",
+    "primary": "#0F766E",
+    "primary_hover": "#0D8A82",
+    # 状态色（保留）
     "ok": "#15803D",
     "warn": "#C2410C",
     "bad": "#B91C1C",
-    # 界面色（浅色模式改为中性灰白，避免底部/卡片在浅色下发黄发脏）
-    "muted": "#5B6775",
+    # ── 界面色（净化版，对齐 MiniMax Code 视觉） ──
+    # 浅色：灰白底 + 白卡片，靠色阶分层而非边框
+    "muted": "#666666",
     "card_bg": "#FFFFFF",
-    "card_border": "#D6DCE5",
-    "page_bg": "#F4F6F8",
+    "sidebar_bg": "#FAFAFA",          # 侧边栏：比页面亮一点，比卡片弱一点
+    "card_border": "#E8E8E8",         # 极淡边框，仅在必要时使用
+    "page_bg": "#F5F5F5",             # 接近 MiniMax Code 的中性灰底
     "entry_bg": "#FFFFFF",
-    "entry_border": "#AEB8C5",
-    "hint_bg": "#E6F5F2",
-    # 文字
-    "text": "#1A2332",
-    "text_muted": "#4B5563",
-    # 深色模式语义色（与 theme.json dark 侧、壳层 UI 配对）
-    "text_dark": "#E8E6E1",
-    "text_muted_dark": "#9CA3AF",
-    "card_bg_dark": "#252B3A",
-    "page_bg_dark": "#1A1F2B",
-    "card_border_dark": "#374151",
-    "accent_pressed_dark": "#0D9488",
-    "disabled_dark": "#64748B",
+    "entry_border": "#E0E0E0",
+    "hint_bg": "#F0F0F0",
+    # ── 文字 ──
+    "text": "#1A1A1A",
+    "text_muted": "#666666",
+    # ── 深色模式语义色（接近 MiniMax Code 深色侧调） ──
+    "text_dark": "#E8E8E8",
+    "text_muted_dark": "#999999",
+    "card_bg_dark": "#2A2A2A",
+    "sidebar_bg_dark": "#262626",
+    "page_bg_dark": "#1F1F1F",
+    "card_border_dark": "#3A3A3A",
+    "accent_pressed_dark": "#0D8A82",
+    "disabled_dark": "#777777",
     "splash_card": "#FFFFFF",
-    "splash_card_dark": "#1C2330",
-    "splash_progress_track_dark": "#2A3545",
-    "splash_sep_dark": "#28303F",
+    "splash_card_dark": "#252525",
+    "splash_progress_track_dark": "#333333",
+    "splash_sep_dark": "#333333",
     "on_accent": "#FFFFFF",
-    "on_accent_dark": "#F1F5F9",
+    "on_accent_dark": "#F5F5F5",
 }
 
 TOOLBOX_THEME_JSON_PATH = Path(__file__).parent / "theme.json"
@@ -81,14 +84,14 @@ def _build_theme_json(dest: Path | None = None) -> None:
         "CTk": {"fg_color": [page_bg_l, page_bg_d]},
         "CTkToplevel": {"fg_color": [card_bg_l, card_bg_d]},
         "CTkFrame": {
-            "corner_radius": 5,
+            "corner_radius": 10,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [card_bg_l, card_bg_d],
             "top_fg_color": [page_bg_l, page_bg_d],
         },
         "CTkButton": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "border_width": 0,
             "border_color": [accent, accent_h],
             "fg_color": [accent, accent],
@@ -107,7 +110,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color": [text_l, text_d],
         },
         "CTkEntry": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "border_width": 1,
             "border_color": [entry_bd_l, card_bd_d],
             "fg_color": [entry_bg_l, page_bg_d],
@@ -115,7 +118,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "placeholder_text_color": [muted, muted_d],
         },
         "CTkOptionMenu": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "fg_color": [accent, accent],
             "button_color": [primary, primary],
             "button_hover_color": [accent_h, accent_pressed_d],
@@ -123,14 +126,14 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkProgressBar": {
-            "corner_radius": 4,
+            "corner_radius": 6,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [page_bg_l, page_bg_d],
             "progress_color": [accent, accent],
         },
         "CTkSwitch": {
-            "corner_radius": 12,
+            "corner_radius": 14,
             "border_width": 0,
             "button_length": 0,
             "fg_color": [TOOLBOX_THEME["muted"], "#475569"],
@@ -141,8 +144,8 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkSlider": {
-            "corner_radius": 6,
-            "button_corner_radius": 6,
+            "corner_radius": 8,
+            "button_corner_radius": 8,
             "border_width": 0,
             "button_length": 0,
             "fg_color": [page_bg_l, page_bg_d],
@@ -151,7 +154,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "button_hover_color": [accent_h, accent_pressed_d],
         },
         "CTkComboBox": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "border_width": 1,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [page_bg_l, page_bg_d],
@@ -163,7 +166,6 @@ def _build_theme_json(dest: Path | None = None) -> None:
         "CTkCheckBox": {
             "corner_radius": 4,
             "border_width": 1,
-            # fg_color = 勾选后方框填充色（须与白色勾形成对比，不能用浅底）
             "border_color": [checkbox_bd_l, card_bd_d],
             "fg_color": [accent, accent],
             "hover_color": [accent_h, accent_pressed_d],
@@ -172,9 +174,9 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkRadioButton": {
-            "corner_radius": 6,
-            "border_width_checked": 3,
-            "border_width_unchecked": 3,
+            "corner_radius": 8,
+            "border_width_checked": 4,
+            "border_width_unchecked": 4,
             "fg_color": [page_bg_l, page_bg_d],
             "border_color": [accent, accent],
             "hover_color": [accent_h, accent_pressed_d],
@@ -182,7 +184,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkSegmentedButton": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "border_width": 0,
             "fg_color": [page_bg_l, page_bg_d],
             "selected_color": [accent, accent],
@@ -193,7 +195,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkTextbox": {
-            "corner_radius": 5,
+            "corner_radius": 8,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [card_bg_l, card_bg_d],
@@ -205,7 +207,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "label_fg_color": [accent, accent],
         },
         "CTkScrollbar": {
-            "corner_radius": 6,
+            "corner_radius": 8,
             "border_spacing": 6,
             "fg_color": [page_bg_l, page_bg_d],
             "button_color": [card_bd, card_bd_d],
@@ -218,7 +220,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
         },
         "CTkFont": {
             "macOS": {"family": "SF Pro", "size": 13, "weight": "normal"},
-            "Windows": {"family": "Segoe UI", "size": 13, "weight": "normal"},
+            "Windows": {"family": "Segoe UI Variable", "size": 13, "weight": "normal"},
             "Linux": {"family": "Ubuntu", "size": 13, "weight": "normal"},
         },
     }

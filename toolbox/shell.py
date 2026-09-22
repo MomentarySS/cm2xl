@@ -12,12 +12,15 @@ import customtkinter as ctk
 
 from toolbox.app_meta import APP_TITLE, APP_VERSION
 from toolbox.ui_components import (
+    accent_color,
     accent_hover_color,
     card_bg_color,
     muted_color,
+    nav_hover_color,
     on_accent_color,
     page_bg_color,
     primary_button_kwargs,
+    sidebar_bg_color,
     text_color,
 )
 from utils.app_icon import apply_window_icon, get_logo_image
@@ -32,20 +35,25 @@ class Shell:
     """
     主窗口 Shell。
 
-    布局：
+    布局（展开态）：
     ┌──────────────────────────────────────────────────────────┐
-    │  cm2xl              [关于] [设置] [_][□][X]  │
-    ├──────────┬─────────────────────────────────────────────┤
-    │          │                                              │
-    │  📊 CMM报告填充 │        模块内容区                      │
-    │  📐 PCDMIS导出 │        (挂载当前模块的 GUI)             │
-    │          │                                              │
-    ├──────────┴─────────────────────────────────────────────┤
-    │  状态栏: PCDMIS连接 | 当前模块 | 操作提示                │
+    │  cm2xl                                       │
+    ├────┬─────────────────────────────────────────────────────┤
+    │ ☰  │                                                      │
+    │    │        模块内容区                                      │
+    │ CMM报告填充                                                  │
+    │ PCDMIS导出   │                                              │
+    │    │                                                      │
+    │ 设置 │                                              │
+    │ 关于 │                                              │
+    ├────┴─────────────────────────────────────────────────────┤
+    │  状态栏                                                     │
     └──────────────────────────────────────────────────────────┘
+    折叠态（NAV_WIDTH=56）：侧边栏只显示图标 + 底部两个图标按钮
     """
 
-    NAV_WIDTH = 156
+    NAV_WIDTH_EXPANDED = 156
+    NAV_WIDTH_COLLAPSED = 56
 
     def __init__(
         self,
@@ -64,9 +72,13 @@ class Shell:
         self._start_module = start_module
         self._auto_export = auto_export
         self._ipc_after_id = None
+        self._nav_collapsed: bool = False
+        # module name -> (title, icon) — 在 _load_modules 时填充，供折叠态切换文字用
+        self._nav_meta: dict[str, tuple[str, str]] = {}
 
-        self._apply_toolbox_settings()    # 启动时应用外观/日志设置
+        self._apply_toolbox_settings()    # 启动时应用外观/日志/折叠状态
         self._build_layout()
+        self._apply_nav_collapsed()       # 把 nav_collapsed 应用到侧边栏
         self._load_modules()
         self._select_startup_module()
         self._start_ipc_poll()
@@ -76,7 +88,7 @@ class Shell:
         logger.info("Shell 初始化完成")
 
     def _apply_toolbox_settings(self) -> None:
-        """启动时应用 toolbox 全局设置：外观模式 + 日志级别（OCR 模型目录懒加载）。"""
+        """启动时应用 toolbox 全局设置：外观模式 + 日志级别 + 侧边栏折叠状态。"""
         try:
             from utils.settings import load_toolbox_settings
             settings = load_toolbox_settings()
@@ -89,6 +101,8 @@ class Shell:
             from utils.logging import set_log_level
             for name in ("CMMFiller", "pc_to_excel", "toolbox"):
                 set_log_level(name, log_level)
+            # 侧边栏折叠状态
+            self._nav_collapsed = bool(settings.get("nav_collapsed", False))
         except Exception as e:
             logger.warning(f"应用 toolbox 设置失败（用默认）: {e}")
 
@@ -128,15 +142,15 @@ class Shell:
     def _build_layout(self):
         root = self.root
 
-        # 顶栏 — 改用中性 surface 色（白/暗石板），把青绿留给 accent
-        self._header = ctk.CTkFrame(root, height=40, corner_radius=0)
+        # 顶栏 — 极简：只放品牌名（关于/设置移到侧边栏底部）
+        self._header = ctk.CTkFrame(root, height=44, corner_radius=0, fg_color=card_bg_color())
         self._header.pack(fill="x", side="top")
-        self._header.configure(fg_color=card_bg_color())
+        self._header.pack_propagate(False)
 
         title_frame = ctk.CTkFrame(self._header, fg_color="transparent")
-        title_frame.pack(side="left", padx=12, pady=0)
+        title_frame.pack(side="left", padx=16, pady=0)
 
-        self._header_logo = get_logo_image(22)
+        self._header_logo = get_logo_image(20)
         if self._header_logo is not None:
             ctk.CTkLabel(
                 title_frame, text="", image=self._header_logo, fg_color="transparent",
@@ -144,72 +158,113 @@ class Shell:
 
         ctk.CTkLabel(
             title_frame,
-            text=f"{APP_TITLE} {APP_VERSION}",
-            font=("Microsoft YaHei", 13, "bold"),
+            text=APP_TITLE,
+            font=("Segoe UI Variable Display", 16, "bold"),
             text_color=text_color(),
         ).pack(side="left", pady=0)
 
-        # 顶栏右侧：关于 + 设置（清理日志 / OCR 缓存见设置面板）
-        ctk.CTkButton(
-            self._header, text="关于", width=58, height=24,
-            font=("Microsoft YaHei", 11),
-            **{**primary_button_kwargs(), "command": self._show_about},
-        ).pack(side="right", padx=(4, 6), pady=8)
-
-        ctk.CTkButton(
-            self._header, text="设置", width=58, height=24,
-            font=("Microsoft YaHei", 11),
-            **{**primary_button_kwargs(), "command": self._show_settings},
-        ).pack(side="right", padx=(4, 10), pady=8)
-
         # 主区域：左侧导航 + 内容
-        self._body = ctk.CTkFrame(root, corner_radius=0, fg_color="transparent")
+        self._body = ctk.CTkFrame(root, corner_radius=0, fg_color=page_bg_color())
         self._body.pack(fill="both", expand=True, side="top")
 
-        # 左侧导航
-        self._nav = ctk.CTkFrame(self._body, width=self.NAV_WIDTH, corner_radius=0)
+        # 左侧导航 — 用 sidebar_bg，与内容区通过色阶分层
+        self._nav = ctk.CTkFrame(self._body, width=self.NAV_WIDTH_EXPANDED, corner_radius=0,
+                                 fg_color=sidebar_bg_color())
         self._nav.pack(fill="y", side="left", padx=0, pady=0)
         self._nav.pack_propagate(False)
-        self._nav.configure(fg_color=card_bg_color())
+
+        # ── 侧边栏顶部：折叠/展开 toggle ──
+        self._nav_header = ctk.CTkFrame(self._nav, fg_color="transparent")
+        self._nav_header.pack(fill="x", padx=10, pady=(10, 4))
+        self._toggle_btn = ctk.CTkButton(
+            self._nav_header, text="☰", width=32, height=32,
+            corner_radius=6,
+            font=("Segoe UI Variable Text", 14, "bold"),
+            fg_color="transparent",
+            hover_color=nav_hover_color(),
+            text_color=text_color(),
+            border_width=0,
+            command=self._toggle_nav,
+        )
+        self._toggle_btn.pack(side="left")
+
+        # 导航按钮容器（占满中间空间，把 关于/设置 挤到底部）
+        self._nav_buttons_frame = ctk.CTkFrame(self._nav, fg_color="transparent")
+        self._nav_buttons_frame.pack(fill="both", expand=True, padx=10, pady=4)
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
         self._content_frame = ctk.CTkFrame(self._body, corner_radius=0, fg_color=page_bg_color())
         self._content_frame.pack(fill="both", expand=True, side="left")
 
-        # 状态栏 — 改用 page_bg（柔和灰/深蓝），文字跟随主题
-        self._statusbar = ctk.CTkFrame(root, height=24, corner_radius=0)
+        # 侧边栏底部 — 关于 / 设置（幽灵按钮，hover 浅底色；折叠态变图标）
+        ghost_btn_kwargs = {
+            "fg_color": "transparent",
+            "hover_color": nav_hover_color(),
+            "text_color": text_color(),
+            "border_width": 0,
+            "anchor": "w",
+        }
+        self._nav_footer = ctk.CTkFrame(self._nav, fg_color="transparent")
+        self._nav_footer.pack(fill="x", side="bottom", padx=10, pady=(0, 10))
+
+        self._settings_btn = ctk.CTkButton(
+            self._nav_footer, text="设置", height=32, corner_radius=6,
+            font=("Segoe UI Variable Text", 14),
+            **{**ghost_btn_kwargs, "command": self._show_settings},
+        )
+        self._settings_btn.pack(fill="x", pady=2)
+        self._about_btn = ctk.CTkButton(
+            self._nav_footer, text="关于", height=32, corner_radius=6,
+            font=("Segoe UI Variable Text", 14),
+            **{**ghost_btn_kwargs, "command": self._show_about},
+        )
+        self._about_btn.pack(fill="x", pady=2)
+
+        # 状态栏 — 极简：左 PC-DMIS 状态、右操作消息 + 版本
+        self._statusbar = ctk.CTkFrame(root, height=22, corner_radius=0,
+                                       fg_color=page_bg_color())
         self._statusbar.pack(fill="x", side="bottom")
-        self._statusbar.configure(fg_color=page_bg_color())
+        self._statusbar.pack_propagate(False)
 
         self._pcdmis_label = ctk.CTkLabel(
             self._statusbar,
-            text="PC-DMIS: 未连接",
-            font=("Microsoft YaHei", 10),
+            text="PC-DMIS · 未连接",
+            font=("Segoe UI Variable Text", 12),
             text_color=muted_color(),
         )
-        self._pcdmis_label.pack(side="left", padx=(10, 18))
+        self._pcdmis_label.pack(side="left", padx=14)
 
         self._module_label = ctk.CTkLabel(
             self._statusbar,
             text="",
-            font=("Microsoft YaHei", 10),
-            text_color=text_color(),
-        )
-        self._module_label.pack(side="left", padx=0)
-
-        self._msg_label = ctk.CTkLabel(
-            self._statusbar,
-            text="就绪",
-            font=("Microsoft YaHei", 10),
+            font=("Segoe UI Variable Text", 12),
             text_color=muted_color(),
         )
-        self._msg_label.pack(side="right", padx=10)
+        self._module_label.pack(side="left", padx=12)
+
+        right_cluster = ctk.CTkFrame(self._statusbar, fg_color="transparent")
+        right_cluster.pack(side="right", padx=14)
+
+        self._msg_label = ctk.CTkLabel(
+            right_cluster,
+            text="就绪",
+            font=("Segoe UI Variable Text", 12),
+            text_color=muted_color(),
+        )
+        self._msg_label.pack(side="left", padx=(0, 12))
+
+        ctk.CTkLabel(
+            right_cluster,
+            text=f"v{APP_VERSION}",
+            font=("Segoe UI Variable Text", 12),
+            text_color=muted_color(),
+        ).pack(side="left")
 
         # 内容区占位提示
         self._placeholder = ctk.CTkLabel(
             self._content_frame,
             text="未选择模块",
-            font=("Microsoft YaHei", 16),
+            font=("Segoe UI Variable Display", 16),
             text_color=muted_color(),
         )
         self._placeholder.place(relx=0.5, rely=0.5, anchor="center")
@@ -228,24 +283,65 @@ class Shell:
             self._add_nav_button(name, mod)
 
     def _add_nav_button(self, name: str, module):
-        """向左侧导航添加一个模块按钮。"""
+        """向左侧导航添加一个模块按钮：展开态显示图标+标题，折叠态只显示图标。"""
+        title = getattr(module, "title", name)
+        icon = getattr(module, "icon", "")
+        self._nav_meta[name] = (title, icon)
         btn = ctk.CTkButton(
-            self._nav,
-            text=f"{module.icon}  {module.title}",
+            self._nav_buttons_frame,
+            text=self._format_nav_label(title, icon),
             height=36,
-            corner_radius=0,
-            font=("Microsoft YaHei", 12),
-            anchor="w",
+            corner_radius=6,
+            font=("Segoe UI Variable Text", 14),
+            anchor="w" if not self._nav_collapsed else "center",
             fg_color="transparent",
-            hover_color=accent_hover_color(),
+            hover_color=nav_hover_color(),
             text_color=text_color(),
             command=lambda n=name: self._activate_module(n),
         )
-        btn.pack(fill="x", pady=0, padx=0)
-        btn.configure(fg_color="transparent")
+        btn.pack(fill="x", pady=2)
         self._nav_buttons[name] = btn
         self._modules[name] = module
         logger.debug(f"导航项注册: {name}")
+
+    def _format_nav_label(self, title: str, icon: str) -> str:
+        """根据折叠状态返回按钮显示文字：展开态 'icon  title'，折叠态仅 'icon'。"""
+        if self._nav_collapsed:
+            return icon or title[:1]
+        return f"{icon}  {title}" if icon else title
+
+    def _toggle_nav(self) -> None:
+        """切换侧边栏展开/折叠状态，并持久化到 toolbox settings。"""
+        self._nav_collapsed = not self._nav_collapsed
+        self._apply_nav_collapsed()
+        self._persist_nav_collapsed()
+
+    def _apply_nav_collapsed(self) -> None:
+        """把当前 self._nav_collapsed 应用到 nav 宽度 + 按钮文字。"""
+        if self._nav_collapsed:
+            width = self.NAV_WIDTH_COLLAPSED
+            self._settings_btn.configure(text="⚙", anchor="center")
+            self._about_btn.configure(text="ⓘ", anchor="center")
+            anchor = "center"
+        else:
+            width = self.NAV_WIDTH_EXPANDED
+            self._settings_btn.configure(text="设置", anchor="w")
+            self._about_btn.configure(text="关于", anchor="w")
+            anchor = "w"
+        self._nav.configure(width=width)
+        for name, btn in self._nav_buttons.items():
+            title, icon = self._nav_meta.get(name, (name, ""))
+            btn.configure(text=self._format_nav_label(title, icon), anchor=anchor)
+
+    def _persist_nav_collapsed(self) -> None:
+        """把折叠状态写入 toolbox settings.json。"""
+        try:
+            from utils.settings import load_toolbox_settings, save_toolbox_settings
+            data = load_toolbox_settings()
+            data["nav_collapsed"] = self._nav_collapsed
+            save_toolbox_settings(data)
+        except Exception as e:
+            logger.warning(f"保存 nav_collapsed 失败: {e}")
 
     def _select_first_module(self):
         """自动选中第一个模块。"""
@@ -329,17 +425,19 @@ class Shell:
             except Exception as e:
                 logger.exception(f"deactivate {old_name} 失败: {e}")
 
-        # 切换高亮 — 选中态用更柔和的 accent_hover/primary 浅色
+        # 切换高亮 — 选中态用品牌色实底（不再是浅 hover 色，更明确）
         for n, btn in self._nav_buttons.items():
             if n == name:
                 btn.configure(
-                    fg_color=accent_hover_color(),
+                    fg_color=accent_color(),
                     text_color=on_accent_color(),
+                    hover_color=accent_hover_color(),
                 )
             else:
                 btn.configure(
                     fg_color="transparent",
                     text_color=text_color(),
+                    hover_color=nav_hover_color(),
                 )
 
         # 挂载或显示新模块
@@ -421,12 +519,12 @@ class Shell:
         if connected:
             ver_str = f" v{version}" if version else ""
             self._pcdmis_label.configure(
-                text=f"🟢 PC-DMIS: 已连接{ver_str}",
+                text=f"PC-DMIS · 已连接{ver_str}",
                 text_color=TOOLBOX_THEME["ok"],
             )
         else:
             self._pcdmis_label.configure(
-                text=f"🔴 PC-DMIS: 未连接",
+                text="PC-DMIS · 未连接",
                 text_color=muted_color(),
             )
 

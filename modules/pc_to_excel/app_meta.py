@@ -1,7 +1,7 @@
 """PC to Excel 版本信息"""
 from toolbox.app_meta import APP_VERSION
 
-APP_TITLE = "PCDMIS 按需 Excel 测量报告"
+APP_TITLE = "PCDMIS导出"
 __version__ = APP_VERSION
 
 EXPORT_CMD_ID = "PC2XL_EXPORT"

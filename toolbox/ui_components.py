@@ -42,12 +42,21 @@ def card_bg_color() -> list[str]:
     return theme_pair("card_bg", "card_bg_dark")
 
 
+def sidebar_bg_color() -> list[str]:
+    return theme_pair("sidebar_bg", "sidebar_bg_dark")
+
+
 def page_bg_color() -> list[str]:
     return theme_pair("page_bg", "page_bg_dark")
 
 
 def card_border_color() -> list[str]:
     return theme_pair("card_border", "card_border_dark")
+
+
+def nav_hover_color() -> list[str]:
+    """侧边栏按钮 hover 底色：透明叠加，不抢眼。"""
+    return [TOOLBOX_THEME["hint_bg"], "#333333"]
 
 
 def on_accent_color() -> list[str]:
@@ -59,17 +68,14 @@ def ui_font(size: int, weight: str = "normal", family: str = UI_FONT) -> ctk.CTk
 
 
 def section_header(parent: Any, title: str, *, label_color: list[str] | None = None) -> ctk.CTkFrame:
-    """分组标题：加粗标签 + 细分割线。"""
+    """分组标题：纯文字小标签，靠留白分隔。"""
     bar = ctk.CTkFrame(parent, fg_color="transparent")
     ctk.CTkLabel(
         bar,
         text=title,
-        font=ui_font(12, "bold"),
-        text_color=label_color or text_color(),
+        font=ui_font(11, "bold"),
+        text_color=label_color or muted_color(),
     ).pack(side="left", padx=(4, 0))
-    ctk.CTkFrame(bar, height=1, fg_color=card_border_color()).pack(
-        side="left", fill="x", expand=True, padx=(8, 0),
-    )
     return bar
 
 

@@ -1,5 +1,5 @@
 """
-CMMFiller 版本信息
+PDF报告填充工具版本信息（CMM 三坐标测量报告 OCR + Excel 自动填充）
 从 toolbox.app_meta 统一导入版本常量。
 """
 

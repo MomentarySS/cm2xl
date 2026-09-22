@@ -352,6 +352,7 @@ TOOLBOX_DEFAULT_SETTINGS: dict = {
     "ocr_model_dir": "",           # 空 = 用内置；非空 = 用户自定义路径
     "ocr_model_tier": "server",    # "server" = 高精度(PP-OCRv4) / "mobile" = 轻量(Mobile v2.0)
     "log_level": "INFO",           # "DEBUG" / "INFO" / "WARNING"
+    "nav_collapsed": False,        # 侧边栏默认展开；折叠后仅显示图标
 }
 
 

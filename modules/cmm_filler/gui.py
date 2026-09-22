@@ -203,8 +203,8 @@ class CMMFillerGUI:
 
         ctk.CTkLabel(
             title_row,
-            text='📐 CMM 报告自动填充工具',
-            font=ctk.CTkFont(size=18, weight='bold'),
+            text='📊 PDF报告填充',
+            font=ctk.CTkFont(size=20, weight='bold'),
         ).pack(side='left')
 
         self.tabs = ctk.CTkTabview(self._container)
@@ -223,12 +223,12 @@ class CMMFillerGUI:
     def _build_process_tab(self):
         t = self.tab_process
 
-        config_card = ctk.CTkFrame(t, corner_radius=6)
-        config_card.pack(pady=6, padx=10, fill='x')
+        config_card = ctk.CTkFrame(t, fg_color="transparent")
+        config_card.pack(pady=(8, 6), padx=10, fill='x')
 
         ctk.CTkLabel(
             config_card, text='文件配置',
-            font=ctk.CTkFont(size=13, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=10, pady=(8, 4))
 
         # 模板行
@@ -279,7 +279,7 @@ class CMMFillerGUI:
         self.profile_menu.pack(side='left', padx=(0, 6))
         ctk.CTkLabel(
             profile_frame, text='切换后重新识别生效',
-            font=ctk.CTkFont(size=10), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60'),
         ).pack(side='left')
 
         # 额外尺寸前缀（叠加在 Profile 之上）
@@ -298,7 +298,7 @@ class CMMFillerGUI:
         ).pack(side='left')
         ctk.CTkLabel(
             prefix_frame, text='可放自定义 JSON Profile',
-            font=ctk.CTkFont(size=10), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60'),
         ).pack(side='left', padx=(8, 0))
 
         # OCR ROI 裁剪（百分比，裁去页眉/页脚等区域）
@@ -313,11 +313,11 @@ class CMMFillerGUI:
         for label, var in [('上%', self.roi_top_var), ('下%', self.roi_bottom_var),
                            ('左%', self.roi_left_var), ('右%', self.roi_right_var)]:
             ctk.CTkLabel(roi_frame, text=label, width=28, anchor='e',
-                         font=ctk.CTkFont(size=10)).pack(side='left', padx=(3, 0))
+                         font=ctk.CTkFont(size=12)).pack(side='left', padx=(3, 0))
             ctk.CTkEntry(roi_frame, textvariable=var, width=38, height=26).pack(side='left', padx=(2, 4))
         ctk.CTkLabel(
             roi_frame, text='跳过页眉/页脚，仅 OCR 测量区',
-            font=ctk.CTkFont(size=10), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60'),
         ).pack(side='left', padx=(4, 0))
 
         # 拖拽提示 + 预览开关
@@ -325,21 +325,21 @@ class CMMFillerGUI:
         tip_frame.pack(fill='x', padx=10, pady=(2, 8))
         ctk.CTkLabel(
             tip_frame, text='💡 可把文件夹直接拖到「PDF 文件夹」输入框上，省去选择目录',
-            font=ctk.CTkFont(size=10), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60'),
         ).pack(side='left')
         self.preview_switch = ctk.CTkSwitch(tip_frame, text='处理前预览识别结果', width=120)
         self.preview_switch.pack(side='right')
         self.preview_switch.select()
 
         # 按钮
-        btn_card = ctk.CTkFrame(t, corner_radius=6)
+        btn_card = ctk.CTkFrame(t, fg_color="transparent")
         btn_card.pack(pady=4, padx=10, fill='x')
         btn_inner = ctk.CTkFrame(btn_card, fg_color="transparent")
-        btn_inner.pack(pady=8, padx=10, fill='x')
+        btn_inner.pack(pady=4, padx=0, fill='x')
 
         self.start_btn = ctk.CTkButton(
             btn_inner, text='▶ 开始处理',
-            font=ctk.CTkFont(size=14, weight='bold'),
+            font=ctk.CTkFont(size=16, weight='bold'),
             height=40, command=self._start,
         )
         self.start_btn.pack(side='left', padx=(0, 8))
@@ -353,41 +353,41 @@ class CMMFillerGUI:
         # 进度
         self.progress_frame = ctk.CTkFrame(t, fg_color="transparent")
         self.progress_frame.pack(fill='x', padx=14, pady=(2, 0))
-        self.progress_label = ctk.CTkLabel(self.progress_frame, text='', font=ctk.CTkFont(size=11), anchor='w')
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text='', font=ctk.CTkFont(size=13), anchor='w')
         self.progress_label.pack(fill='x')
         self.progress = ctk.CTkProgressBar(self.progress_frame, mode='determinate')
         self.progress.set(0)
         self.progress.pack(fill='x', pady=(2, 6))
 
         # 日志
-        log_card = ctk.CTkFrame(t, corner_radius=6)
+        log_card = ctk.CTkFrame(t, fg_color="transparent")
         log_card.pack(pady=(0, 8), padx=10, fill='both', expand=True)
         ctk.CTkLabel(
             log_card, text='处理日志',
-            font=ctk.CTkFont(size=14, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=10, pady=(8, 3))
-        self.log_text = ctk.CTkTextbox(log_card, font=ctk.CTkFont(family='Consolas', size=13), wrap='word')
+        self.log_text = ctk.CTkTextbox(log_card, font=ctk.CTkFont(family='Consolas', size=15), wrap='word')
         self.log_text.pack(pady=(0, 8), padx=10, fill='both', expand=True)
         self.log_text.configure(state='disabled')
         for tag, color in self.COLORS.items():
             self.log_text.tag_config(tag, foreground=color)
 
-        self.status_bar = ctk.CTkLabel(t, text='就绪', font=ctk.CTkFont(size=11), anchor='w', padx=6)
+        self.status_bar = ctk.CTkLabel(t, text='就绪', font=ctk.CTkFont(size=13), anchor='w', padx=6)
         self.status_bar.pack(side='bottom', fill='x', pady=(0, 4))
 
     def _build_summary_tab(self):
         t = self.tab_summary
 
         # 选文件卡
-        file_card = ctk.CTkFrame(t)
-        file_card.pack(pady=10, padx=14, fill='both', expand=True)
+        file_card = ctk.CTkFrame(t, fg_color="transparent")
+        file_card.pack(pady=(8, 6), padx=14, fill='both', expand=True)
         ctk.CTkLabel(
             file_card, text='选择 PDF 文件',
-            font=ctk.CTkFont(size=15, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=14, pady=(12, 2))
         ctk.CTkLabel(
             file_card, text='💡 可一次多选；也可把多个 PDF 文件或文件夹直接拖到下方列表区域',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(anchor='w', padx=14)
 
         btn_row = ctk.CTkFrame(file_card, fg_color='transparent')
@@ -398,7 +398,7 @@ class CMMFillerGUI:
             border_width=1, text_color=('gray20', 'gray80'),
             command=self._summary_clear_files,
         ).pack(side='left', padx=(8, 0))
-        self.summary_count_label = ctk.CTkLabel(btn_row, text='已选 0 个 PDF', font=ctk.CTkFont(size=12))
+        self.summary_count_label = ctk.CTkLabel(btn_row, text='已选 0 个 PDF', font=ctk.CTkFont(size=14))
         self.summary_count_label.pack(side='right')
 
         self.summary_file_list = ctk.CTkScrollableFrame(file_card, fg_color='transparent')
@@ -407,7 +407,7 @@ class CMMFillerGUI:
         self._setup_dnd(self.summary_file_list, 'summary_files')
 
         # 输出文件夹（与处理页共用同一设置）
-        out_card = ctk.CTkFrame(t)
+        out_card = ctk.CTkFrame(t, fg_color='transparent')
         out_card.pack(pady=(0, 6), padx=14, fill='x')
         out_row = ctk.CTkFrame(out_card, fg_color='transparent')
         out_row.pack(pady=10, padx=14, fill='x')
@@ -418,22 +418,22 @@ class CMMFillerGUI:
         ctk.CTkButton(out_row, text='浏览', width=56, height=32, command=self._browse_output).pack(side='left')
 
         # 生成按钮 + 本页专属进度
-        run_card = ctk.CTkFrame(t)
+        run_card = ctk.CTkFrame(t, fg_color='transparent')
         run_card.pack(pady=(0, 10), padx=14, fill='x')
         run_inner = ctk.CTkFrame(run_card, fg_color='transparent')
         run_inner.pack(pady=10, padx=14, fill='x')
         self.summary_btn = ctk.CTkButton(
             run_inner, text='▶ 生成汇总 Excel',
-            font=ctk.CTkFont(size=14, weight='bold'),
+            font=ctk.CTkFont(size=16, weight='bold'),
             height=40, command=self._summary_start,
         )
         self.summary_btn.pack(side='left')
         ctk.CTkLabel(
             run_inner, text='每个 PDF 一个 Sheet，全部数据汇总到一个 Excel',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(side='left', padx=10)
 
-        self.summary_progress_label = ctk.CTkLabel(run_card, text='', font=ctk.CTkFont(size=11), anchor='w')
+        self.summary_progress_label = ctk.CTkLabel(run_card, text='', font=ctk.CTkFont(size=13), anchor='w')
         self.summary_progress_label.pack(fill='x', padx=14)
         self.summary_progress = ctk.CTkProgressBar(run_card, mode='determinate')
         self.summary_progress.set(0)
@@ -443,55 +443,55 @@ class CMMFillerGUI:
         """NG 统计分析页"""
         t = self.tab_ng
 
-        info_card = ctk.CTkFrame(t)
-        info_card.pack(pady=10, padx=14, fill='x')
+        info_card = ctk.CTkFrame(t, fg_color="transparent")
+        info_card.pack(pady=(8, 4), padx=14, fill='x')
         ctk.CTkLabel(
             info_card,
             text='批量分析 PDF 文件夹中各 FAI 项目的 NG 率排行，导出统计 Excel',
-            font=ctk.CTkFont(size=12), text_color=('gray30', 'gray70'),
+            font=ctk.CTkFont(size=14), text_color=('gray30', 'gray70'),
             wraplength=700, justify='left',
         ).pack(anchor='w', padx=14, pady=12)
 
-        hint_card = ctk.CTkFrame(t)
+        hint_card = ctk.CTkFrame(t, fg_color="transparent")
         hint_card.pack(pady=(0, 6), padx=14, fill='x')
         ctk.CTkLabel(
             hint_card,
             text='使用「处理」页的 PDF 文件夹和输出文件夹，以及当前报告版式 / OCR 裁剪设置',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(anchor='w', padx=14, pady=8)
 
-        run_card = ctk.CTkFrame(t)
+        run_card = ctk.CTkFrame(t, fg_color="transparent")
         run_card.pack(pady=(0, 10), padx=14, fill='x')
         run_inner = ctk.CTkFrame(run_card, fg_color='transparent')
         run_inner.pack(pady=10, padx=14, fill='x')
         self.ng_btn = ctk.CTkButton(
             run_inner, text='▶ 导出 NG 统计 Excel',
-            font=ctk.CTkFont(size=14, weight='bold'),
+            font=ctk.CTkFont(size=16, weight='bold'),
             height=40, command=self._ng_start,
         )
         self.ng_btn.pack(side='left')
         ctk.CTkLabel(
             run_inner, text='含 NG 排行、详细记录、FAI 明细 三个 Sheet',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(side='left', padx=10)
 
-        self.ng_progress_label = ctk.CTkLabel(run_card, text='', font=ctk.CTkFont(size=11), anchor='w')
+        self.ng_progress_label = ctk.CTkLabel(run_card, text='', font=ctk.CTkFont(size=13), anchor='w')
         self.ng_progress_label.pack(fill='x', padx=14)
         self.ng_progress = ctk.CTkProgressBar(run_card, mode='determinate')
         self.ng_progress.set(0)
         self.ng_progress.pack(fill='x', padx=14, pady=(2, 8))
 
         # 通用 PDF 表格提取（可选 pdfplumber）
-        table_card = ctk.CTkFrame(t)
+        table_card = ctk.CTkFrame(t, fg_color="transparent")
         table_card.pack(pady=(0, 10), padx=14, fill='x')
         ctk.CTkLabel(
             table_card, text='通用表格提取（文字型 PDF）',
-            font=ctk.CTkFont(size=13, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=14, pady=(10, 4))
         ctk.CTkLabel(
             table_card,
             text='需安装 pdfplumber；扫描件请用 OCR 流程。从汇总导出页选中的 PDF 提取表格。',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(anchor='w', padx=14, pady=(0, 8))
         self.table_extract_btn = ctk.CTkButton(
             table_card, text='提取表格 → Excel', height=34,
@@ -662,7 +662,7 @@ class CMMFillerGUI:
             row.pack(fill='x', pady=1)
             ctk.CTkLabel(
                 row, text=f'{i + 1}. {f.name}',
-                font=ctk.CTkFont(size=12), anchor='w',
+                font=ctk.CTkFont(size=14), anchor='w',
             ).pack(side='left', fill='x', expand=True)
             ctk.CTkButton(
                 row, text='✕', width=32, height=26, fg_color='transparent',
@@ -676,10 +676,10 @@ class CMMFillerGUI:
 
         ctk.CTkLabel(
             t, text='处理结果统计',
-            font=ctk.CTkFont(size=15, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=18, pady=(16, 8))
 
-        stats = ctk.CTkFrame(t)
+        stats = ctk.CTkFrame(t, fg_color="transparent")
         stats.pack(fill='x', padx=14, pady=(0, 10))
         self.stat_labels = {}
         labels = [
@@ -693,18 +693,18 @@ class CMMFillerGUI:
         for i, (key, text, color) in enumerate(labels):
             box = ctk.CTkFrame(stats, corner_radius=10)
             box.grid(row=i // 3, column=i % 3, padx=8, pady=8, sticky='nsew')
-            ctk.CTkLabel(box, text=text, font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60')).pack(pady=(10, 0))
-            val = ctk.CTkLabel(box, text='-', font=ctk.CTkFont(size=26, weight='bold'), text_color=color)
+            ctk.CTkLabel(box, text=text, font=ctk.CTkFont(size=14), text_color=('gray40', 'gray60')).pack(pady=(10, 0))
+            val = ctk.CTkLabel(box, text='-', font=ctk.CTkFont(size=30, weight='bold'), text_color=color)
             val.pack(pady=(0, 10))
             self.stat_labels[key] = val
         stats.grid_columnconfigure((0, 1, 2), weight=1)
         stats.grid_rowconfigure((0, 1), weight=1)
 
-        out_card = ctk.CTkFrame(t)
+        out_card = ctk.CTkFrame(t, fg_color="transparent")
         out_card.pack(fill='both', expand=True, padx=14, pady=(0, 12))
         ctk.CTkLabel(
             out_card, text='生成文件',
-            font=ctk.CTkFont(size=15, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=14, pady=(10, 4))
         self.output_list = ctk.CTkScrollableFrame(out_card, fg_color='transparent')
         self.output_list.pack(fill='both', expand=True, padx=10, pady=(0, 10))
@@ -729,7 +729,7 @@ class CMMFillerGUI:
         win.title('运行日志')
         win.geometry('720x480')
         win.transient(self.root)
-        text = ctk.CTkTextbox(win, font=ctk.CTkFont(family='Consolas', size=11), wrap='word')
+        text = ctk.CTkTextbox(win, font=ctk.CTkFont(family='Consolas', size=13), wrap='word')
         text.pack(fill='both', expand=True, padx=12, pady=12)
         try:
             with open(log_path, 'r', encoding='utf-8') as f:
@@ -849,7 +849,7 @@ class CMMFillerGUI:
         self.status_bar.configure(text=f'{prefix}: {msg}' if prefix else msg)
 
     def _show_welcome(self):
-        self._log('欢迎使用 CMMFiller！')
+        self._log('欢迎使用 PDF报告填充工具！')
         if self.default_template:
             self._log(f'模板: {self.default_template}')
         else:
@@ -869,7 +869,7 @@ class CMMFillerGUI:
 
     def _show_first_run_guide(self):
         win = ctk.CTkToplevel(self.root.winfo_toplevel())
-        win.title('欢迎使用 CMMFiller')
+        win.title('欢迎使用 PDF 报告填充')
         win.geometry('740x460')
         win.minsize(700, 420)
         win.transient(self.root.winfo_toplevel())
@@ -880,12 +880,12 @@ class CMMFillerGUI:
         self._guide_status_labels = {}
 
         ctk.CTkLabel(
-            win, text='📐 欢迎使用 CMMFiller',
-            font=ctk.CTkFont(size=20, weight='bold'),
+            win, text='📊 欢迎使用 PDF 报告填充',
+            font=ctk.CTkFont(size=22, weight='bold'),
         ).pack(pady=(22, 4))
         ctk.CTkLabel(
             win, text='三步完成第一次处理：① 选 Excel 模板 → ② 选 PDF 文件夹 → ③ 点「开始处理」',
-            font=ctk.CTkFont(size=12), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=14), text_color=('gray40', 'gray60'),
         ).pack(pady=(0, 12))
 
         card = ctk.CTkFrame(win)
@@ -904,13 +904,13 @@ class CMMFillerGUI:
             entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
             self._setup_dnd(entry, key)  # 引导窗口同样支持拖拽
             ctk.CTkButton(row, text='浏览', width=52, height=30, command=browse_cmd).pack(side='left', padx=(0, 6))
-            st = ctk.CTkLabel(row, text='…', width=40, font=ctk.CTkFont(size=13, weight='bold'))
+            st = ctk.CTkLabel(row, text='…', width=40, font=ctk.CTkFont(size=15, weight='bold'))
             st.pack(side='left')
             self._guide_status_labels[key] = st
 
         ctk.CTkLabel(
             win, text='💡 也可以把文件夹/模板文件直接拖到对应输入框上',
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(pady=(8, 4))
 
         btns = ctk.CTkFrame(win, fg_color='transparent')
@@ -922,7 +922,7 @@ class CMMFillerGUI:
         ).pack(side='left', padx=6)
         ctk.CTkButton(
             btns, text='完成 ✓', width=110, height=36,
-            font=ctk.CTkFont(size=13, weight='bold'),
+            font=ctk.CTkFont(size=15, weight='bold'),
             command=self._guide_finish,
         ).pack(side='left', padx=6)
 
@@ -1092,14 +1092,14 @@ class CMMFillerGUI:
         header.pack(fill='x', padx=14, pady=(12, 4))
         ctk.CTkLabel(
             header, text='识别结果预览（开始前核对）',
-            font=ctk.CTkFont(size=15, weight='bold'),
+            font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(side='left')
         hint = '取消勾选 = 剔除；实测值列可直接修改；橙色行 = 低置信度'
         if conflict_keys:
             hint += '；紫色行 = 子编号冲突'
         ctk.CTkLabel(
             header, text=hint,
-            font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         ).pack(side='right')
 
         if conflicts:
@@ -1108,7 +1108,7 @@ class CMMFillerGUI:
             ctk.CTkLabel(
                 conflict_panel,
                 text='子编号冲突：多个子项对应模板同一序号，请为每组选择填入项',
-                font=ctk.CTkFont(size=12, weight='bold'),
+                font=ctk.CTkFont(size=14, weight='bold'),
                 anchor='w',
             ).pack(fill='x', padx=10, pady=(8, 4))
             for conflict in conflicts:
@@ -1117,7 +1117,7 @@ class CMMFillerGUI:
                 ctk.CTkLabel(
                     row,
                     text=conflict_summary_line(conflict),
-                    font=ctk.CTkFont(size=11),
+                    font=ctk.CTkFont(size=13),
                     anchor='w',
                     wraplength=420,
                     justify='left',
@@ -1143,7 +1143,7 @@ class CMMFillerGUI:
             ctk.CTkLabel(
                 conflict_panel,
                 text='选项按识别到的子项动态生成（如 FAI_1-1 … FAI_1-N），默认选较差(NG)项',
-                font=ctk.CTkFont(size=10),
+                font=ctk.CTkFont(size=12),
                 text_color=('gray40', 'gray60'),
                 anchor='w',
             ).pack(fill='x', padx=10, pady=(2, 8))
@@ -1158,7 +1158,7 @@ class CMMFillerGUI:
         ctk.CTkLabel(
             btn_row,
             text=f'共 {len(items)} 份 PDF，识别出 {total_ms} 项测量；NG 超差 {total_ng} 项',
-            font=ctk.CTkFont(size=12), text_color=('gray30', 'gray70'),
+            font=ctk.CTkFont(size=14), text_color=('gray30', 'gray70'),
         ).pack(side='right')
 
         scroll = ctk.CTkScrollableFrame(win, fg_color='transparent')
@@ -1170,7 +1170,7 @@ class CMMFillerGUI:
         foot = ctk.CTkFrame(win, fg_color="transparent")
         foot.pack(fill='x', padx=14, pady=(0, 12))
         self.preview_confirm_label = ctk.CTkLabel(
-            foot, text='', font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+            foot, text='', font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
         )
         self.preview_confirm_label.pack(side='left')
         ctk.CTkButton(
@@ -1179,7 +1179,7 @@ class CMMFillerGUI:
         ).pack(side='right', padx=(0, 8))
         ctk.CTkButton(
             foot, text='确认开始处理', height=38,
-            font=ctk.CTkFont(size=13, weight='bold'),
+            font=ctk.CTkFont(size=15, weight='bold'),
             command=self._confirm_preview,
         ).pack(side='right')
 
@@ -1193,11 +1193,11 @@ class CMMFillerGUI:
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.pack(fill='x', padx=10, pady=(6, 2))
         head_text = f'📄 {item["name"]}' + ('  [识别失败]' if item['error'] else '')
-        ctk.CTkLabel(head, text=head_text, font=ctk.CTkFont(size=12, weight='bold')).pack(side='left')
+        ctk.CTkLabel(head, text=head_text, font=ctk.CTkFont(size=14, weight='bold')).pack(side='left')
         if item['error']:
             ctk.CTkLabel(
                 head, text='该文件将自动跳过',
-                font=ctk.CTkFont(size=11), text_color=self.COLORS['err'],
+                font=ctk.CTkFont(size=13), text_color=self.COLORS['err'],
             ).pack(side='left', padx=8)
         else:
             source_labels = {'text': '文字层', 'ocr-table': 'OCR表格', 'ocr-line': 'OCR行解析'}
@@ -1207,19 +1207,19 @@ class CMMFillerGUI:
                 meta += f' | {src}'
             ctk.CTkLabel(
                 head, text=meta,
-                font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'),
+                font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'),
             ).pack(side='left', padx=8)
             if item['ng_count']:
                 ctk.CTkLabel(
                     head, text=f'⚠ {item["ng_count"]} 项超差',
-                    font=ctk.CTkFont(size=11, weight='bold'), text_color=self.COLORS['ng'],
+                    font=ctk.CTkFont(size=13, weight='bold'), text_color=self.COLORS['ng'],
                 ).pack(side='right', padx=(8, 4))
 
         if item['error']:
             err_txt = item['error'][:80]
             ctk.CTkLabel(
                 card, text=f'   {err_txt}',
-                font=ctk.CTkFont(size=11), text_color=self.COLORS['err'], anchor='w',
+                font=ctk.CTkFont(size=13), text_color=self.COLORS['err'], anchor='w',
             ).pack(fill='x', padx=14, pady=(0, 8))
             return
 
@@ -1258,14 +1258,14 @@ class CMMFillerGUI:
                 desc_color = '#7D3C98'
             elif low_conf and not ng:
                 desc_color = self.COLORS['warn']
-            desc_font = ctk.CTkFont(size=11, weight='bold') if (ng or low_conf) else ctk.CTkFont(size=11)
+            desc_font = ctk.CTkFont(size=13, weight='bold') if (ng or low_conf) else ctk.CTkFont(size=13)
 
             cols = ctk.CTkFrame(row, fg_color="transparent")
             cols.pack(side='left', fill='x', expand=True)
             cols.grid_columnconfigure(1, weight=1)
 
             ctk.CTkLabel(cols, text=label, width=80, anchor='w',
-                         font=ctk.CTkFont(size=11)).grid(row=0, column=0, sticky='w', padx=(2, 6))
+                         font=ctk.CTkFont(size=13)).grid(row=0, column=0, sticky='w', padx=(2, 6))
             desc_val = m.get('desc', '')
             if is_conflict:
                 desc_val = f'⚡ {desc_val}'
@@ -1276,18 +1276,18 @@ class CMMFillerGUI:
             tol_val = f"{m['nominal']:g} +{m['upper_tol']:g}/-{abs(m['lower_tol']):g}"
             ctk.CTkLabel(
                 cols, text=tol_val,
-                width=130, anchor='e', font=ctk.CTkFont(size=10), text_color=('gray45', 'gray55'),
+                width=130, anchor='e', font=ctk.CTkFont(size=12), text_color=('gray45', 'gray55'),
             ).grid(row=0, column=2, sticky='e', padx=(0, 6))
             meas_entry = ctk.CTkEntry(
                 cols, textvariable=measured_var, width=90, height=28,
-                font=ctk.CTkFont(size=12, weight='bold'),
+                font=ctk.CTkFont(size=14, weight='bold'),
                 border_color=self.COLORS['warn'] if low_conf else None,
             )
             meas_entry.grid(row=0, column=3, sticky='e', padx=(0, 2))
             if ng:
                 ctk.CTkLabel(
                     cols, text='NG', width=30,
-                    font=ctk.CTkFont(size=10, weight='bold'), text_color='white',
+                    font=ctk.CTkFont(size=12, weight='bold'), text_color='white',
                     fg_color=self.COLORS['ng'], corner_radius=6,
                 ).grid(row=0, column=4, padx=(4, 0))
 
@@ -1580,9 +1580,9 @@ class CMMFillerGUI:
         # 表头
         hdr = ctk.CTkFrame(self.output_list, fg_color='transparent')
         hdr.pack(fill='x', pady=(0, 4))
-        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=11, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
-        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
-        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=13, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
+        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=13, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=13, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
         ctk.CTkLabel(hdr, text='', width=82).pack(side='right')
 
         path = summary.get('output_file')
@@ -1594,9 +1594,9 @@ class CMMFillerGUI:
             row.pack(fill='x', pady=1)
             icon = '🔴' if is_fail else '📄'
             icon_color = self.COLORS['err'] if is_fail else self.COLORS['ok']
-            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=12), width=50, anchor='w').pack(side='left', padx=(8, 0))
-            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=12), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
-            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=14), width=50, anchor='w').pack(side='left', padx=(8, 0))
+            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=14), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
             ctk.CTkButton(
                 row, text='复制路径', width=76, height=26,
                 command=lambda p=path: (self._copy_to_clipboard(p),
@@ -1624,9 +1624,9 @@ class CMMFillerGUI:
         # 表头
         hdr = ctk.CTkFrame(self.output_list, fg_color='transparent')
         hdr.pack(fill='x', pady=(0, 4))
-        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=11, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
-        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
-        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=11, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+        ctk.CTkLabel(hdr, text='状态', font=ctk.CTkFont(size=13, weight='bold'), width=50, anchor='w').pack(side='left', padx=(8, 0))
+        ctk.CTkLabel(hdr, text='文件名', font=ctk.CTkFont(size=13, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+        ctk.CTkLabel(hdr, text='文件夹', font=ctk.CTkFont(size=13, weight='bold'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
         ctk.CTkLabel(hdr, text='', width=82).pack(side='right')
 
         failed_paths = {Path(p).name: p for p in summary.get('failed_pdfs', [])}
@@ -1638,9 +1638,9 @@ class CMMFillerGUI:
             row.pack(fill='x', pady=1)
             icon = '🔴' if is_fail else '📄'
             icon_color = self.COLORS['err'] if is_fail else self.COLORS['ok']
-            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=12), width=50, anchor='w').pack(side='left', padx=(8, 0))
-            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=12), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
-            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=11), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
+            ctk.CTkLabel(row, text=icon, font=ctk.CTkFont(size=14), width=50, anchor='w').pack(side='left', padx=(8, 0))
+            ctk.CTkLabel(row, text=p.name, font=ctk.CTkFont(size=14), text_color=icon_color, anchor='w').pack(side='left', fill='x', expand=True, padx=8)
+            ctk.CTkLabel(row, text=p.parent.name, font=ctk.CTkFont(size=13), text_color=('gray40', 'gray60'), anchor='w').pack(side='left', fill='x', expand=True, padx=(0, 8))
             ctk.CTkButton(
                 row, text='复制路径', width=76, height=26,
                 command=lambda p=path: (self._copy_to_clipboard(p),
@@ -1756,7 +1756,7 @@ class CMMFillerModule(ModuleProtocol):
     实现 ModuleProtocol，供 Shell 通过 mount()/unmount() 挂载。
     """
 
-    title = "CMM报告填充"
+    title = "PDF报告填充"
     icon = "📊"
     version = __version__
 

@@ -50,25 +50,28 @@ def _lp(light: str, dark: str) -> tuple[str, str]:
     return (light, dark)
 
 _C = {
-    # 与 TOOLBOX_THEME 同步
+    # 与 TOOLBOX_THEME 同步（净化版：低饱和、避免深蓝色卡片）
     "accent": _lp("#0F766E", "#14B8A6"),
-    "accent_hover": _lp("#0D9488", "#2DD4BF"),
-    "primary": _lp("#115E59", "#0F766E"),
-    "primary_hover": _lp("#0F766E", "#14B8A6"),
+    "accent_hover": _lp("#0D8A82", "#0D8A82"),
+    "primary": _lp("#0F766E", "#0F766E"),
+    "primary_hover": _lp("#0D8A82", "#0D8A82"),
     "ok": _lp("#15803D", "#4ADE80"),
     "warn": _lp("#C2410C", "#EA580C"),
     "warn_hover": _lp("#EA580C", "#F97316"),
     "bad": _lp("#B91C1C", "#F87171"),
-    "card_border": _lp("#B8BFC8", "#334155"),
+    # 卡片边框：仍保留极淡描边以兼顾"完全无框"读不出层级的情况
+    "card_border": _lp("#E8E8E8", "#3A3A3A"),
     # 仅 pc_to_excel 使用
-    "muted": _lp("#5B6775", "#475569"),
-    "muted_hover": _lp("#475569", "#334155"),
-    "subtle": _lp("#52606D", "#94A3B8"),
+    "muted": _lp("#666666", "#999999"),
+    "muted_hover": _lp("#525252", "#777777"),
+    "subtle": _lp("#666666", "#999999"),
     "idle": _lp("#7B8794", "#64748B"),
-    "card": _lp("#F0EEE6", "#252B3A"),
-    "page": _lp("#E4E2DA", "#1A1F2B"),
+    # 卡片底色 = 页面底（让卡片融入背景，靠留白分层而非边框）
+    "card": _lp("#F5F5F5", "#1F1F1F"),
+    "page": _lp("#F5F5F5", "#1F1F1F"),
     "stripe": _lp("#0F766E", "#14B8A6"),
-    "hint_bg": _lp("#D9EDE8", "#134E4A"),
+    # 提示区底色 = 略深的页面色（深色模式下深一层，浅色下浅一层）
+    "hint_bg": _lp("#FAFAFA", "#2A2A2A"),
 }
 
 # For REPORTS_DIR reference
@@ -348,44 +351,36 @@ class MainWindow:
         expanded: bool = True,
         accent: bool = False,
     ) -> ctk.CTkFrame:
+        # 净化版：去掉卡片边框 + 卡片底色融入页面，靠标题层级 + 留白分层
         outer = ctk.CTkFrame(parent, fg_color="transparent")
-        outer.pack(fill="x", pady=(0, 8))
+        outer.pack(fill="x", pady=(0, 18))
 
-        if accent:
-            stripe = ctk.CTkFrame(outer, width=3, corner_radius=1, fg_color=_C["stripe"])
-            stripe.pack(side="left", fill="y", padx=(0, 0))
-
-        card = ctk.CTkFrame(
-            outer,
-            corner_radius=8,
-            border_width=1,
-            border_color=_C["card_border"],
-            fg_color=_C["card"],
-        )
-        card.pack(side="left", fill="both", expand=True)
-
-        head = ctk.CTkFrame(card, fg_color="transparent")
-        head.pack(fill="x", padx=12, pady=(10, 2))
+        head = ctk.CTkFrame(outer, fg_color="transparent")
+        head.pack(fill="x", pady=(0, 8))
         title_col = ctk.CTkFrame(head, fg_color="transparent")
         title_col.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(title_col, text=title, font=self._font(13, True), anchor="w").pack(anchor="w")
+        # 标题更突出（更大、更粗）
+        ctk.CTkLabel(
+            title_col, text=title,
+            font=self._font(15, True), anchor="w",
+        ).pack(anchor="w")
         if subtitle:
             ctk.CTkLabel(
                 title_col,
                 text=subtitle,
-                font=self._font(10),
+                font=self._font(11),
                 text_color=_C["subtle"],
                 anchor="w",
             ).pack(anchor="w", pady=(2, 0))
 
-        body = ctk.CTkFrame(card, fg_color="transparent")
+        body = ctk.CTkFrame(outer, fg_color="transparent")
 
         if collapsible:
             switch_var = tk.BooleanVar(value=expanded)
 
             def _toggle(*_args) -> None:
                 if switch_var.get():
-                    body.pack(fill="x", padx=12, pady=(5, 10))
+                    body.pack(fill="x", padx=(4, 0))
                 else:
                     body.pack_forget()
 
@@ -399,9 +394,9 @@ class MainWindow:
                 progress_color=_C["accent"],
             ).pack(side="right")
             if expanded:
-                body.pack(fill="x", padx=12, pady=(5, 10))
+                body.pack(fill="x", padx=(4, 0))
         else:
-            body.pack(fill="x", padx=12, pady=(5, 10))
+            body.pack(fill="x", padx=(4, 0))
 
         return body
 
@@ -412,7 +407,7 @@ class MainWindow:
 
         brand = ctk.CTkFrame(header, fg_color="transparent")
         brand.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(brand, text=APP_TITLE, font=self._font(18, True), anchor="w").pack(anchor="w")
+        ctk.CTkLabel(brand, text=f"📐 {APP_TITLE}", font=self._font(18, True), anchor="w").pack(anchor="w")
 
         right = ctk.CTkFrame(header, fg_color="transparent")
         right.pack(side="right")
@@ -625,7 +620,7 @@ class MainWindow:
         help_text = ctk.CTkTextbox(
             help_body,
             height=210,
-            font=ctk.CTkFont(family="Consolas", size=12),
+            font=ctk.CTkFont(family="Consolas", size=14),
             wrap="word",
             corner_radius=6,
             border_width=1,
@@ -1065,7 +1060,7 @@ class MainWindow:
         ).pack(anchor="w", padx=18, pady=(0, 10))
         box = ctk.CTkTextbox(
             card,
-            font=ctk.CTkFont(family="Consolas", size=12),
+            font=ctk.CTkFont(family="Consolas", size=14),
             wrap="word",
             corner_radius=10,
             border_width=1,
