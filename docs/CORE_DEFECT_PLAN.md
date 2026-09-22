@@ -23,7 +23,7 @@
 
 | # | 问题 | 位置 | 类型 | 真机 | 状态 |
 |---|------|------|------|:---:|------|
-| P1-1 | 模板数据区上限截断（序号 >50 静默丢弃） | `cmm_filler/core/filler.py:858-882` | 静默丢数据 | ✅ | ⬜ 未开始 |
+| P1-1 | 模板数据区上限截断（序号 >50 静默丢弃） | `cmm_filler/core/filler.py:858-882` | 静默丢数据 | ✅ | ✅ **已完成**（真机待验） |
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成**（真机待验） |
 | P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ⬜ 未开始 |
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ⬜ 未开始 |
@@ -64,9 +64,11 @@ copy "%LOCALAPPDATA%\cm2xl\config\cmm_filler\settings.json" settings.before.json
 
 ### P1-1 模板数据区上限截断
 
-**现象** — 随包 `modules/cmm_filler/templates/模板2.xlsx` 的序号列有 108 个非空单元格（第 10–109 行），
-但 `_get_max_data_row()` 返回 **59**，`build_sheet_row_index()` 只建到序号 ≈50。
-序号 >50 的项：规格/公差在 `filler.py:786-787` **静默 `continue`**；实测值在 `filler.py:838-842`
+**现象** — 随包 `modules/cmm_filler/templates/模板2.xlsx` 的序号列：**序号 1..100 落在第 10–109 行**
+（另有 8 个说明性文字单元格在第 1–7 行，如「图纸版本:」）。
+但 `_get_max_data_row()` 返回 **59**，`build_sheet_row_index()` 只建到序号 **50**
+（实测 indexed keys=54，末键 `'50'`）—— 即序号 51..100 共 50 项全部漏掉。
+这些项的规格/公差在 `filler.py:786-787` **静默 `continue`**；实测值在 `filler.py:838-842`
 只写一条 warning 并计入 `unmatched`。
 
 **根因** — `_get_max_data_row()` 以**规格列**（B 列）最后一个非空单元格为锚点。
@@ -84,6 +86,40 @@ copy "%LOCALAPPDATA%\cm2xl\config\cmm_filler\settings.json" settings.before.json
 
 **验证** — 新增单测断言 `模板2.xlsx` 的 `_get_max_data_row() >= 109`；另加「规格列有值」用例断言仍走原路径。
 真机：跑一份 >50 项的 PDF，核对序号 51+ 是否写入。
+
+**实施记录（2026-09-22）**
+
+| 文件 | 改动 |
+|------|------|
+| `cmm_filler/core/filler.py` | 新增模块级 `_looks_like_serial()` + `_SERIAL_CELL_RE`；`_get_max_data_row()` 锚点改为「序号列 ∪ 规格列」取 max，并覆盖全部模板 Sheet |
+| `modules/cmm_filler/tests/test_fixed_page_layout.py` | +4 条测试 |
+
+**实测效果（随包模板）**
+
+| 模板 | max_data_row 修复前 → 后 | 索引到的序号 |
+|------|:---:|------|
+| `模板2.xlsx` | 59 → **159** | 54 键（末键 `'50'`）→ **104 键（末键 `'100'`）** |
+| `模板1.xlsx` | 34 → 80 | 29 键 → 29 键（本就覆盖，无回归） |
+
+**实施时的两个决定**
+
+1. **扫描范围从「配置的单个 Sheet」扩到 `_get_template_sheet_names()` 的全部 Sheet。**
+   理由：`max_data_row` 的消费方 `build_sheet_row_index()` 就是按这个列表逐 Sheet 建索引的，
+   只看一个 Sheet 推断出的下界对其它 Sheet 不成立。随包模板都是单 Sheet，所以实测无差异。
+2. **顺带把 `wb.close()` 挪进 `try/finally`。** 原实现若 `wb[sheet_name]` 抛 KeyError
+   （模板缺 Sheet），`close()` 永不执行 → 工作簿句柄泄漏。属于被重写的那几行内部，
+   未扩大范围；如不想要可以单独回退这两行。
+
+**验证（含「守卫是否有牙」的证明）**
+
+- 4 条测试：`_looks_like_serial` 正反例、合成空白表（规格列只有表头 + 序号 1..100）、
+  随包 `模板2.xlsx` 全覆盖、显式配置短路优先级。
+- 随包模板那条的期望值**从模板自身推导**（找出最后一个像序号的行），
+  模板更新后不会变成假失败。
+- **证明有效**：`git stash` 把 `filler.py` 退回修复前，同一份模板上
+  旧 `_get_max_data_row()` 返回 **59**，而新断言要求 `>= 109` → **FAIL**；
+  恢复后 → PASS。
+- 全量 `248 passed`（244 + 新增 4）。
 
 ---
 
@@ -549,3 +585,5 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | 决策 3 定案（做 A + 修 B-1）⇒ **P1-2 实施完成**：`stamp_settings()` + 迁移保留未知键 + 降级导出改白名单；+7 条回归测试，`240 passed`。真机待验 |
 | 2026-09-22 | **发现并登记 P3-7**：`tests/` 目录默认不被 pytest 收集（`phase8_smoke.py` 文件名不匹配 `test_*.py`），42 个测试静默不跑。**同时修正本文件与前期结论的基线数字：197 → 233** |
 | 2026-09-22 | **P2-5 实施完成**：`get_report_header_info()` 的 COM 段包进 `com_call_lock`（阻塞式，附 3 条理由）；+4 条测试，其中源码守卫用 AST 判定并已证明「修复前会失败」。全量 `244 passed` |
+| 2026-09-22 | 已提交一轮到分支 `fix/core-defects`：`0331696` P1-2 / `56e3770` P2-5 / `d607e11` docs |
+| 2026-09-22 | **P1-1 实施完成**：`_get_max_data_row()` 锚点改为「序号列 ∪ 规格列」并覆盖全部 Sheet；新增 `_looks_like_serial()`。模板2 的 max_data_row 59 → 159，索引键 54 → 104（末键 `'100'`）。+4 条测试，已用 `git stash` 退回旧实现证明「修复前会失败」。全量 `248 passed`。**同时修正本节 P1-1 现象里的序号区间描述（1..100，非 109 个序号）** |

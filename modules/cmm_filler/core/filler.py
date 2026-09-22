@@ -217,6 +217,26 @@ def month_cn_to_num(month_cn: str) -> str:
     return month_cn
 
 
+# 模板序号列的「有效序号」形态：1 / 34.1 / 1-1 / 1_1 / 2/3
+_SERIAL_CELL_RE = re.compile(r'^\d+(?:[.\-_/]\d+)*$')
+
+
+def _looks_like_serial(value) -> bool:
+    """模板序号列的单元格是否**像序号**。
+
+    用于推断数据区下界。序号列里混着说明性文字（模板2 的第 6–9 行就是
+    「图纸版本:」「注：测量仪器代号…」「图面标准」），不区分就会把锚点拉到表头行。
+    注意不能用 serial_cell_keys() 代替：它对任意非空字符串都会返回一个键。
+    """
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, str):
+        return bool(_SERIAL_CELL_RE.match(value.strip()))
+    return False
+
+
 class CMMReportFiller:
     def __init__(self, template_path, dpi=300, ocr_engine=None,
                  report_profile=None, ocr_roi=None, custom_item_prefixes=None):
@@ -862,27 +882,49 @@ class CMMReportFiller:
         return self.config.get('sample_row', DEFAULT_SAMPLE_ROW)
 
     def _get_max_data_row(self):
-        """数据区最后一行：优先 template 配置，否则扫描模板规格列。"""
+        """数据区最后一行：优先显式配置，否则按模板实际数据区推断。
+
+        锚点取「序号列 ∪ 规格列」里最后一个**有效**单元格，覆盖全部模板 Sheet：
+
+        - 只扫规格列是不够的：空白报告表的规格列往往只有表头（模板2 就是），
+          锚点会落在表头行，算出的 max_data_row 远小于真实数据区 —— 于是超出部分的
+          行根本不进 row_index，规格/公差被静默跳过（:786），实测值只记一条 warning。
+        - 序号列混着说明性文字，必须用 _looks_like_serial() 判定，否则锚点被
+          表头文字拉高到表头行，等于没修。
+        - 扫描范围必须覆盖 _get_template_sheet_names() 的全部 Sheet：max_data_row 的
+          消费方 build_sheet_row_index() 就是按这个列表逐 Sheet 建索引的。
+        """
         configured = self._get_template_layout_config().get('max_data_row')
         if configured is None:
             configured = self.config.get('max_data_row')
         if configured:
             return int(configured)
 
-        default_max = self._get_data_start_row() + 28
+        data_start = self._get_data_start_row()
+        default_max = data_start + 28
+        scan_end = data_start + 200
         try:
             wb = openpyxl.load_workbook(self.template_path)
-            ws = wb[self._get_sheet_name()]
-            spec_col = column_index_from_string(self._get_column_letter('spec'))
-            data_start = self._get_data_start_row()
-            last_data_row = None
-            for row in range(data_start, min(ws.max_row, data_start + 200) + 1):
-                if ws.cell(row=row, column=spec_col).value is not None:
-                    last_data_row = row
-            wb.close()
+            try:
+                spec_col = column_index_from_string(self._get_column_letter('spec'))
+                serial_col = column_index_from_string(self._get_column_letter('serial'))
+                last_data_row = None
+                for sheet_name in self._get_template_sheet_names():
+                    if sheet_name not in wb.sheetnames:
+                        continue
+                    ws = wb[sheet_name]
+                    for row in range(data_start, min(ws.max_row, scan_end) + 1):
+                        if ws.cell(row=row, column=spec_col).value is not None:
+                            last_data_row = row
+                        elif _looks_like_serial(
+                            ws.cell(row=row, column=serial_col).value
+                        ):
+                            last_data_row = row
+            finally:
+                wb.close()
             if last_data_row:
-                # 增大缓冲量：从 5 → 50，兼容一次性处理多份 PDF 新增大量测量项的场景
-                return min(last_data_row + 50, data_start + 200)
+                # 缓冲量 50：兼容一次性处理多份 PDF 新增大量测量项的场景
+                return min(last_data_row + 50, scan_end)
         except Exception:
             pass
         return default_max
