@@ -75,6 +75,21 @@ def _normalize_minus_tol(minus: float | None, show_negative: bool) -> float | No
     return -minus
 
 
+def _safe_com_float(getter: Callable[[], Any]) -> float | None:
+    """调用一次 COM getter 并安全转 float —— 抛异常与返回失败值都归 None。
+
+    与 `_safe_float(_field_value(...))` 的分工：`_field_value` 自带 try/except，
+    所以走它的分支（如 FCF 的 LINE1_*）对「抛异常」天然免疫；
+    而 `tol_cmd.sizeMinusTol(j)` 这类**直接调用**会抛异常，异常冒到外层
+    `except Exception: continue` 就会把整行丢掉。这里兜住那类调用。
+    """
+    try:
+        raw = getter()
+    except Exception:
+        return None
+    return _safe_float(raw)
+
+
 def _command_name(*sources: Any) -> str:
     """按优先级读取命令 ID（与 PCDMIS 标识符一致）。"""
     for source in sources:

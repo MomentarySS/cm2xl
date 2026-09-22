@@ -111,6 +111,8 @@ class _SizeTolCmd:
         self._minus = minus_value
 
     def sizeMinusTol(self, j):
+        if self._minus is _RAISES:
+            raise ValueError("模拟 COM 抛异常")
         return self._minus
 
     def sizePlusTol(self, j):
@@ -143,6 +145,8 @@ class _SegMinusOverride(_TolCmd):
         self._minus = minus_value
 
     def segmentDimMinusTol(self, k, j):
+        if self._minus is _RAISES:
+            raise ValueError("模拟 COM 抛异常")
         return self._minus
 
 
@@ -161,6 +165,9 @@ def _extract_segment_records(minus_value, show_negative=True):
 # show_negative=False 是「丢行」那条路径：`-None` 才抛 TypeError。
 # 现场默认就是 False（`_minus_tol_show_negative()` 异常时回落 False），所以两个取值都要覆盖。
 _SHOW_NEGATIVE_CASES = [True, False]
+
+# 哨兵：让替身方法**抛异常**，而不是返回 COM 失败值 —— P2-1 的第二种失效路径。
+_RAISES = object()
 
 
 @pytest.mark.parametrize("show_negative", _SHOW_NEGATIVE_CASES)
@@ -212,6 +219,66 @@ def test_minus_tol_unavailable_logs_debug(caplog, show_negative):
     with caplog.at_level(logging.DEBUG, logger="pc_to_excel"):
         _extract_size_record(False, show_negative=show_negative)
     assert any("下公差不可用" in r.getMessage() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# P2-1 续：COM **抛异常** 是第二种失效路径。
+#
+# `_safe_float(tol_cmd.sizeMinusTol(j))` 只处理**返回值**；调用本身抛异常时，
+# 异常会冒到外层 `except Exception: continue` ⇒ 整行照样丢。
+# FCF 分支走 `_field_value()`（自带 try/except）所以对它免疫，这里曾经不对称。
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("show_negative", _SHOW_NEGATIVE_CASES)
+def test_size_minus_tol_raises_keeps_row(show_negative):
+    """sizeMinusTol 抛异常 ⇒ 该行不丢，minus_tol 为 None。"""
+    records, indices = _extract_size_record(_RAISES, show_negative=show_negative)
+    assert indices == {7}
+    assert len(records) == 1, "COM 抛异常时该行被丢弃了"
+    rec = records[0]
+    assert rec.minus_tol is None
+    assert rec.plus_tol == 0.05
+    assert rec.tolerance is not None
+    assert rec.tolerance.d == 0.05
+
+
+@pytest.mark.parametrize("show_negative", _SHOW_NEGATIVE_CASES)
+def test_size_minus_tol_raises_does_not_cause_false_ng(show_negative):
+    """抛异常时同样不得把下公差当 0。"""
+    records, _ = _extract_size_record(_RAISES, show_negative=show_negative)
+    rec = records[0]
+    apply_tolerance(records, ToleranceConfig())
+    assert rec.failed_axes == []
+    assert rec.status == PassStatus.PASS
+
+
+@pytest.mark.parametrize("show_negative", _SHOW_NEGATIVE_CASES)
+def test_segment_minus_tol_raises_keeps_rows(show_negative):
+    """segmentDimMinusTol 抛异常 ⇒ 两条区段记录都不丢。"""
+    records, indices = _extract_segment_records(_RAISES, show_negative=show_negative)
+    assert indices == {10}
+    assert len(records) == 2, "COM 抛异常时区段行被丢弃了"
+    assert all(r.minus_tol is None for r in records)
+    assert all(r.plus_tol == 0.04 for r in records)
+
+
+def test_safe_com_float_contract():
+    """`_safe_com_float` 的契约：抛异常 / COM 失败值 → None；字符串也要转成 float。"""
+    from ..core._common import _safe_com_float
+
+    assert _safe_com_float(lambda: 0.0) == 0.0
+    assert _safe_com_float(lambda: 0.03) == 0.03
+    # COM 读回的常是字符串，不能原样透传（否则 minus_tol 会变成 '  -0.010'）
+    assert _safe_com_float(lambda: "  -0.010") == -0.01
+    assert _safe_com_float(lambda: False) is None
+    assert _safe_com_float(lambda: None) is None
+    assert _safe_com_float(lambda: float("nan")) is None
+
+    def _boom():
+        raise ValueError("模拟 COM 抛异常")
+
+    assert _safe_com_float(_boom) is None
 
 
 if __name__ == "__main__":
