@@ -12,7 +12,7 @@
 > D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 > ```
 >
-> 当前全量 **248 passed**（`tests/` 42 + `modules/*/tests` 206）。
+> 当前全量 **265 passed**（`tests/` 42 + `modules/*/tests` 223）。
 > 审查当时的基线是 233 —— 也就是说：**下列缺陷全部落在现有测试覆盖之外**。
 >
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
@@ -28,7 +28,7 @@
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成**（真机待验） |
 | P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ✅ **已完成**（真机待验） |
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ⬜ 未开始 |
-| P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ⬜ 未开始 |
+| P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ✅ **已完成**（真机待验） |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-3 | 「最差 NG 子项」只比一个样品 | `cmm_filler/core/sub_item_conflict.py:17-21` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-4 | 数字含逗号致整份 PDF 解析失败 | `cmm_filler/core/parse_measurements.py:108-117` | 逻辑矛盾（**实测未触发**，见该节判定依据） | ❌ | ⬜ 未开始 |
@@ -294,6 +294,63 @@ reader 是 `OpenTextFile(CONFIG_PATH, 1, False, -1)`（`scripts/export_current.b
 4. 顺手全文件 grep 一遍所有 `tol_cmd.` 直接调用，列出还有没有别的漏 `_safe_float` 的点，一次改完。
 
 **验证** — mock `sizeMinusTol` 返回 `None` / `False`，断言记录不丢、`minus_tol is None`、`apply_tolerance()` 不产生假超差。
+
+**实施记录（2026-09-22）**
+
+| 文件 | 改动 |
+|------|------|
+| `pc_to_excel/core/_tolerance.py` | 新增模块级 `logger`（`getLogger("pc_to_excel")`，与 `gui`/`connector` 同款）；尺寸区与区段区两处下公差改走 `_normalize_minus_tol(_safe_float(...), show_negative)`，并在 `minus_tol is None` 时补一条 debug 日志 |
+| `modules/pc_to_excel/tests/test_gdt_extraction.py` | +14 条测试（新增 `_SizeTolCmd` / `_SegMinusOverride` 两个可注入 COM 失败值的替身） |
+
+**边界核实（对应上文 4 条语义边界）**
+
+1. **`plus` 有值时 `tolerance` 仍正确构造** —— 已回源码确认 `_tolerance_from_limits()`
+   （`_common.py:151-177`）是 `plus is not None` 时先 set、`minus` 只在 `current is None` 时 set；
+   `minus=None` 时 `tol.d == plus`。已写成断言，不是靠读代码。
+2. **「读不到下公差」的行现在保留** —— 有 plus 也算有效数据。日志文案刻意写成
+   「COM 返回 False/None **或未设置**」：`_safe_float` 无法区分「COM 失败」与「该项本就无下公差」，
+   两种都落 `None`，不假装能分辨。
+3. **`indices.add(idx)`（`:184`）未动** —— 位置与去重语义保持原样。
+4. **全文件 `tol_cmd.` 直接调用已逐条清点**（修复后 27 处），无第三处漏网：
+   | 类别 | 处数 | 行号（修复后） |
+   |------|:---:|------|
+   | 已在 `_safe_float` 内 | 12 | `207`、`226`、`227`、`228`、`231`、`235`、`299`、`312`、`313`、`314`、`317`、`321` |
+   | 包在 `try/except` 的 int/str 读取 | 8 | `91`、`96`、`119`、`190`、`198`、`269`、`274`、`288` |
+   | 包在 `try/except` 的 outtol getter（lambda） | 4 | `238`、`239`、`326`、`327` |
+   | 文本读取，已有 `or` 兜底 | 3 | `218`、`223`、`297` |
+
+**实施时的新发现：`show_negative=False` 才是「丢行」那条路径**
+
+第一版测试矩阵只参数化了 `minus_value`（`None` / `False`），跑「有牙」验证时发现
+`None` 的两个用例在修复前**也通过** —— 因为 `show_negative=True` 时
+`minus_tol = minus_raw`（`None` 直接赋值，不取负）⇒ **不抛 TypeError**。
+只有 `show_negative=False` 才会走 `-minus_raw` ⇒ `-None` ⇒ TypeError ⇒ 被吞 ⇒ 丢行。
+
+而 `_minus_tol_show_negative()`（`data_extractor.py:71-75`）在异常时**回落 `False`** ——
+即现场默认走的就是这条丢行路径。测试矩阵因此补上 `show_negative` 维度（2×2 + 2×2）。
+
+**验证（含「守卫是否有牙」的证明）**
+
+- 文件内 17 条测试（3 条原有 + 14 条新增）。
+- **证明有效**：`git stash push -- modules/pc_to_excel/core/_tolerance.py` 退回修复前实现，
+  跑同一组测试 → **10 failed, 7 passed**。失败构成：
+  | 探针 | 失败用例 |
+  |------|------|
+  | 尺寸区丢行 | `[None-False]` `[False-True]` `[False-False]` |
+  | 尺寸区假超差 | `[True]` `[False]` |
+  | 区段区丢行 | `[None-False]` `[False-True]` `[False-False]` |
+  | debug 日志 | `[True]` `[False]` |
+
+  通过的 7 条 = 3 条原有用例 + 2 条符号约定守卫 + 2 条 `None + show_negative=True`
+  （后者旧代码本就保留该行、`minus_tol` 本就是 `None`）—— **守卫与探针可区分**。
+- 全量 `265 passed`（251 + 新增 14），行尾保持 CRLF（bareLF=0）。
+
+**遗留观察（本次不改，待真机确认）** — `_tolerance.py:297` 的
+`tol_cmd.SegmentAxis(j)` 只传了特征下标，而它的同族调用
+（`segmentDimMinusTol(k, j)` / `SegmentDimNominal(k, j)` …）都是 `(段, 特征)` 两个参数。
+若真实 API 签名确为 `(segmentIndex, featureIndex)`，多段记录的轴字母会取错。
+本包测试替身写的是单参签名，**不构成证据**；需在真机上用多段记录核对后才能定性。
+本次只登记，不扩大改动范围。
 
 ---
 
@@ -645,11 +702,12 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P1-2：启动两次，确认只弹一次迁移提示且 3 个字段仍在
 - [ ] P1-3：汇总导出选两个不同目录的同名 PDF，核对第二个 Sheet
 - [ ] P1-4：PC-DMIS 内执行 `PC2XL_EXPORT`，确认 `pcdmis_partial_export.csv` 生成
-- [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差
+- [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差；**顺带核对多段记录的轴字母**
+      （`SegmentAxis(j)` 单参调用，见 P2-1「遗留观察」）
 - [ ] P2-2：找一个多轴项核对报告
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 251 passed）
+- [ ] 全量回归：`python -m pytest -q`（当前 265 passed）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 
@@ -670,3 +728,4 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | 已提交 `fcbc19c`（P1-1 + CLAUDE.md 计数修正） |
 | 2026-09-22 | **P3-7 实施完成**：新建 `pytest.ini`（`python_files` 补上 `phase8_smoke.py` + `testpaths = tests modules`）。裸跑 `pytest` 收集数 206 → **248**，42 个用例全部找回；显式路径用法不受影响。同步 `CLAUDE.md` / `README.md` / `docs/PERF_UI_LATENCY.md` 里的历史测试数字与命令。**本文件的基线命令也随之简化为裸跑** |
 | 2026-09-22 | **P1-3 实施完成**：缓存图片名改为 `{stem}_{路径哈希}{_pN}{_roi_比例}.png`。新增 `_path_cache_suffix()`；顺带接上**原本零引用的** `roi_cache_suffix()`（旧实现只加布尔 `_roi`，改 ROI 后仍命中旧 OCR）。+3 条测试，已用 `git stash` 证明「修复前 2 failed」。全量 `251 passed`。`dpi` 按原边界明确不做并已在 docstring 说明 |
+| 2026-09-22 | **P2-1 实施完成**：两处下公差改走 `_normalize_minus_tol(_safe_float(...))` + `None` 时补 debug 日志。全文件 27 处 `tol_cmd.` 调用已逐条清点，**无第三处漏网**。+14 条测试（矩阵含 `show_negative` 维度 —— 实施时才发现 `show_negative=False` 才是「丢行」那条路径，现场默认即走它），已用 `git stash` 证明「修复前 10 failed / 7 passed」。全量 `265 passed`。登记一条待真机确认的遗留观察（`SegmentAxis(j)` 单参调用）。本文件基线数字 248 → 265 |
