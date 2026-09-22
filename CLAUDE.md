@@ -26,6 +26,8 @@ cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q          # 全量回归（收集范围由 pytest.ini 的 testpaths 限定）
+# 只读诊断：转储各命令上/下公差的 COM 读取结果（连运行中的 PC-DMIS，不改任何数据）
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m modules.pc_to_excel.cli dump-tols --filter CC_ -o dump.txt
 ```
 
 ### 导入路径
@@ -43,6 +45,10 @@ multiprocessing.freeze_support()             # PyInstaller 多进程必需
 工具栏一键导出：`cm2xl.exe --module pc_to_excel --auto-export`（跳过 OCR；已有实例则 IPC 转发给现有窗口）。
 
 PC-DMIS COM：所有调用走 `com_call_lock`（**该约定由 `test_com_compat.py::test_every_com_apartment_is_inside_com_call_lock` 源码级守护 —— 凡打开 `com_apartment()` 的函数都必须进锁**）；已运行实例只用 `GetActiveObject` / `Dispatch`，**禁止 `EnsureDispatch`**（会重建 gencache，第二次导出假死）。抽数时不要从工作线程 `root.after` 刷进度，状态轮询在 `_busy` 时跳过。Tk `main thread is not in main loop` 不是 COM 失效，不要因此重连。
+
+取命令**必须**用 `core/_command_cache.py` 的 `_get_command_at()`：本机 2024.1 上 `cmds.Item(i)` 对**每个**索引都抛 `TypeError`，靠它的回退链（`Item` → 调用式 → `[]`）才取得到；不要"简化"成直接 `Item()`。
+
+读公差/实测字段时，**直接调用**（`tol_cmd.sizeMinusTol(j)` 这类）与 `_field_value()` 是两种风险：前者会**抛异常**，异常冒到外层 `except Exception: continue` 就会静默丢整行；后者自带 try/except。统一用 `_common._safe_com_float(lambda: ...)` 兜住「抛异常」与「返回 COM 失败值 `False`/`None`」两种情况。注意 `_com_failed` 用的是 `is False`（不是 `==`），所以真实 `0.0` 公差**不算**失败 —— 别把单边公差改成无下公差。
 
 ### 主题
 - **`apply_theme()` 只在 `main.py` 启动最早处调用一次**

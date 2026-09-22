@@ -12,7 +12,7 @@
 > D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 > ```
 >
-> 当前全量 **265 passed**（`tests/` 42 + `modules/*/tests` 223）。
+> 当前全量 **277 passed**（`tests/` 42 + `modules/*/tests` 235）。
 > 审查当时的基线是 233 —— 也就是说：**下列缺陷全部落在现有测试覆盖之外**。
 >
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
@@ -345,12 +345,91 @@ reader 是 `OpenTextFile(CONFIG_PATH, 1, False, -1)`（`scripts/export_current.b
   （后者旧代码本就保留该行、`minus_tol` 本就是 `None`）—— **守卫与探针可区分**。
 - 全量 `265 passed`（251 + 新增 14），行尾保持 CRLF（bareLF=0）。
 
-**遗留观察（本次不改，待真机确认）** — `_tolerance.py:297` 的
-`tol_cmd.SegmentAxis(j)` 只传了特征下标，而它的同族调用
-（`segmentDimMinusTol(k, j)` / `SegmentDimNominal(k, j)` …）都是 `(段, 特征)` 两个参数。
-若真实 API 签名确为 `(segmentIndex, featureIndex)`，多段记录的轴字母会取错。
-本包测试替身写的是单参签名，**不构成证据**；需在真机上用多段记录核对后才能定性。
-本次只登记，不扩大改动范围。
+**遗留观察 → 已结案（2026-09-22 真机）** — `tol_cmd.SegmentAxis(j)` 的单参调用在
+PC-DMIS 2024.1 上**正常返回**（`SegmentAxis(1)` → `'M'`）。若真实签名是
+`(segmentIndex, featureIndex)`，少传一个位置参数会抛 TypeError —— 没有抛，说明**单参是合法的**。
+但该程序 `SegmentCount=1`，所以「多段时它取的是段还是特征」仍未验证；
+要定性需一个多段（`SegmentCount>1`）的程序。**本次不再作为疑点挂账**。
+
+---
+
+**P2-1 续（2026-09-22 晚）：补「COM 抛异常」路径 + 落地真机诊断子命令**
+
+前一版修复只覆盖「COM **返回** `False`/`None`」。若 COM 是**抛异常**，
+`tol_cmd.sizeMinusTol(j)` 的调用点仍在 `try` 内 ⇒ 异常冒到外层
+`except Exception: continue` ⇒ **该行照样丢**。FCF 分支对此免疫（走 `_field_value()`，自带
+try/except），两分支曾不对称。
+
+| 文件 | 改动 |
+|------|------|
+| `core/_common.py` | 新增 `_safe_com_float(getter)` —— 包住**直接调用**：抛异常与返回失败值都归 `None`，并统一过 `_safe_float` |
+| `core/_tolerance.py` | 两处下公差读取改为 `_normalize_minus_tol(_safe_com_float(lambda: ...), show_negative)` |
+| `cli.py` | **新增 `dump-tols` 子命令**（只读诊断，见下） |
+| `tests/test_gdt_extraction.py` | +7 条（抛异常矩阵 6 条 + `_safe_com_float` 契约 1 条） |
+| `tests/test_cli_dump_tols.py` | **新建**，+5 条 |
+
+**`dump-tols` 子命令**
+
+```powershell
+python -m modules.pc_to_excel.cli dump-tols --filter CC_ -o dump.txt
+```
+
+只读：连上运行中的 PC-DMIS → 逐命令转储上/下公差的 COM 读取结果
+（原值 + 类型 + `ok`/`COM_FAILED`/`RAISED:<异常名>`），末尾汇总
+「哪些行的 `minus_tol` 不可用」。存在理由：真机清单那条「构造下公差读不到的行」
+**没法从 UI 手工制造 COM 故障**；有了它，验证从「碰运气找」变成「跑一次拿清单」。
+
+实现上的两个决定：
+
+1. **`ok` / `COM_FAILED` / `RAISED` 三态必须分开报。** 布尔属性（`IsFcfCommand`）返回 `False`
+   是**正常值**不是失败 —— 第一版探针拿 `_com_failed` 去判定，把所有 `False` 都标成 FAILED，
+   属于自欺。诊断里只有数值/字段读取才用 `_com_failed`。
+2. **下公差必须先 `_safe_float` 再 `_normalize_minus_tol`。** COM 读回的常是**字符串**
+   （`'  -0.010'`）；第一版直接把原值喂进去，报出 `minus_tol = '  -0.010'` 这种误导性结果。
+   已由 `test_dump_minus_converts_com_string_to_float` 守住。
+
+**真机实测（2026-09-22，PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`）**
+
+| 指标 | 实测 |
+|------|------|
+| 命令总数 | 242 |
+| `MinusTolerancesShowNegative` | **True** |
+| `scope=report, require_marked=True` 提取 | 42 条（全部是 `CC_*`） |
+| **`minus_tol is None`** | **0 条** |
+| COM 抛异常 | **0 处** |
+| 判 FAIL | 0 条（`apply_tolerance` 口径） |
+
+⇒ **该程序无法复现 P2-1 的条件**（既没有失败值也没有抛异常）。这本身是有用结论：
+P2-1 的真机验证需要**另找或另造**含「下公差未定义」项的程序，不能拿手头这份顶。
+
+分命令看：
+
+| 命令 | 类型 | 下公差来源 | 实测 |
+|------|------|-----------|------|
+| `CC_1`–`CC_4` | ISO 几何公差命令（垂直度） | **区段区** `segmentDimMinusTol(1,1)` | 真值 `0.0`（float，**非** `False`）→ `minus_tol=0.0`，判**合格** ✓ |
+| `CC_15`/`CC_16` | 尺寸位置（头行） | 尺寸区 `F_MINUS_TOL` | `'   0.000'` 可读 → `minus_tol=0.0`；但 `DIM_DEVIATION`/`DIM_OUTTOL` 返回 **`False`** |
+
+`CC_1`–`CC_4` 的价值：它们是**被本次改动直接覆盖的那条分支**（区段区），
+且下公差是真值 `0.0`。若改动把 `0.0` 误判成 COM 失败（`_com_failed` 用的是 `is False`
+而非 `==`，`0.0 is False` 为假 ⇒ 不算失败），这四条会从「合格」翻成别的结果 ——
+实测仍为**合格**，说明健康路径没被改坏。
+
+**顺带确认的一个实现前提**：本机 `cmds.Item(i)` 对每个索引都抛 **TypeError**，
+必须靠 `_get_command_at()` 的回退链（`Item` → 调用式 → `[]`）才能取到命令。
+诊断子命令复用了它，没有另写一套。
+
+**验证（含「有牙」证明）**
+
+- 全量 `277 passed`（265 + 新增 12）。
+- **证明 A —— 回退到 HEAD（`22a532f`，已修 None/False、未修抛异常）**：
+  `git stash push -- core/_tolerance.py` → **6 failed / 23 passed**，失败的正是 6 条抛异常用例
+  （尺寸区 4 + 区段区 2），其余（含 `_safe_com_float` 契约测试）全过 ⇒ **抛异常这条修复确实有牙**。
+- **证明 B —— 回退到 `6f77f72`（P2-1 修复前）**：`git checkout 6f77f72 -- core/_tolerance.py`
+  → **16 failed / 13 passed**。失败 16 条 = 尺寸区丢行 3 + 尺寸区假超差 2 + 区段区丢行 3
+  + 日志 2 + **抛异常 6** ⇒ 两轮修复合起来把三种失效路径（返回 `None` / 返回 `False` / 抛异常）
+  全部覆盖。通过 13 条 = 3 条原有用例 + 2 条符号约定守卫 + 2 条 `None+show_negative=True`
+  + 5 条 `test_cli_dump_tols.py`（与 `_tolerance.py` 无关，本就不该受影响）—— 分类可解释。
+- 行尾保持 CRLF。
 
 ---
 
@@ -373,6 +452,41 @@ reader 是 `OpenTextFile(CONFIG_PATH, 1, False, -1)`（`scripts/export_current.b
    ⇒ 判定侧与导出侧**都要改**，不能只改一处；第 1 条因此从「可选」变为「必须」。
 
 **验证** — 构造多轴不同公差的 `FeatureRecord`，断言各轴按自己的限判定。真机：找一个多轴项核对报告。
+
+**现场实测补充（2026-09-22 晚，PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`）**
+
+用 `dump-tols` + 真实提取跑出来的 `CC_15` / `CC_16`，是 P2-2 的**现成样本**，
+且比原描述多暴露两处：
+
+| 项 | `CC_15` | `CC_16` |
+|----|---------|---------|
+| 头行 idx | 150（`尺寸位置`，ID=`CC_15`） | 155（同上） |
+| 配对行 | 151 `X 轴位置` / 152 `Y 轴位置` / **153 `直径位置`** | 156 / 157 / **158** |
+| `X 轴位置` ± | +0.05 / −0.05 | +0.02 / −0.06 |
+| `Y 轴位置` ± | +0.01 / −0.01 | +0.04 / −0.04 |
+| **`直径位置` ±** | **+0.10 / −0.04** | **+0.05 / −0.01** |
+| `直径位置` 偏差 / PC-DMIS `OutTol` | +0.192 / **0.092（NG）** | +0.192 / **0.142（NG）** |
+| 合并记录 `plus_tol` / `minus_tol` | **+0.050 / −0.050**（= X 轴） | **+0.020 / −0.060**（= X 轴） |
+| 合并记录 `tolerance` | `d=+0.10 x=+0.05 y=+0.01` | `d=+0.05 x=+0.02 y=+0.04` |
+| 合并记录 `outtol` | **0.0**（= X 轴的 0.0） | **0.0** |
+| 本工具判定 | FAIL（`dev.d=0.192 > plus=0.05`） | FAIL（同） |
+
+**两个新边界（原计划没写）**
+
+5. **标量 plus/minus 与 `deviation.d` 不同源。** `deviation.d = 0.192` 来自 `直径位置` 行，
+   而标量 `plus_tol = +0.05` 来自**第一个**配对行 `X 轴位置`。于是「判定用的公差」与
+   「被判定的值」来自不同的行 —— 本例两者恰好同判 FAIL（0.192 同时超过 0.05 和 0.10），
+   **但这是巧合**：若 `直径位置` 偏差为 0.06，按它自己的 +0.10/−0.04 应**合格**，
+   按 X 轴的 ±0.05 却会判**超差**（假 NG）。修 P2-2 时这条必须一并处理。
+6. **`outtol` 也吃「首个写入者优先」。** `_apply_dimension_report_meta()` 对 `outtol` 用的是
+   同一个 `if rec.outtol is None` 模式（`:164-165`），所以合并记录的 `outtol` 取自
+   `X 轴位置` 的 **0.0**，而 PC-DMIS 对 `直径位置` 行报的 **0.092 / 0.142 被丢掉**。
+   后果：`apply_tolerance()` 开头「COM 已给出超差量时优先采信」的短路（`tolerance.py:55-60`）
+   对这类合并记录**失效**，判定退回标量 ± 路径 —— 本例结论未变，但机制已不是设计意图。
+   `outtol` 的合并策略要一起定（取最差？取逐轴？），别只改 plus/minus。
+
+**未改变结论**：本例两条记录 PC-DMIS 与本工具都判 NG，所以**当前没有实际误判**；
+上面两点是「会在什么条件下误判」的机制性缺口，属于修 P2-2 时要覆盖的边界。
 
 ---
 
@@ -702,12 +816,16 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P1-2：启动两次，确认只弹一次迁移提示且 3 个字段仍在
 - [ ] P1-3：汇总导出选两个不同目录的同名 PDF，核对第二个 Sheet
 - [ ] P1-4：PC-DMIS 内执行 `PC2XL_EXPORT`，确认 `pcdmis_partial_export.csv` 生成
-- [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差；**顺带核对多段记录的轴字母**
-      （`SegmentAxis(j)` 单参调用，见 P2-1「遗留观察」）
-- [ ] P2-2：找一个多轴项核对报告
+- [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差。
+      **2026-09-22 实测：`马丁测试-2026-08-28-B版.PRG` 全程序 42 条记录里
+      `minus_tol is None` = 0 条、COM 抛异常 0 处 ⇒ 这份程序复现不了，需另找/另造。**
+      先跑 `python -m modules.pc_to_excel.cli dump-tols --filter <前缀> -o dump.txt`
+      拿清单，再决定用哪份程序。多段记录的轴字母也顺带看一眼（`SegmentAxis(j)` 单参已确认合法）
+- [ ] P2-2：找一个多轴项核对报告。**已有现成样本：本程序的 `CC_15`/`CC_16`**
+      （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 265 passed）
+- [ ] 全量回归：`python -m pytest -q`（当前 277 passed）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 
@@ -729,3 +847,6 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **P3-7 实施完成**：新建 `pytest.ini`（`python_files` 补上 `phase8_smoke.py` + `testpaths = tests modules`）。裸跑 `pytest` 收集数 206 → **248**，42 个用例全部找回；显式路径用法不受影响。同步 `CLAUDE.md` / `README.md` / `docs/PERF_UI_LATENCY.md` 里的历史测试数字与命令。**本文件的基线命令也随之简化为裸跑** |
 | 2026-09-22 | **P1-3 实施完成**：缓存图片名改为 `{stem}_{路径哈希}{_pN}{_roi_比例}.png`。新增 `_path_cache_suffix()`；顺带接上**原本零引用的** `roi_cache_suffix()`（旧实现只加布尔 `_roi`，改 ROI 后仍命中旧 OCR）。+3 条测试，已用 `git stash` 证明「修复前 2 failed」。全量 `251 passed`。`dpi` 按原边界明确不做并已在 docstring 说明 |
 | 2026-09-22 | **P2-1 实施完成**：两处下公差改走 `_normalize_minus_tol(_safe_float(...))` + `None` 时补 debug 日志。全文件 27 处 `tol_cmd.` 调用已逐条清点，**无第三处漏网**。+14 条测试（矩阵含 `show_negative` 维度 —— 实施时才发现 `show_negative=False` 才是「丢行」那条路径，现场默认即走它），已用 `git stash` 证明「修复前 10 failed / 7 passed」。全量 `265 passed`。登记一条待真机确认的遗留观察（`SegmentAxis(j)` 单参调用）。本文件基线数字 248 → 265 |
+| 2026-09-22 | **P2-1 续 + 真机诊断落地**：补「COM **抛异常**」路径（新增 `_safe_com_float()`）；新增 `dump-tols` 只读诊断子命令（三态 `ok`/`COM_FAILED`/`RAISED`，汇总「下公差不可用」的行）。+12 条测试，全量 `277 passed`。两条「有牙」证明：回退到 HEAD → 6 failed（全是抛异常用例）；回退到 `6f77f72`（P2-1 前）→ 16 failed（三种失效路径全覆盖）。**`SegmentAxis(j)` 遗留观察结案**（2024.1 上单参合法）。本文件基线 265 → 277 |
+| 2026-09-22 | **真机实测（PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`，242 命令）**：P2-1 条件**复现不了**（42 条记录 `minus_tol is None` = 0、抛异常 0）⇒ 真机清单该条需换程序。`CC_1`–`CC_4` 是被改动直接覆盖的区段区分支、下公差为真值 `0.0`，实测仍判**合格**（健康路径未被改坏）。`CC_15`/`CC_16` 成为 **P2-2 现成样本**，并暴露两个新边界：标量 plus/minus 与 `deviation.d` **不同源**、`outtol` 同样「首个写入者优先」导致超差短路失效（详见 P2-2「现场实测补充」） |
+| 2026-09-22 | 顺带确认实现前提：本机 `cmds.Item(i)` 对每个索引都抛 **TypeError**，必须靠 `_get_command_at()` 的回退链取命令（诊断子命令复用之，未另写一套） |
