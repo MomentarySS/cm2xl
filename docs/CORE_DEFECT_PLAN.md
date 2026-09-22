@@ -34,6 +34,7 @@
 |---|---------|---------|---------|---------|
 | **P1-2** | 启动 app **两次** | 无 | 只弹一次「配置已自动迁移」；`report_profile` / `custom_item_prefixes` / `ocr_roi` 三个字段仍在 | `0331696` |
 | **P1-4** | ① 重新点一次「部署 BAS 脚本」 ② PC-DMIS 内执行 `PC2XL_EXPORT` | 编码修复**不会自动生效**，必须先重新部署 | `pcdmis_partial_export.csv` 生成（**新路径** `D:\AI\work\cm2xl\data\reports\`） | `05f4e61` |
+| ⚠️ | **P1-4 的验证当前被 P1-5 阻塞** | 脚本第 9 行编译不过，跑不到 `saveCsv` | 先修 P1-5 再验 P1-4 | — |
 | **P1-1** | 跑一份 **>50 项**的 PDF 导出 | 需要这样一份 PDF | 序号 51+ 被写入 | `fcbc19c` |
 | **P1-3** | 汇总导出选**两个不同目录的同名 PDF** | 需要两个同名 PDF | 第二个 Sheet 不是第一个零件的值 | `9d1957d` |
 | **P2-1** | 构造「下公差读不到」的行 | **当前那份程序复现不了**（已实测 42 条里 0 条），需另找/另造 | 不丢行、无假超差 | `22a532f` + `66560d9` |
@@ -48,6 +49,15 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m modules.pc_to_excel.cli dump-t
 看末尾「下公差不可用（`minus_tol is None`）」与「COM 抛异常」两个汇总数字。
 
 ### 二、我还能做什么（按推荐顺序）
+
+**最优先：P1-5 + P1-6（2026-09-22 晚真机新发现，均已定位到「可照着写代码」）**
+
+| 项 | 类型 | 为什么插到最前 |
+|----|------|--------------|
+| **P1-5** | 功能不可用 | **阻塞 P1-4 的真机验证** —— 脚本编译不过，编码修复验不到。改法机械但有个必须守住的边界：不能盲改 `\bID\b`（会连带改掉 `cmd.ID` 属性访问） |
+| **P1-6** | 自动保存恒失败 | 同一次真机测试暴露：`part.Save()` 在 2024.1 是**属性**不是方法 ⇒ 每次植入都报「自动保存失败」，用户只能手动 Ctrl+S。改法要按运行时形态分派，**且必须用 `IsModified` 验证效果**，否则会把「没保存」报成「已保存」 |
+
+其余按此顺序：
 
 | 顺序 | 项 | 类型 | 为什么排这里 |
 |:---:|----|------|------------|
@@ -64,7 +74,7 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 
 ### 三、整体进度（截至 2026-09-22）
 
-**已完成 7 / 16，未开始 9 / 16。** 基线 233 → **278 passed**（`tests/` 42 + `modules/*/tests` 236）。
+**已完成 7 / 18，未开始 11 / 18。** 基线 233 → **278 passed**（`tests/` 42 + `modules/*/tests` 236）。
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -95,6 +105,8 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成**（真机待验） |
 | P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ✅ **已完成**（真机待验） |
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
+| P1-5 | BAS 常量 `ID` 撞引擎内置名，脚本编译不过 | `scripts/export_current.bas.template:9,149` | 功能不可用 | ✅ | ⬜ 未开始 |
+| P1-6 | `part.Save()` 在 2024.1 是**属性**不是方法 | `inject/save_helper.py:96` | 自动保存恒失败 | ✅ | ⬜ 未开始 |
 | P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ✅ **已完成**（真机待验） |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-3 | 「最差 NG 子项」只比一个样品 | `cmm_filler/core/sub_item_conflict.py:17-21` | 判定错 | ✅ | ⬜ 未开始 |
@@ -378,6 +390,101 @@ reader 是 `OpenTextFile(CONFIG_PATH, 1, False, -1)`（`scripts/export_current.b
    `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv`
    （`paths.pc_excel_reports` = `data_dir/reports`，dev 下 `data_dir` = 仓库根 `data/`）。
    也就是说：**重新部署同时会换掉 CSV 的落盘位置** —— 这是期望行为，但核对时要按新路径找文件。
+
+**现象修正（2026-09-22 晚，真机）** — 本节原先写的症状是「弹『写入文件失败』」。
+真机跑下来发现**这个症状根本没机会出现**：脚本在第 9 行就编译不过（见 P1-5），
+压根到不了 `saveCsv`。所以「写入文件失败」是审查时**推演**出来的，不是观察到的。
+编码缺陷本身仍然成立且已按字节验证（74 字节无 BOM → 126 字节带 BOM），
+但它**是必要不充分条件** —— 必须先修 P1-5 才能验到它。
+
+---
+
+### P1-5 BAS 常量 `ID` 撞引擎内置名
+
+**现象** — 在 PC-DMIS 内执行 `PC2XL_EXPORT`，弹：
+
+```
+PC-DMIS Basic Scripting Engine
+Error on line: 9 - Duplicate definition: ID
+```
+
+脚本根本编译不过，`pcdmis_partial_export.csv` 不可能生成。
+
+**根因** — 部署的 `export_current.bas` 第 9 行是 `Const ID = 2`。全文件里 `ID`
+**只声明这一次**（已用 `\bID\b` 全量清点：7 处出现中 4 处是 `cmd.ID` / `dimObj.ID` /
+`tolCmd.ID` 这类**属性访问**、1 处在 CSV 表头字符串里），所以「重复定义」只能来自
+**引擎预置的同名全局**。旁证：脚本里那批数值常量（`ID=2`、`AXIS=132`、`NOMINAL=166`、
+`F_PLUS_TOL=167` …）与 PC-DMIS 自己的字段常量**同名同值**
+（对照 `connector/pcdlrn_constants.py` 的 `get_const("ID")=2`、`F_PLUS_TOL=167`），
+像是引擎已经把这些字段常量注入成全局 —— 而引擎只报**第一个**冲突，所以后面可能还有。
+
+**改法（推荐 A）**
+
+- **A（推荐）**：把脚本里那批**字段常量**统一加前缀改名（如 `ID` → `FLD_ID`），
+  一次消除整类冲突。共 18 个常量声明、约 30 处引用。
+- B：只改 `ID`（2 行），再跑一次看引擎报不报下一个。diff 最小，但可能要来回几轮。
+
+**语义边界（这条最要紧）**
+
+1. **绝对不能盲改 `\bID\b`**：`cmd.ID` / `dimObj.ID` / `tolCmd.ID` 是 COM **属性访问**，
+   改了脚本就废。只有第 9 行（声明）与第 149 行 `cmd.GetText(ID, 0)`（唯一真用常量的地方）
+   该动。
+2. `CONFIG_PATH` 与 `DATA_TYPE_*` 不是字段常量，撞名风险低，**本次不动**（缩小 diff）。
+3. 改名是**行为等价**变换（值不变），不需要改 BAS 逻辑。
+4. 改完必须**重新部署**才生效（同 P1-4 边界 3）。
+
+**验证** — 单测：断言模板里不存在裸的 `Const ID =`，且 `cmd.ID` 这类属性访问**未被改动**
+（反向守卫，防止有人图省事全局替换）。真机：重新部署 → 在 PC-DMIS 内跑 `PC2XL_EXPORT`，
+确认不再报第 9 行错误。
+
+---
+
+### P1-6 `part.Save()` 在 2024.1 是属性不是方法
+
+**现象** — 点「植入/更新导出命令」后弹「自动保存失败」：
+
+```
+COM Save() 失败：'bool' object is not callable
+目标文件：C:\Users\terence\Desktop\demo\cm2xl开发用20260922.PRG
+```
+
+**根因** — `save_helper.py:96` 写死 `part.Save()`。真机内省（只读）实测：
+
+| 探测 | 结果 |
+|------|------|
+| `part.Save` 求值 | `True`，`type=bool`，**`callable=False`** ⇒ 是**属性**不是方法 |
+| `part.IsModified` | 存在（dispid 124），求值 `False` |
+| `part.SaveAs` | 存在（dispid 22） |
+| `PCDLRN.Application` 上的 `Save*` | **一个都没有** |
+
+所以 `part.Save()` 必然抛 `TypeError: 'bool' object is not callable` ⇒
+**自动保存恒失败**，用户每次都只能手动 Ctrl+S。注意这是**假失败**：
+命令其实已写入内存（`part.IsModified` 可用来判定真实状态）。
+
+**改法** — 按运行时**形态分派**，不要写死一种（老版本是方法、2024.1 是属性）：
+
+```python
+save = getattr(part, "Save", None)
+if callable(save):
+    save()            # 老版本：方法
+else:
+    part.Save = True  # 2024.1：属性赋值触发
+```
+
+**语义边界**
+
+1. **必须验证效果，不能只看有没有抛异常。** 若属性 setter 是空操作，上面这段会
+   把「没保存」报成「已保存」—— 那是**假成功**，比现在的假失败更糟。
+   落盘判据用 `part.IsModified`（存在且可读，已实测）；仍为 `True` 就照实报失败。
+2. `SaveAs` 不在本次范围：它需要目标路径，而 `check_save_preflight()` 已经保证
+   PRG 有可写路径，用 `Save` 语义更贴近「保存当前程序」。
+3. 不改 `check_save_preflight()` 的判据。
+4. 提示文案要跟着改：现在那 4 条「常见原因」是在猜，实测根因是 API 形态不符，
+   继续留着会误导下一个排查的人。
+
+**验证** — 单测：`Save` 是 bool 属性 / 是方法 / 两种都不生效（`IsModified` 仍 True）
+三种替身，断言分别得到「成功 / 成功 / 明确失败」。真机：植入一次，确认
+`IsModified` 转 False 且 PRG mtime 更新。
 
 ---
 
@@ -971,3 +1078,4 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **真机实测（PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`，242 命令）**：P2-1 条件**复现不了**（42 条记录 `minus_tol is None` = 0、抛异常 0）⇒ 真机清单该条需换程序。`CC_1`–`CC_4` 是被改动直接覆盖的区段区分支、下公差为真值 `0.0`，实测仍判**合格**（健康路径未被改坏）。`CC_15`/`CC_16` 成为 **P2-2 现成样本**，并暴露两个新边界：标量 plus/minus 与 `deviation.d` **不同源**、`outtol` 同样「首个写入者优先」导致超差短路失效（详见 P2-2「现场实测补充」） |
 | 2026-09-22 | 顺带确认实现前提：本机 `cmds.Item(i)` 对每个索引都抛 **TypeError**，必须靠 `_get_command_at()` 的回退链取命令（诊断子命令复用之，未另写一套） |
 | 2026-09-22 | **P1-4 实施完成**：`export_config.txt` 改按 UTF-16（带 BOM）写，对齐 BAS 读侧 `OpenTextFile(..., -1)`。本机复核根因：已部署文件 74 字节、前 4 字节 `44 3A 5C 41`、无 BOM；全仓仅一个写入方。+1 条测试，并**修正**原有那条按 utf-8 读回的测试（它过去通过正是 bug 被漏过的原因）。已用 `git stash` 证明「修复前 2 failed」（`assert b'C:' == b'\xff\xfe'`）。全量 `278 passed`。登记两条真机前置事实：编码修复不自动生效（需重新部署）；重新部署会同时把 CSV 落盘位置从旧项目路径换成 `cm2xl\data\reports`。本文件基线 277 → 278 |
+| 2026-09-22 | **P1-4 真机验证（部分）+ 新发现 P1-5 / P1-6**。已验证：重新部署后 `export_config.txt` = 126 字节、`FF FE` BOM、按 FSO 读法干净两行（写侧通过）；`pcdmis_inject success=True`；**P1-2 真机验证通过**（第二次启动 0 条迁移弹窗审计、配置未被再次改写、退出保存未写丢 `_version`；反证：白天 09:15–15:16 每次启动都弹，共 20 次）。新发现两个 bug（均已定位，见 P1-5 / P1-6）：**① BAS 第 9 行 `Const ID = 2` 撞引擎内置名，脚本编译不过** ⇒ 修正 P1-4 的「现象」——「写入文件失败」从未被观察到，是推演出来的，且 P1-4 的验证被 P1-5 阻塞；**② `part.Save()` 在 2024.1 是属性不是方法**（内省实测 `callable=False`）⇒ 自动保存恒失败。本文件条目数 16 → 18 |
