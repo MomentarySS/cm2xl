@@ -25,7 +25,7 @@
 cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
-D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q          # 全量回归（收集范围由 pytest.ini 的 testpaths 限定）
 ```
 
 ### 导入路径
@@ -216,6 +216,6 @@ python -c "from utils.theme import _build_theme_json; _build_theme_json()"
 | 0–6 | ✅ 完成 |
 | 7 | ✅ 完成（README + CLAUDE.md + 旧入口重定向） |
 | 7.5 | ✅ 完成（设置 + 关于对话框，外观/OCR模型/日志级别） |
-| 8 | ✅ 完成（130 tests passed；GUI/OCR/PCDMIS 需人工真机验证） |
+| 8 | ✅ 完成（当时 130 tests passed —— **该数字已过期**，当前基线与收集范围见 `pytest.ini` 与 `docs/CORE_DEFECT_PLAN.md`；GUI/OCR/PCDMIS 需人工真机验证） |
 
 详细参见 `docs/MIGRATION_ARCHIVE.md`。

@@ -33,12 +33,14 @@ cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 ```
 
-烟测命令：
+烟测命令（全量回归，收集范围由 `pytest.ini` 限定）：
 
 ```powershell
 cd D:\AI\work\cm2xl
-D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 ```
+
+> 注意：只跑 `pytest tests\phase8_smoke.py` 会漏掉 `modules/*/tests` 下的 200+ 个用例。
 
 如只想快速验证主窗口、跳过 OCR 预加载：
 
