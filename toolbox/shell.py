@@ -67,6 +67,7 @@ class Shell:
         self._active_module_name: Optional[str] = None
         self._modules: dict[str, object] = {}
         self._module_hosts: dict[str, ctk.CTkFrame] = {}
+        self._active_host: Optional[str] = None   # 当前置于最上层的 host 名
         self._mounted_modules: set[str] = set()
         self._running = True
         self._start_module = start_module
@@ -295,6 +296,53 @@ class Shell:
         )
         self._placeholder.place(relx=0.5, rely=0.5, anchor="center")
 
+    # ── 模块 host 堆叠切换 ────────────────────────────────────────────────
+
+    def _place_module_host(self, name: str) -> None:
+        """确保 host 已铺满内容区（幂等）。
+
+        必须用 place() 而不是 pack()：多个 host 若都 pack(fill/expand) 进同一个
+        cavity，第一个的 expand=True 会吃光全部扩展空间，后面的只拿到 1x1
+        （实测 mapped=0，等于不可见）。place(relwidth/relheight=1) 让每个 host
+        都独立铺满容器，互不争抢，再靠 lift()/lower() 决定谁可见。
+        """
+        host = self._module_hosts.get(name)
+        if host is None or not host.winfo_exists():
+            return
+        if not host.winfo_manager():
+            host.place(relx=0, rely=0, relwidth=1, relheight=1)
+        host.update_idletasks()
+
+    def _raise_module_host(self, name: str) -> None:
+        """把指定模块的 host 提到最上层（可见）。
+
+        与 pack_forget/pack 的区别：所有 host 始终铺满内容区，靠堆叠顺序决定
+        谁可见。这样 _content_frame 永远有内容，不会在切换瞬间暴露成一块纯色
+        （浅色白 / 深色近黑）—— 即用户反馈的「黑白色块闪屏」。
+        """
+        host = self._module_hosts.get(name)
+        if host is None:
+            return
+        host.update_idletasks()   # 先让 Tk 落地几何，再改堆叠顺序
+        host.lift()
+        self._active_host = name
+
+    def _lower_module_host(self, name: str) -> None:
+        """把指定模块的 host 压到堆叠底部（不可见），但不取消映射。
+
+        不用 host.lower(self._placeholder)：placeholder 也是 place() 管理的，
+        且在有模块激活时已被 place_forget()，拿它当堆叠参照不可靠。
+        直接 lower() 到底部即可；将来若重新 place() 占位 label，它自然在最上层。
+        """
+        host = self._module_hosts.get(name)
+        if host is None or not host.winfo_exists():
+            return
+        host.update_idletasks()   # 同 _raise_module_host：先落地再改堆叠
+        host.lower()
+        if getattr(self, "_active_host", None) == name:
+            self._active_host = None
+
+
     # ── 模块加载 ───────────────────────────────────────────────────────────
 
     def _load_modules(self):
@@ -438,19 +486,6 @@ class Shell:
         if name == self._active_module_name:
             return
 
-        # 隐藏当前模块。模块实例保留，避免每次切换都重建整页 UI。
-        if self._active_module is not None:
-            old_name = self._active_module_name or "?"
-            try:
-                if hasattr(self._active_module, "on_deactivate"):
-                    self._active_module.on_deactivate()
-                host = self._module_hosts.get(old_name)
-                if host is not None:
-                    host.pack_forget()
-                audit("module_deactivate", module=old_name)
-            except Exception as e:
-                logger.exception(f"deactivate {old_name} 失败: {e}")
-
         # 切换高亮 — 选中态用品牌色实底（不再是浅 hover 色，更明确）
         for n, btn in self._nav_buttons.items():
             if n == name:
@@ -466,7 +501,10 @@ class Shell:
                     hover_color=nav_hover_color(),
                 )
 
-        # 挂载或显示新模块
+        # 挂载或显示新模块。
+        # 顺序刻意安排成「先 mount、后 raise、最后 lower 旧的」：
+        # 首次挂载要构建整页 widget（pc_to_excel 77 个 ≈100ms），这期间旧模块
+        # 仍然可见，用户不会看到空内容区；新页就绪后一次 lift 完成交换。
         module = self._modules[name]
         try:
             self._placeholder.place_forget()
@@ -476,15 +514,31 @@ class Shell:
             if host is None:
                 host = ctk.CTkFrame(self._content_frame, corner_radius=0, fg_color=page_bg_color())
                 self._module_hosts[name] = host
-            host.pack(fill="both", expand=True)
+            # 先铺满再 mount：host 必须先有几何管理，再往里面建 widget。
+            # 同时旧模块在新页构建期间仍然可见，用户不会看到空内容区。
+            self._place_module_host(name)
             if name not in self._mounted_modules:
                 module.mount(host)
                 self._mounted_modules.add(name)
+            # 新页先就绪再交换，旧模块的 on_deactivate() 放到交换之后调用，
+            # 保证内容区任何时刻都有可见内容（不会暴露成纯色块）。
+            old_name = self._active_module_name
+            old_module = self._active_module
+            self._raise_module_host(name)
+            if old_module is not None and old_name != name:
+                self._lower_module_host(old_name or "")
             module.on_activate()
             self._active_module = module
             self._active_module_name = name
             self._module_label.configure(text=module.title)
             self.update_status("就绪", "info")
+            if old_module is not None and old_name != name:
+                try:
+                    if hasattr(old_module, "on_deactivate"):
+                        old_module.on_deactivate()
+                    audit("module_deactivate", module=old_name)
+                except Exception as e:
+                    logger.exception(f"deactivate {old_name} 失败: {e}")
             audit("module_activate", module=name, version=module.version)
             logger.info(f"模块已激活: {name}")
         except Exception as e:
