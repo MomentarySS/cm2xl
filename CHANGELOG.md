@@ -4,6 +4,44 @@
 
 ---
 
+## [1.1.0] — 2026-09-22
+
+### 整体
+
+- `toolbox/app_meta.py`：`APP_VERSION` 统一为 `1.1.0`
+- 安装包输出文件名同步为 `cm2xl_Setup_1.1.0.exe`
+- **界面卡顿专项优化**（详见 `docs/PERF_UI_LATENCY.md`）：深色/浅色切换、模块切换、PCDMIS 状态刷新三条路径的主线程阻塞均大幅下降
+
+### 性能
+
+| 场景 | 修复前 | 修复后 | 根因 |
+|------|-------:|-------:|------|
+| 切到 PCDMIS 模块 | ~560 ms | 194 ms（2s 内命中缓存 ~0.001 ms） | `_perm_text()` 内 3 次 `get_pcdmis_pid()`，等价 spawn 3 个 `tasklist.exe`（单次实测 190 ms） |
+| 已连接时每次激活/轮询 | ~620 ms | 45 ms | `dispatch_pcdmis()` 内部调 `is_pcdmis_running()`，每次 dispatch 付一次 tasklist；`get_active_part_name()` 因 `ensure_session()` 重复 dispatch |
+| 外观切换（2000 widget） | 361 ms | — | `ctk.set_appearance_mode()` 同步遍历全部存活 widget，O(n) |
+| 打开设置/关于（第二次起） | 71 / 82 ms | ~0.4 ms | 每次重开都重建全部 CustomTkinter widget（Settings 28 个 / About 60 个） |
+
+- `_perm_text()`：合并为单次 `get_pcdmis_pid()` + 2 秒 TTL 缓存；`elevated` 为 `None` 时显式显示「PCDMIS:?」，不再误报「普通」
+- `dispatch_pcdmis()`：固定「先 `GetActiveObject`、失败转 `Dispatch`」顺序，删掉 `is_pcdmis_running()` 前置判断（该判断只影响异常路径开销，不影响功能正确性）
+- `get_active_part_name()`：去掉内部 `ensure_session()` 自愈，改为纯轻量读取 + 缓存兜底；导出前的会话自愈路径 `_ensure_connected()` 未改动
+- CMMFiller 预览窗口：`_build_preview_card()` 删除内层 `cols` Frame，把 `label` + `desc` 合并为单个 Label，**保留 tol 独立列**（灰色 / size 12 / 右对齐）以维持表格可读性
+- `settings_dialog._save()`：`set_appearance_mode()` 改走 `after_idle`，不再在「保存」按钮回调里同步执行
+
+### 缺陷修复
+
+- **外观切换失效**：`set_appearance_mode()` 的 `after_idle` 原挂在设置对话框自身上，而 `_save()` 结尾会 destroy 该窗口，Tk 随之取消其未执行的 after 回调，导致模式切换永不执行（设置已写盘、下次启动才生效）。改挂 Shell 主窗口
+- **模块切换黑白闪屏**：`_activate_module()` 对旧 host `pack_forget()`、对新 host `pack()`，中间 `_content_frame` 短暂空出，暴露区域只有 `page_bg` 一色——浅色模式下是一块白、深色模式下是近黑。改为所有 host 用 `place()` 铺满内容区，靠 `lift()`/`lower()` 切换堆叠，任何时刻都不 unmap
+- watcher 的 after id 在触发后未清零，`_stop_status_watcher()` 会去取消已执行的 id；现触发即置 `None`
+
+### 测试
+
+- `modules/pc_to_excel/tests`：128 passed
+- 新增 dispatch 顺序/回退/双失败用例，`Fix 4-B` 专项 5 个（含 `com_call_lock` 为 `RLock`、需跨线程持锁才能制造抢锁失败）
+- 新增对话框复用与 after-idle 生命周期校验；模块切换零 unmapped 校验
+- `tests/phase8_smoke.py`：1 个**既有**失败（`TestCrashLog::test_exception_written` 断字面量 `MODEL_MISSING`，而 `ToolboxError.__str__` 只输出 `[E1003]`），与本次改动无关
+
+---
+
 ## [1.0.12] — 2026-09-03
 
 ### 整体

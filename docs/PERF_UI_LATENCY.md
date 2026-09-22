@@ -383,12 +383,24 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_fix4.py
 
 ## 遗留事项
 
-1. **真机回归未完成**。本轮全程没有 PDF 可用于验证 CMMFiller 预览窗口；
-   UI 改动只做到静态验证 + 单测 + micro-benchmark。PCDMIS 连接 / 断开 /
-   一键导出 / 多件连续测需在真机确认。
-2. `main` 分支已 push 至 `origin/main`。
-3. `tests/phase8_smoke.py::TestCrashLog::test_exception_written` 是**排查前就存在**
+1. **CMMFiller 预览窗口未真机回归**。PCDMIS 侧已在真机验证通过（见下），但
+   「打开预览后切外观」这条路径始终没有 PDF 可测；预览窗口一次能挂上万 widget
+   进 `AppearanceModeTracker`，是问题 1 收益最大的场景，待有 PDF 时补验。
+2. **真机回归结果（2026-09-22 15:15–15:25 会话，审计日志逐条核对）**：
+   - 模块切换 27 次，26 次在同一秒内完成（audit 精度到秒）
+   - PCDMIS 连接 4 次成功、断开 3 次；**一键导出 74 个特征成功**
+     （`塑料DEMO_report.xlsx`，9122 字节）
+   - 外观切换 `settings_saved` 7 次（light/dark 反复），界面即时生效
+   - OCR 缓存清理正常（29 PNG / 26 条记录）
+   - 该会话 `toolbox.log` 36 行，**ERROR / WARNING / Traceback 数量为 0**
+   - 需用户主观确认的：对话框第二次起重开是否无卡顿（开关动作不进审计）
+3. `main` 分支已 push 至 `origin/main`。
+4. `tests/phase8_smoke.py::TestCrashLog::test_exception_written` 是**排查前就存在**
    的失败：断言字面量 `MODEL_MISSING`，但 `ToolboxError.__str__` 只输出
    `[E1003]`。与本文所有改动无关。
-4. 连接流程中仍有 tasklist（`try_connect_with_app():437`、`check_elevation_match()`），
+5. 连接流程中仍有 tasklist（`try_connect_with_app():437`、`check_elevation_match()`），
    一次性动作可接受，未改动。详见 4.9。
+6. **模块切换黑白闪屏**（用户后续反馈）已在 `95be9e9` 修复：所有 module host
+   改用 `place()` 铺满内容区 + `lift()`/`lower()` 切换堆叠，不再
+   `pack_forget/pack`。根因是中间帧 `_content_frame` 整块暴露成单一 `page_bg`
+   色（浅色白 / 深色近黑）。详见该 commit 的说明。

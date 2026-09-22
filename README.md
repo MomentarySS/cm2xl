@@ -55,7 +55,7 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 7）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.2.exe
+# 产物：installer/output/cm2xl_Setup_1.1.0.exe
 ```
 
 打包前确保：
@@ -258,6 +258,6 @@ cm2xl；`build.bat` 会自动将该启动器复制到 `dist/cm2xl/`。
 
 ## 版本
 
-`1.0.2` —— 当前开发版
+`1.1.0` —— 当前开发版
 
 定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。配置 schema 版本（`CONFIG_SCHEMA_VERSION`）为 `2.0.0`，与应用程序版本独立。
