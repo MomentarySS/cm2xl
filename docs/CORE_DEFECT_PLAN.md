@@ -420,22 +420,58 @@ Error on line: 9 - Duplicate definition: ID
 
 **改法（推荐 A）**
 
-- **A（推荐）**：把脚本里那批**字段常量**统一加前缀改名（如 `ID` → `FLD_ID`），
-  一次消除整类冲突。共 18 个常量声明、约 30 处引用。
+- **A（推荐）**：把脚本里那批**字段常量**统一加 `FLD_` 前缀，一次消除整类冲突。
 - B：只改 `ID`（2 行），再跑一次看引擎报不报下一个。diff 最小，但可能要来回几轮。
+- **明确不做**：删掉这些声明、改用引擎预置的同名全局。`Option Explicit` 下若引擎只预置了
+  **部分**名字，删完会变成「未定义变量」——比现在更难排查。加前缀不依赖引擎内部，
+  行为等价（值不变），是唯一不需要先知道「到底哪几个撞名」就能一次到位的做法。
+
+**实施清单（逐行精确，2026-09-22 已核对）**
+
+⚠️ 两个坑，都踩过一次：
+
+1. **必须大小写敏感、逐行确认。** 第一版统计用 `Select-String`（默认大小写不敏感），
+   把局部变量 `nominal` 也算成了 `NOMINAL` 的引用。真实情况见下表「仅改这些行」。
+2. **同一个拼写可能两种身份并存**：`NOMINAL` 在第 162 行是 `dimObj.NOMINAL`
+   （COM **属性**），第 177 行才是常量。**盲改会改坏属性访问。**
+
+| 常量（声明行） | 改为 | **仅改这些行**（常量引用） | 同拼写但**不能动**的地方 |
+|---|---|---|---|
+| `ID`（9） | `FLD_ID` | **149** | 148 / 159 / 200 / 225 是 `cmd.ID`·`dimObj.ID`·`tolCmd.ID` **属性**；45 在 CSV 表头字符串里 |
+| `AXIS`（10） | `FLD_AXIS` | 183, 184 | — |
+| `NOMINAL`（11） | `FLD_NOMINAL` | **177** | 162 是 `dimObj.NOMINAL` **属性**；151 / 188 是局部变量 `nominal` |
+| `F_PLUS_TOL`（12） | `FLD_F_PLUS_TOL` | 178 | — |
+| `F_MINUS_TOL`（13） | `FLD_F_MINUS_TOL` | 179 | — |
+| `DIM_MEASURED`（14） | `FLD_DIM_MEASURED` | 180 | — |
+| `DIM_LENGTH`（15） | `FLD_DIM_LENGTH` | 181 | — |
+| `DIM_BONUS`（16） | `FLD_DIM_BONUS` | 182 | — |
+| `UNIT_TYPE`（17） | 删除（或改名） | **无引用 —— 死代码** | — |
+| `LINE1_FEATNAME`（18） | `FLD_LINE1_FEATNAME` | 211 | — |
+| `LINE1_NOMINAL`（19） | `FLD_LINE1_NOMINAL` | 206 | — |
+| `LINE1_MEAS`（20） | `FLD_LINE1_MEAS` | 202, 209 | — |
+| `LINE1_PLUSTOL`（21） | `FLD_LINE1_PLUSTOL` | 207 | — |
+| `LINE1_MINUSTOL`（22） | `FLD_LINE1_MINUSTOL` | 208 | — |
+| `LINE1_BONUS`（23） | `FLD_LINE1_BONUS` | 210 | — |
+
+**不改**：`CONFIG_PATH`（4，引用 113/115）、`DATA_TYPE_DIMENSION`（5）、`DATA_TYPE_FCF`（6）、
+`DATA_TYPE_FCFDIM`（7）—— 它们不是 PC-DMIS 字段常量，撞名风险低，缩小 diff。
 
 **语义边界（这条最要紧）**
 
-1. **绝对不能盲改 `\bID\b`**：`cmd.ID` / `dimObj.ID` / `tolCmd.ID` 是 COM **属性访问**，
-   改了脚本就废。只有第 9 行（声明）与第 149 行 `cmd.GetText(ID, 0)`（唯一真用常量的地方）
-   该动。
-2. `CONFIG_PATH` 与 `DATA_TYPE_*` 不是字段常量，撞名风险低，**本次不动**（缩小 diff）。
-3. 改名是**行为等价**变换（值不变），不需要改 BAS 逻辑。
+1. **绝对不能盲改 `\bID\b` / `\bNOMINAL\b`**：会连带改掉 COM 属性访问，脚本就废。
+   只动上表「仅改这些行」那一列。
+2. 改名是**行为等价**变换（值不变），不需要改 BAS 逻辑。
+3. `UNIT_TYPE` 零引用，顺手删掉（或一起改名）—— 留着只会让下一个读脚本的人困惑。
 4. 改完必须**重新部署**才生效（同 P1-4 边界 3）。
 
-**验证** — 单测：断言模板里不存在裸的 `Const ID =`，且 `cmd.ID` 这类属性访问**未被改动**
-（反向守卫，防止有人图省事全局替换）。真机：重新部署 → 在 PC-DMIS 内跑 `PC2XL_EXPORT`，
-确认不再报第 9 行错误。
+**验证** — 单测（对模板文件做静态断言，不需要 PC-DMIS）：
+
+- 断言模板里不存在裸的 `Const ID =` / `Const NOMINAL =` 等（按上表逐个查）。
+- **反向守卫**：断言 `cmd.ID`、`dimObj.ID`、`dimObj.NOMINAL`、`tolCmd.ID` 这些
+  **属性访问原样保留**（防止有人图省事全局替换）。
+- 真机：重新部署 → 在 PC-DMIS 内跑 `PC2XL_EXPORT`，确认不再报第 9 行错误。
+  **若报的是新的行号**，说明引擎预置的名字不止 `ID` —— 照上表继续加前缀即可，
+  不需要重新分析。
 
 ---
 
@@ -464,27 +500,79 @@ COM Save() 失败：'bool' object is not callable
 **改法** — 按运行时**形态分派**，不要写死一种（老版本是方法、2024.1 是属性）：
 
 ```python
-save = getattr(part, "Save", None)
-if callable(save):
-    save()            # 老版本：方法
-else:
-    part.Save = True  # 2024.1：属性赋值触发
+def _part_is_modified(part: Any) -> bool | None:
+    """读 part.IsModified（2024.1 实测存在且可读）；读不到返回 None（未知）。"""
+    try:
+        val = getattr(part, "IsModified")
+    except Exception:
+        return None
+    return val if isinstance(val, bool) else None
+
+
+def _trigger_part_save(part: Any) -> None:
+    """触发保存当前程序。
+
+    2024.1 实测：`part.Save` 是**属性**（读出来是 bool、callable=False），
+    `PCDLRN.Application` 上没有任何 Save* 成员。老版本 `Save` 是方法。
+    所以按运行时形态分派 —— 写死 `part.Save()` 会恒抛
+    TypeError: 'bool' object is not callable。
+    """
+    save = getattr(part, "Save", None)
+    if callable(save):
+        save()            # 老版本：方法
+        return
+    part.Save = True      # 2024.1：属性赋值触发
+
+
+def try_save_part_program(part, app=None):
+    ok, reason = check_save_preflight(part)
+    if not ok:
+        return False, reason
+    if app is not None:
+        wait_app_ready(app)
+    path = part_program_path(part)
+
+    try:
+        _trigger_part_save(part)
+    except Exception as exc:
+        return False, _save_failure_hint(exc, path)
+
+    # 关键：必须验证效果。若属性 setter 是空操作，只看「没抛异常」会把
+    # 「没保存」报成「已保存」—— 假成功比现在的假失败更糟。
+    after = _part_is_modified(part)
+    if after is True:
+        return False, _save_failure_hint(
+            RuntimeError("Save 已调用且未抛异常，但 IsModified 仍为 True（未落盘）"), path
+        )
+    if after is None:
+        # 读不到 IsModified：退回「未抛异常即视为成功」，但在提示里说明无法验证
+        return True, f"{path}（未能读取 IsModified，保存结果未经验证）"
+    return True, str(path or "")
 ```
+
+`_save_failure_hint(exc, path)` 抽出来（原来那段 4 条「常见原因」内联在函数里），
+文案要改：**实测根因是 API 形态不符，不是权限/网络盘**。保留「命令已写入内存，
+可手动 Ctrl+S」这条（它对用户仍有效），删掉猜测性条目，加上真实根因。
 
 **语义边界**
 
-1. **必须验证效果，不能只看有没有抛异常。** 若属性 setter 是空操作，上面这段会
-   把「没保存」报成「已保存」—— 那是**假成功**，比现在的假失败更糟。
-   落盘判据用 `part.IsModified`（存在且可读，已实测）；仍为 `True` 就照实报失败。
+1. **必须验证效果，不能只看有没有抛异常**（上面已内建）。落盘判据用
+   `part.IsModified`（存在且可读，已实测）；仍为 `True` 就照实报失败。
 2. `SaveAs` 不在本次范围：它需要目标路径，而 `check_save_preflight()` 已经保证
    PRG 有可写路径，用 `Save` 语义更贴近「保存当前程序」。
 3. 不改 `check_save_preflight()` 的判据。
-4. 提示文案要跟着改：现在那 4 条「常见原因」是在猜，实测根因是 API 形态不符，
-   继续留着会误导下一个排查的人。
+4. 提示文案要跟着改（见上）：继续留着那 4 条猜测会误导下一个排查的人。
 
-**验证** — 单测：`Save` 是 bool 属性 / 是方法 / 两种都不生效（`IsModified` 仍 True）
-三种替身，断言分别得到「成功 / 成功 / 明确失败」。真机：植入一次，确认
-`IsModified` 转 False 且 PRG mtime 更新。
+**验证** — 单测三种替身（不需要 PC-DMIS），断言分别得到「成功 / 成功 / **明确失败**」：
+
+| 替身形态 | 期望 |
+|---|---|
+| `Save` 是 bool 属性、赋值后 `IsModified` 变 False | `(True, path)` |
+| `Save` 是方法（老版本形态）、`IsModified` 变 False | `(True, path)` |
+| `Save` 是 bool 属性但赋值是空操作、`IsModified` 仍 True | **`(False, ...)`** ← 防假成功 |
+| `IsModified` 读不到（抛异常） | `(True, ...含「未经验证」...)` |
+
+真机：植入一次，确认 `IsModified` 转 False 且 PRG mtime 更新。
 
 ---
 
@@ -1077,5 +1165,6 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **P2-1 续 + 真机诊断落地**：补「COM **抛异常**」路径（新增 `_safe_com_float()`）；新增 `dump-tols` 只读诊断子命令（三态 `ok`/`COM_FAILED`/`RAISED`，汇总「下公差不可用」的行）。+12 条测试，全量 `277 passed`。两条「有牙」证明：回退到 HEAD → 6 failed（全是抛异常用例）；回退到 `6f77f72`（P2-1 前）→ 16 failed（三种失效路径全覆盖）。**`SegmentAxis(j)` 遗留观察结案**（2024.1 上单参合法）。本文件基线 265 → 277 |
 | 2026-09-22 | **真机实测（PC-DMIS 2024.1 / `马丁测试-2026-08-28-B版.PRG`，242 命令）**：P2-1 条件**复现不了**（42 条记录 `minus_tol is None` = 0、抛异常 0）⇒ 真机清单该条需换程序。`CC_1`–`CC_4` 是被改动直接覆盖的区段区分支、下公差为真值 `0.0`，实测仍判**合格**（健康路径未被改坏）。`CC_15`/`CC_16` 成为 **P2-2 现成样本**，并暴露两个新边界：标量 plus/minus 与 `deviation.d` **不同源**、`outtol` 同样「首个写入者优先」导致超差短路失效（详见 P2-2「现场实测补充」） |
 | 2026-09-22 | 顺带确认实现前提：本机 `cmds.Item(i)` 对每个索引都抛 **TypeError**，必须靠 `_get_command_at()` 的回退链取命令（诊断子命令复用之，未另写一套） |
+| 2026-09-22 | **P1-5 / P1-6 改法补到「照着就能写代码」精度**（只记录方案，代码明天实施）。P1-5 补逐行改名清单（15 个字段常量 → `FLD_` 前缀，逐个标出「仅改这些行」与「同拼写不能动的地方」），并记录两个踩过的坑：① 统计必须**大小写敏感**（首版把局部变量 `nominal` 误算成 `NOMINAL` 的引用）；② **同一拼写两种身份并存**（`NOMINAL` 在 162 行是 `dimObj.NOMINAL` 属性、177 行才是常量；`ID` 同理有 4 处 `.ID` 属性 + 1 处字符串）。顺带发现 `UNIT_TYPE` 零引用（死代码）。P1-6 补可直接落地的代码（`_part_is_modified` / `_trigger_part_save` / `try_save_part_program` 改法 + `IsModified` 三态处理）与四种替身的期望结果表 |
 | 2026-09-22 | **P1-4 实施完成**：`export_config.txt` 改按 UTF-16（带 BOM）写，对齐 BAS 读侧 `OpenTextFile(..., -1)`。本机复核根因：已部署文件 74 字节、前 4 字节 `44 3A 5C 41`、无 BOM；全仓仅一个写入方。+1 条测试，并**修正**原有那条按 utf-8 读回的测试（它过去通过正是 bug 被漏过的原因）。已用 `git stash` 证明「修复前 2 failed」（`assert b'C:' == b'\xff\xfe'`）。全量 `278 passed`。登记两条真机前置事实：编码修复不自动生效（需重新部署）；重新部署会同时把 CSV 落盘位置从旧项目路径换成 `cm2xl\data\reports`。本文件基线 277 → 278 |
 | 2026-09-22 | **P1-4 真机验证（部分）+ 新发现 P1-5 / P1-6**。已验证：重新部署后 `export_config.txt` = 126 字节、`FF FE` BOM、按 FSO 读法干净两行（写侧通过）；`pcdmis_inject success=True`；**P1-2 真机验证通过**（第二次启动 0 条迁移弹窗审计、配置未被再次改写、退出保存未写丢 `_version`；反证：白天 09:15–15:16 每次启动都弹，共 20 次）。新发现两个 bug（均已定位，见 P1-5 / P1-6）：**① BAS 第 9 行 `Const ID = 2` 撞引擎内置名，脚本编译不过** ⇒ 修正 P1-4 的「现象」——「写入文件失败」从未被观察到，是推演出来的，且 P1-4 的验证被 P1-5 阻塞；**② `part.Save()` 在 2024.1 是属性不是方法**（内省实测 `callable=False`）⇒ 自动保存恒失败。本文件条目数 16 → 18 |
