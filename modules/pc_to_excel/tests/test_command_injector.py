@@ -177,7 +177,11 @@ def test_deploy_bas_script_copies_and_substitutes(tmp_path: Path, monkeypatch):
 
 
 def test_deploy_bas_script_creates_export_config(tmp_path: Path, monkeypatch):
-    """deploy_bas_script 应创建 export_config.txt。"""
+    """deploy_bas_script 应创建 export_config.txt（UTF-16，见下方 BOM 用例）。
+
+    注意：本用例原先按 `encoding="utf-8"` 读回 —— 那正是 P1-4 的缺陷本身
+    （写 UTF-8、读 UTF-16）。读法已改为与 BAS 读侧一致的 utf-16。
+    """
     project_root = tmp_path / "project"
     project_root.mkdir()
     _write_bas_template(project_root)
@@ -199,10 +203,57 @@ def test_deploy_bas_script_creates_export_config(tmp_path: Path, monkeypatch):
 
     config = deploy_dir / "export_config.txt"
     assert config.exists()
-    text = config.read_text(encoding="utf-8")
+    text = config.read_text(encoding="utf-16")
     lines = text.strip().split("\n")
     assert len(lines) == 2
-    assert lines[1] == "YES"
+    assert lines[1].strip() == "YES"
+
+
+def test_export_config_is_utf16_with_bom(tmp_path: Path, monkeypatch):
+    """P1-4：export_config.txt 必须是**带 BOM 的 UTF-16**，否则 BAS 侧断不开行。
+
+    读侧 `fso.OpenTextFile(CONFIG_PATH, 1, False, -1)` 的第 4 参 -1 = TristateTrue，
+    所以这里用 `bytes.decode("utf-16")`（同样依 BOM 判定）来等价复现。
+    """
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    _write_bas_template(project_root)
+    deploy_dir = tmp_path / "deploy"
+    deploy_dir.mkdir()
+
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector.paths",
+        _FullFakePaths(project_root, deploy_dir),
+    )
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
+        project_root,
+    )
+
+    deploy_bas_script(deploy_dir)
+    raw = (deploy_dir / "export_config.txt").read_bytes()
+
+    # 1) 必须带 BOM（utf-16-le 不带，FSO 的 TristateTrue 在无 BOM 时行为不确定）
+    assert raw[:2] == b"\xff\xfe", "export_config.txt 缺少 UTF-16 BOM"
+
+    # 2) 按 FSO 的读法必须能干净地断成两行
+    lines = raw.decode("utf-16").splitlines()
+    assert len(lines) == 2
+    assert lines[0].strip().endswith("pcdmis_partial_export.csv")
+    assert lines[1].strip() == "YES"
+
+    # 3) 反向守卫：证明上面第 2 条不是空壳 —— 旧的「UTF-8 无 BOM」写法
+    #    按 FSO 的读法**不满足**「干净两行 + 第二行 YES」这个契约。
+    #    实测本机那份 74 字节配置解出来连行都断不开（只有 1 行），
+    #    正是 readExportConfig 把乱码路径当成有效值返回 True 的原因。
+    #    这里只断言契约不成立，不锁死具体失效形态（它取决于字节内容）。
+    legacy = (
+        f"{_FullFakePaths(project_root, deploy_dir).pc_excel_reports}"
+        "/pcdmis_partial_export.csv\nYES\n"
+    ).encode("utf-8")
+    assert legacy[:2] != b"\xff\xfe"
+    legacy_lines = legacy.decode("utf-16", errors="replace").splitlines()
+    assert not (len(legacy_lines) == 2 and legacy_lines[1].strip() == "YES")
 
 
 # ---------------------------------------------------------------------------

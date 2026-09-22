@@ -79,9 +79,17 @@ def deploy_bas_script(target_dir: Path | None = None) -> Path:
     csv_path = paths.pc_excel_reports / "pcdmis_partial_export.csv"
     paths.pc_excel_reports.mkdir(parents=True, exist_ok=True)
     config_path = dest_dir / "export_config.txt"
+    # 必须 utf-16（**带 BOM**）：读侧是
+    #   fso.OpenTextFile(CONFIG_PATH, 1, False, -1)
+    # （scripts/export_current.bas.template:115），第 4 参 -1 = TristateTrue = 按 Unicode 读。
+    # 写成 UTF-8 无 BOM 时，单字节内容被按 UTF-16 解析 ⇒ `\n` 与后一个字节拼成一个码元
+    # ⇒ ReadLine 断不开行 ⇒ outPath 乱码且非空 ⇒ readExportConfig 返回 True
+    # ⇒ saveCsv 失败，弹「写入文件失败」。不要改成 utf-16-le：不带 BOM 时
+    # FSO 的 TristateTrue 行为不确定。
     atomic_write_text(
         config_path,
         f"{csv_path.resolve()}\nYES\n",
+        encoding="utf-16",
     )
 
     source_text = _bundled_bas_source().read_text(encoding="utf-8")
