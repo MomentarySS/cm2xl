@@ -22,19 +22,19 @@ if exist "modules\cmm_filler\models\paddleocr" (
 REM ── 检查 BAS 脚本模板 ──────────────────────────────────────────────
 if not exist "scripts\export_current.bas.template" (
     echo [ERROR] 未找到 scripts\export_current.bas.template
-    echo         请从 pc to excel\scripts\ 复制 BAS 脚本到 pcdmis_toolbox\scripts\
+    echo         请从 pc to excel\scripts\ 复制 BAS 脚本到 scripts\
     pause
     exit /b 1
 )
 
 echo.
 echo [1/6] Clean old build...
-if exist build\pcdmis_toolbox rmdir /s /q build\pcdmis_toolbox
+if exist build\cm2xl rmdir /s /q build\cm2xl
 if exist dist rmdir /s /q dist
 
 echo.
 echo [2/6] PyInstaller build (this may take 10-20 minutes)...
-python -m PyInstaller pcdmis_toolbox.spec --noconfirm
+python -m PyInstaller cm2xl.spec --noconfirm
 if errorlevel 1 (
     echo.
     echo [ERROR] PyInstaller failed. Check errors above.

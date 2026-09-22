@@ -22,7 +22,7 @@
 
 本机已验证命令：
 ```powershell
-cd D:\AI\work\a1\pcdmis_toolbox
+cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
@@ -77,7 +77,7 @@ register_module("<module_name>", ModuleClass())
 
 | 关注点 | 文件 |
 |--------|------|
-| 启动入口 | `pcdmis_toolbox/main.py` |
+| 启动入口 | `main.py` |
 | 主窗口布局 | `toolbox/shell.py` |
 | 模块注册 | `modules/__init__.py` |
 | 主题常量 | `utils/theme.py`（dict）+ `utils/theme.json`（CustomTkinter） |
@@ -188,11 +188,11 @@ tail -f "%LOCALAPPDATA%/cm2xl/logs/toolbox.log"
 ### 复现打包后问题
 ```bash
 # 1. 清缓存（不要删整个 build/，其中有 hooks 与 fix_dist.py）
-rm -rf dist/ build/pcdmis_toolbox
+rm -rf dist/ build/cm2xl
 
 # 2. 重新打包
-cd pcdmis_toolbox
-python -m PyInstaller pcdmis_toolbox.spec --noconfirm
+cd .
+python -m PyInstaller cm2xl.spec --noconfirm
 python build/fix_dist.py
 find dist -name "opencv_videoio_ffmpeg*.dll" -delete
 

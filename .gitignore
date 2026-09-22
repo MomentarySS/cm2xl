@@ -12,12 +12,12 @@ venv/
 env/
 
 # Logs and data
-pcdmis_toolbox/data/logs/
-pcdmis_toolbox/data/cache/
-pcdmis_toolbox/data/config/
+data/logs/
+data/cache/
+data/config/
 
 # Auto-generated theme
-pcdmis_toolbox/utils/theme.json
+utils/theme.json
 
 # OS
 .DS_Store
@@ -29,18 +29,20 @@ Thumbs.db
 *.swp
 
 # PyInstaller build artifacts (keep build/fix_dist.py and build/hooks/, ignore working dir)
-pcdmis_toolbox/build/pcdmis_toolbox/
-pcdmis_toolbox/build/*.toc
-pcdmis_toolbox/build/warn*.txt
-pcdmis_toolbox/build/*.pyz
-pcdmis_toolbox/build/*.manifest
+build/cm2xl/
+build/pcdmis_toolbox/        # 历史 spec 名留下的构建产物, 防止误提交
+build/*.toc
+build/**/*.toc
+build/warn*.txt
+build/*.pyz
+build/**/*.pyz
+build/*.manifest
 
 # PyInstaller output
-pcdmis_toolbox/dist/
-pcdmis_toolbox/dist/cm2xl/
+dist/cm2xl/
 
 # Inno Setup installer output
-pcdmis_toolbox/installer/output/
+installer/output/
 
 # ZCode workspace
 .zcode/
@@ -51,20 +53,18 @@ pcdmis_toolbox/installer/output/
 # Mimosa session/state files (Claude Code plugin state, not project source)
 .mimosa/
 
-# CMMFiller 子项目兜底（子目录 .gitignore 已覆盖主要项）
+# Legacy subproject safety nets (历史遗留: CMMFiller/ pc to excel/ 已合并, 以下规则保留作为兜底)
 CMMFiller/__pycache__/
 CMMFiller/build/
 CMMFiller/dist/
 CMMFiller/.pytest_cache/
-
-# pc to excel 子项目兜底
 pc to excel/__pycache__/
 pc to excel/.pytest_cache/
 pc to excel/build/
 pc to excel/dist/
 
 # Junk files
-pcdmis_toolbox/nul
-pcdmis_toolbox/cm2xl_preview.png
-pcdmis_toolbox/cm2xl_theme_preview.png
-pcdmis_toolbox/build/icon_concepts/
+nul
+cm2xl_preview.png
+cm2xl_theme_preview.png
+build/icon_concepts/

@@ -17,7 +17,6 @@ pip install -r requirements/cmm_filler.txt   # CMMFiller 模块
 pip install -r requirements/pc_to_excel.txt  # pc_to_excel 模块
 
 # 启动 Toolbox 集成模式
-cd pcdmis_toolbox
 python main.py
 
 # 启动各模块独立模式
@@ -30,14 +29,14 @@ python -m modules.pc_to_excel
 本仓库在这台机器上不要使用 `D:\AI\miniconda3\python.exe`（base 环境，Python 3.14，Tk/DLL 链不稳定），否则容易出现启动窗口一闪而过。请固定使用已验证的 `paddleocr_gpu` 环境：
 
 ```powershell
-cd D:\AI\work\a1\pcdmis_toolbox
+cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 ```
 
 烟测命令：
 
 ```powershell
-cd D:\AI\work\a1\pcdmis_toolbox
+cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
 ```
 
@@ -50,8 +49,6 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
 ### 打包（测量房离线部署）
 
 ```bash
-cd pcdmis_toolbox
-
 # Step 1: PyInstaller 打包（10-20 分钟）
 build.bat
 # 产物：dist/cm2xl/cm2xl.exe
@@ -70,9 +67,9 @@ build_installer.bat
 ## 目录结构
 
 ```
-pcdmis_toolbox/
+cm2xl/
 ├── main.py                       # Toolbox 统一入口
-├── pcdmis_toolbox.spec           # PyInstaller 打包规格
+├── cm2xl.spec                    # PyInstaller 打包规格
 ├── build.bat / build_installer.bat / run_as_admin.bat
 ├── installer/cm2xl.iss           # Inno Setup 安装脚本
 ├── preview/index.html            # UI 修复对比预览（开发辅助）
