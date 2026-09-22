@@ -170,6 +170,8 @@ spec `datas` 列表里加：
 3. **打包前清缓存**：删除 `utils/theme.json`、`data/logs/`、`data/config/`，避免脏缓存
 4. **打包后真机测**：必须跑 `dist/cm2xl/cm2xl.exe`（不是 `python main.py`）才算验证
 5. **dev 模式没色块 ≠ 打包后没色块**：很多 GUI 问题只在 frozen exe 出现
+6. **提交中文 commit message 用 `-F`，不要用 `-m`**：PowerShell 5.1 把参数按 ANSI 编码传给原生程序，`git commit -m "中文"` 会把 GBK 字节写进历史（仓库既有提交是 UTF-8），事后很难修。做法：把消息写成 UTF-8 文件，再 `git commit -F <文件>`。
+7. **新增回归测试后验证它「有牙」**：`git stash push -- <实现文件>` 退回修复前的实现，跑同一组测试确认它**会失败**，再 `git stash pop`。只断言"现在通过"无法区分真守卫与空壳。
 
 ---
 
