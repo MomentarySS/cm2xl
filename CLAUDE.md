@@ -92,7 +92,7 @@ register_module("<module_name>", ModuleClass())
 | 审计日志 | `utils/audit.py` |
 | 路径管理 | `utils/paths.py` |
 | 模块接口协议 | `toolbox/protocol.py` |
-| 已知缺陷修复计划（长期） | `docs/CORE_DEFECT_PLAN.md`（状态总览表 / 每条语义边界 / 真机清单，随进度更新） |
+| 已知缺陷修复计划（长期） | `docs/CORE_DEFECT_PLAN.md`（**顶部「待办与进度总览」= 要人做的真机验证 / 下一步推荐顺序 / 整体进度**；下面是每条的状态总览表 / 语义边界 / 实施记录 / 真机清单，随进度更新） |
 | PCDMIS 数据提取（已拆分） | `modules/pc_to_excel/core/`（`data_extractor.py` 入口 + `_common`/`_command_cache`/`_dimension`/`_tolerance`/`feature`/`_datum`/`classification`） |
 
 ---
