@@ -307,18 +307,22 @@ def dispatch_pcdmis(prog_id: str):
 
     PC-DMIS 已在运行时只用 GetActiveObject / Dispatch 附着，禁止 EnsureDispatch：
     后者会重建 gencache，第二次导出可卡住数十秒甚至假死。
+
+    顺序固定为「先 GetActiveObject、失败再 Dispatch」：
+    - 已运行实例：直接附着，不 spawn 新进程。
+    - 未运行：GetActiveObject 快速失败（毫秒级）后转 Dispatch。
+
+    早期实现里这里曾调用 is_pcdmis_running() 来决定两个工厂的尝试顺序，
+    而该函数内部 spawn tasklist.exe（实测 ~190ms）。顺序只影响异常路径的开销，
+    不影响任何功能正确性，因此去掉这次进程 spawn：dispatch 从 ~192ms 降到 ~8ms。
     """
     import win32com.client  # type: ignore[import-untyped]
 
     errors: list[str] = []
-    running = is_pcdmis_running()
-    factories: list[tuple[str, object]] = []
-    if running:
-        factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
-        factories.append(("Dispatch", lambda: win32com.client.Dispatch(prog_id)))
-    else:
-        factories.append(("Dispatch", lambda: win32com.client.Dispatch(prog_id)))
-        factories.append(("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)))
+    factories: list[tuple[str, object]] = [
+        ("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)),
+        ("Dispatch", lambda: win32com.client.Dispatch(prog_id)),
+    ]
     for label, factory in factories:
         try:
             with com_call_lock:

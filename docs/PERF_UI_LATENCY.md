@@ -12,7 +12,7 @@
 | 1 | 深色/浅色切换卡顿 | `ctk.set_appearance_mode()` 同步遍历**全部存活 widget**，O(n)；CMMFiller 预览窗口又一次性挂上万 widget 进 tracker | ✅ 已修 `bce103c` |
 | 2 | 切到 PCDMIS 模块卡 ~560 ms | `_perm_text()` 内 3 次 `get_pcdmis_pid()`，等价 spawn 3 个 `tasklist.exe` | ✅ 已修 `f6a4a42` |
 | 3 | watcher after-id 生命周期 | 触发后的 id 未清零，`_stop_status_watcher()` 去取消已执行 id | ✅ 已修 `94aa08b` |
-| 4 | **已连接 PCDMIS 时每次激活/轮询 ~620 ms** | `dispatch_pcdmis()` **内部**调 `is_pcdmis_running()`，每次 dispatch 付一次 tasklist；且 `get_active_part_name()` 因 `ensure_session()` 重复 dispatch | 🔬 已定位，未实施 |
+| 4 | **已连接 PCDMIS 时每次激活/轮询 ~620 ms** | `dispatch_pcdmis()` **内部**调 `is_pcdmis_running()`，每次 dispatch 付一次 tasklist；且 `get_active_part_name()` 因 `ensure_session()` 重复 dispatch | ✅ 已修 `HEAD`（4-A + 4-B） |
 
 第 4 项是当前剩余的最大卡点，实测比第 2 项还严重，但尚未动代码（本次仅完成研究 + 记录方案）。
 
@@ -159,7 +159,10 @@ def _status_watcher_tick(self) -> None:
 
 ---
 
-## 问题 4：已连接 PCDMIS 时每次激活/轮询 ~620 ms（研究完成，未实施）
+## 问题 4：已连接 PCDMIS 时每次激活/轮询 ~620 ms
+
+> **状态：已修复。** 以下为完整根因分析与实施记录。Fix 4-A + 4-B 已落地，
+> 实测单次 tick 从 ~606 ms 降到 **44.8 ms（−93%）**。
 
 ### 4.1 现象与范围
 
@@ -254,54 +257,97 @@ _status_watcher_tick()
 
 **这是当前剩余的最大卡点，比已修复的问题 2（560 ms）还严重。**
 
-### 4.6 建议修复（按 ROI 排序）
+### 4.6 已实施的修复
 
-#### Fix 4-A：`dispatch_pcdmis()` 去掉 `is_pcdmis_running()` 前置判断
+#### Fix 4-A ✅ `dispatch_pcdmis()` 去掉 tasklist 前置判断
 
-**预期：一次 dispatch 192 ms → ~8 ms。** 收益最大、风险最低。
+`modules/pc_to_excel/connector/com_detector.py` — 顺序固定为先
+`GetActiveObject`、失败再 `Dispatch`：
 
-两种做法：
+```python
+factories: list[tuple[str, object]] = [
+    ("GetActiveObject", lambda: win32com.client.GetActiveObject(prog_id)),
+    ("Dispatch", lambda: win32com.client.Dispatch(prog_id)),
+]
+```
 
-1. **直接删掉**：无脑按「先 GetActiveObject、失败转 Dispatch」走。多付一次异常
-   开销（毫秒级），省 184 ms tasklist。
-2. **保留顺序意图但加 TTL 缓存**：若担心 Dispatch 优先时的副作用，可给
-   `is_pcdmis_running()` 加 2–3s TTL 缓存（复用问题 2 已验证过的思路）。
-   但注意 `dispatch_pcdmis` 也用于正式连接流程，缓存 key 要设计好。
+已运行实例仍优先附着；未运行时只是多一次毫秒级的 `GetActiveObject` 失败再转
+`Dispatch`。顺序只影响异常路径开销，不影响任何功能正确性。
 
-倾向做法 1 —— 顺序只影响异常路径，语义等价。
+**实测：dispatch 192 ms → 7.95 ms（24×）。**
 
-#### Fix 4-B：`get_active_part_name()` 去掉内部 `ensure_session()`
+#### Fix 4-B ✅ `get_active_part_name()` 去掉内部 `ensure_session()`
 
-**预期：416 ms → ~196 ms**（Fix 4-A 落地后进一步降到 ~18 ms）。
+`modules/pc_to_excel/connector/pcdmis_connector.py` — 改为纯轻量读取：
+未连接直接返回 `_last_part_name`；已连接则尝试一次
+`_bind_app()` + `ActivePartProgram.Name`，任何失败兜底缓存。
+并把 `com_call_lock` 抢锁失败与「未连接」都提到最前面，避免无谓开销。
 
-调用方 `_refresh_connection_ui()` 已先判 `self.connector.is_connected()`，
-`_status_watcher_tick()` 也已先调 `session_alive()`。`get_active_part_name()`
-本来就是「界面用，失败返回 `_last_part_name` 兜底」（见其 docstring），
-不需要内部再做一次完整 session 校验——尤其它失败时会走 `connect()` 全量重连，
-**那才是真正危险的分支**（会触发一次完整 COM 连接流程，可能耗时数百 ms 甚至更久）。
+导出前的会话自愈仍在 `_ensure_connected()` → `ensure_session()`，**未受影响**
+（`get_active_part_name()` 的调用方都是 UI 刷新）。
 
-#### Fix 4-C：part name 加 TTL 缓存（可选，叠加 4-A/4-B）
+**实测：`get_active_part_name()` 416 ms → 24.04 ms（17×）。**
 
-`part_var` 是纯展示字段。在 `_refresh_connection_ui()` 层给 part name 加
-2–5s TTL，则大部分激活/轮询零 COM 成本。注意导出完成后要显式失效缓存。
+#### 总体效果
 
-#### Fix 4-D：整个 tick 移到工作线程（最彻底，最侵入）
+| 调用 | before | after | |
+|------|-------:|------:|---|
+| `dispatch_pcdmis()` | 192 ms | 7.95 ms | 24× |
+| `session_alive()` | 206 ms | 20.79 ms | 10× |
+| `get_active_part_name()` | 416 ms | 24.04 ms | 17× |
+| **单次 `_status_watcher_tick`（已连接）** | **~606 ms** | **44.8 ms** | **−93%** |
 
-COM 探测全部移出主线程，UI 更新经 `root.after(0, ...)` 回灌。
-项目已有 `CancellableWorker` 与 `com_call_lock`（`threading.RLock`）基础设施，
-跨线程路径是通的。但改动面大、回归风险高，**仅在 4-A/4-B 仍不够时才考虑**。
+（`session_alive` 的 20.79 ms = 7.95 dispatch + ~13 ms `ActivePartProgram`
+属性读，与 4.2 节单独测得的 9.8 ms 同量级。）
 
-### 4.7 风险与注意点
+### 4.7 测试变更
+
+`modules/pc_to_excel/tests/test_com_compat.py`：
+
+- `test_dispatch_running_does_not_use_ensure_dispatch`
+  → `test_dispatch_prefers_get_active_object`：去掉 `is_pcdmis_running=True`
+  的 monkeypatch（该探测已不存在），**新增断言 `dispatch_pcdmis()` 不得调用
+  `is_pcdmis_running()`**（spy 记录调用次数，防回归），并源码级断言
+  `EnsureDispatch` 不出现在实现中（项目铁律）。
+- 新增 `test_dispatch_falls_back_to_dispatch`：`GetActiveObject` 失败后回退
+  `Dispatch`，且顺序为先前者。
+- 新增 `test_dispatch_raises_when_both_fail`：两条路都失败时报
+  `PCDMIS_CONNECT_FAIL`，且错误信息含两个工厂的失败原因。
+- 新增 Fix 4-B 专项 5 个：跳过 `ensure_session`（monkeypatch 成抛异常来守）、
+  未连接返缓存、读失败兜底、`ActivePartProgram is None`、抢不到
+  `com_call_lock` 返缓存（**注意 `com_call_lock` 是 `RLock`，同线程可重入，
+  必须由另一个线程持有才能真正制造抢锁失败**）、源码级断言无
+  `ensure_session` 调用。
+- 测试辅助 `_code_source()`：源码级断言前先剔除 docstring，否则 docstring 里
+  为说明背景提到的禁用 API 名会造成误报。
+
+### 4.8 未采用的方案（备查）
+
+#### Fix 4-C：part name 加 TTL 缓存
+
+`part_var` 是纯展示字段，可加 2–5s TTL 让大部分激活/轮询零 COM 成本。
+当前 44.8 ms 已足够低，**暂不值得**；若将来 watcher 间隔缩短或发现仍有感知
+再考虑。注意导出完成后要显式失效缓存。
+
+#### Fix 4-D：整个 tick 移到工作线程
+
+最彻底，但改动面大、回归风险高。**仅在 4-A/4-B 仍不够时才考虑。**
+
+### 4.9 风险与注意点
 
 - `dispatch_pcdmis` 的 CLAUDE.md 约束：**已运行实例只用 GetActiveObject /
-  Dispatch，禁止 EnsureDispatch**（会重建 gencache，二次导出假死）。Fix 4-A 的两
-  个工厂都不涉及 EnsureDispatch，安全。
+  Dispatch，禁止 EnsureDispatch**（会重建 gencache，二次导出假死）。Fix 4-A 的
+  两个工厂都不涉及 EnsureDispatch，且新增了源码级测试守护。
 - `com_call_lock` 是 `threading.RLock`；`get_active_part_name()` 与
   `session_alive()` 都用 `acquire(blocking=False)` 非阻塞抢锁，抽数时返回缓存值
   不阻塞。删掉 `ensure_session()` 不影响这个保护。
-- 需真机回归：连接 / 断开 / 一键导出 / 多件连续测（`ensure_session` 曾被用于
-  导出前会话自愈，**确认 Fix 4-B 不动这条路径**——`get_active_part_name()` 的调用方
-  都是 UI 刷新，导出流程用的是 `_ensure_connected()` → `ensure_session()`，是独立的）。
+- `dispatch_pcdmis()` **自己不包 `com_apartment()`**，依赖调用方预先
+  CoInitialize。app 内 `session_alive()` / `get_active_part_name()` /
+  `try_connect_with_app()` 均有包裹；新增调用点时必须自行包裹。
+- **连接流程中仍有 tasklist**：`try_connect_with_app():437` 的
+  `is_pcdmis_running()` 与 `check_elevation_match()`。但连接是一次性动作，
+  190 ms 可接受，**未改动**。
+- 需真机回归：连接 / 断开 / 一键导出 / 多件连续测。
 
 ---
 
@@ -327,20 +373,22 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_switch.py
 # 问题 1：set_appearance_mode 随 widget 数增长
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_theme2.py
 
-# 问题 4：COM 探测分解（需 PCDMIS 运行中）
+# 问题 4：COM 探测分解 + 修复后复测（需 PCDMIS 运行中）
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_com_probe.py
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_decompose.py
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_fix4.py
 ```
 
 ---
 
 ## 遗留事项
 
-1. **问题 4 未实施**。Fix 4-A + 4-B 预期把已连接状态的激活从 ~620 ms 降到
-   ~45 ms，是下一个高价值目标。
-2. **真机回归未完成**。本轮全程没有 PDF 可用于验证 CMMFiller 预览窗口；
-   UI 改动只做到静态验证 + 单测 + micro-benchmark。
-3. `main` 分支已 push 至 `origin/main`（3 个 perf/refactor commit）。
-4. `tests/phase8_smoke.py::TestCrashLog::test_exception_written` 是**排查前就存在**
+1. **真机回归未完成**。本轮全程没有 PDF 可用于验证 CMMFiller 预览窗口；
+   UI 改动只做到静态验证 + 单测 + micro-benchmark。PCDMIS 连接 / 断开 /
+   一键导出 / 多件连续测需在真机确认。
+2. `main` 分支已 push 至 `origin/main`。
+3. `tests/phase8_smoke.py::TestCrashLog::test_exception_written` 是**排查前就存在**
    的失败：断言字面量 `MODEL_MISSING`，但 `ToolboxError.__str__` 只输出
    `[E1003]`。与本文所有改动无关。
+4. 连接流程中仍有 tasklist（`try_connect_with_app():437`、`check_elevation_match()`），
+   一次性动作可接受，未改动。详见 4.9。

@@ -146,13 +146,22 @@ class PcdmisConnector(MeasurementConnector):
         return self.connect()
 
     def get_active_part_name(self) -> str:
-        """界面用：抽数中不抢 COM，返回上次缓存的程序名。"""
+        """界面用：抽数中不抢 COM，返回上次缓存的程序名。
+
+        刻意**不**调 ensure_session()：调用方（_refresh_connection_ui /
+        _status_watcher_tick）均已先确认过连接状态，再在这里做一次完整会话
+        自愈会多付一次 dispatch + ActivePartProgram 探测（实测 ~192ms），
+        且自愈失败时会走 connect() 全量重连——那不是界面刷新该付的代价。
+
+        这里只做轻量读取：未连接直接返回缓存；已连接则尝试读一次
+        ActivePartProgram.Name，任何失败都回退到 _last_part_name。
+        导出前的会话自愈在 _ensure_connected() → ensure_session()，不受影响。
+        """
+        if not self._connected or not self._active_prog_id:
+            return self._last_part_name
         if not com_call_lock.acquire(blocking=False):
             return self._last_part_name
         try:
-            info = self.ensure_session()
-            if not info.connected:
-                return self._last_part_name
             with com_apartment():
                 app = self._bind_app()
                 part = app.ActivePartProgram
