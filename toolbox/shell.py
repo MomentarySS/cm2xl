@@ -73,6 +73,9 @@ class Shell:
         self._auto_export = auto_export
         self._ipc_after_id = None
         self._nav_collapsed: bool = False
+        # 对话框实例复用：withdraw 保留，避免每次重开重建全部 widget
+        self._settings_dialog = None
+        self._about_dialog = None
         # module name -> (title, icon) — 在 _load_modules 时填充，供折叠态切换文字用
         self._nav_meta: dict[str, tuple[str, str]] = {}
 
@@ -107,14 +110,37 @@ class Shell:
             logger.warning(f"应用 toolbox 设置失败（用默认）: {e}")
 
     def _show_settings(self) -> None:
-        """打开设置弹窗。"""
+        """打开设置弹窗。
+
+        实例复用：首次构建后 withdraw 保留，重开只 reload + deiconify。
+        重建成本实测 ≈71ms（28 个 CustomTkinter widget），复用后接近 0。
+        """
         from toolbox.settings_dialog import SettingsDialog
-        SettingsDialog(self.root.winfo_toplevel(), self)
+
+        dlg = self._settings_dialog
+        if dlg is not None:
+            try:
+                if dlg.reopen():
+                    dlg.reload()
+                    return
+            except Exception:
+                logger.debug("复用设置对话框失败，重建", exc_info=True)
+            self._settings_dialog = None
+        self._settings_dialog = SettingsDialog(self.root.winfo_toplevel(), self)
 
     def _show_about(self) -> None:
-        """打开关于弹窗。"""
+        """打开关于弹窗。实例复用，重开只 deiconify（内容静态，无需 reload）。"""
         from toolbox.about_dialog import AboutDialog
-        AboutDialog(self.root.winfo_toplevel())
+
+        dlg = self._about_dialog
+        if dlg is not None:
+            try:
+                if dlg.reopen():
+                    return
+            except Exception:
+                logger.debug("复用关于对话框失败，重建", exc_info=True)
+            self._about_dialog = None
+        self._about_dialog = AboutDialog(self.root.winfo_toplevel())
 
     def _schedule_migration_notices(self) -> None:
         """主窗口就绪后展示配置迁移结果（ARCHITECTURE Phase 5a）。"""
@@ -562,6 +588,20 @@ class Shell:
                 logger.exception(f"unmount {name} 异常: {e}")
         self._mounted_modules.clear()
         self._module_hosts.clear()
+
+        # 销毁复用的对话框实例：withdraw 保留的窗口不随 root.destroy() 自动清理，
+        # 退出前显式销毁，避免残留 toplevel 拖住进程。
+        for attr in ("_settings_dialog", "_about_dialog"):
+            dlg = getattr(self, attr, None)
+            if dlg is None:
+                continue
+            try:
+                win = getattr(dlg, "_win", None)
+                if win is not None and win.winfo_exists():
+                    win.destroy()
+            except Exception:
+                logger.debug(f"销毁 {attr} 异常", exc_info=True)
+            setattr(self, attr, None)
 
         # 正常退出路径：取消 watchdog 后销毁
         try:

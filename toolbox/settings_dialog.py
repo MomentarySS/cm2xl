@@ -35,9 +35,10 @@ import customtkinter as ctk
 from toolbox.ui_components import (
     accent_color,
     accent_hover_color,
-    close_modal,
+    hide_modal,
     muted_color,
     primary_button_kwargs,
+    reopen_modal,
     secondary_button_kwargs,
     section_header,
     setup_modal,
@@ -72,6 +73,7 @@ class SettingsDialog:
 
     def __init__(self, parent, shell):
         self._shell = shell
+        self._parent = parent          # 保挂父窗口：after_idle 必须由它调度，见 _save()
         self._win = ctk.CTkToplevel(parent)
         self._win.title("设置")
         self._win.geometry("640x560")
@@ -342,14 +344,17 @@ class SettingsDialog:
             messagebox.showerror("保存失败", f"无法保存设置：\n{e}")
             return
 
-        # 运行时应用：after_idle 让模式切换推到当前事件循环之后，
-        # 避免 ctk.set_appearance_mode() 在保存按钮回调里同步遍历所有 widget
-        # （CMMFiller 预览窗口打开时 AppearanceModeTracker 回调可达上万，
-        #  同步执行会让主线程冻结几百 ms）
+        # 运行时应用：after_idle 让模式切换推到「保存」回调之后，避免在按钮
+        # 回调里同步遍历全部 widget 卡住界面。
+        #
+        # 必须挂在 self._parent（Shell 主窗口）而不是 self._win：下面 _close()
+        # 会 destroy 对话框，而 Tk 会取消**该窗口上**所有未执行的 after 回调，
+        # 挂 self._win 会让 set_appearance_mode 永远不执行（外观切换失效，
+        # 但设置已写盘，所以下次启动才生效）。
         try:
             mode = self._working["appearance_mode"]
             if mode in ("light", "dark", "system"):
-                self._win.after_idle(lambda m=mode: ctk.set_appearance_mode(m))
+                self._parent.after_idle(lambda m=mode: ctk.set_appearance_mode(m))
         except Exception:
             pass
         try:
@@ -367,7 +372,31 @@ class SettingsDialog:
         self._close()
 
     def _close(self) -> None:
-        close_modal(self._win)
+        # 保留实例（withdraw），下次由 Shell reload() + reopen() 重开，
+        # 避免重建 28 个 widget（实测 ≈71ms）
+        hide_modal(self._win)
+
+    def reload(self) -> None:
+        """Shell 复用实例时调用：重新读盘并刷新控件显示。
+
+        与 _restore_defaults() 的区别：那个恢复内置默认值，这个读当前配置。
+        """
+        try:
+            self._working = load_toolbox_settings()
+            self._appearance_var.set(
+                self._label_for(self.APPEARANCE_OPTIONS, self._working.get("appearance_mode", "system"))
+            )
+            self._ocr_tier_var.set(
+                self._label_for(self.OCR_TIER_OPTIONS, self._working.get("ocr_model_tier", "server"))
+            )
+            self._ocr_var.set(self._working.get("ocr_model_dir", "") or "")
+            self._log_level_var.set(self._working.get("log_level", "INFO"))
+        except Exception as e:
+            logger.warning(f"刷新设置对话框失败: {e}")
+
+    def reopen(self) -> bool:
+        """Shell 复用实例时调用：reload() 后重新显示已构建好的窗口。"""
+        return reopen_modal(self._win)
 
     @staticmethod
     def _value_for(options, label):

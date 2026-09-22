@@ -12,9 +12,10 @@ from toolbox.app_meta import APP_TITLE, APP_VERSION
 from toolbox.ui_components import (
     UI_FONT_MONO,
     card_bg_color,
-    close_modal,
+    hide_modal,
     muted_color,
     primary_button_kwargs,
+    reopen_modal,
     secondary_button_kwargs,
     section_header,
     setup_modal,
@@ -262,4 +263,9 @@ class AboutDialog:
             )
 
     def _close(self) -> None:
-        close_modal(self._win)
+        # 保留实例（withdraw），下次由 Shell reopen() 重开，避免重建 60 个 widget
+        hide_modal(self._win)
+
+    def reopen(self) -> bool:
+        """Shell 复用实例时调用：重新显示已构建好的窗口（含补回模态 grab）。"""
+        return reopen_modal(self._win)

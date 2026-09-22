@@ -108,3 +108,46 @@ def close_modal(win: ctk.CTkToplevel) -> None:
     except Exception:
         pass
     win.destroy()
+
+
+def hide_modal(win: ctk.CTkToplevel) -> None:
+    """关闭模态对话框但保留实例，供下次快速重开。
+
+    close_modal() 会 destroy 窗口；而 About/Settings 每次重开都要重建全部
+    widget（实测 About 60 个 ≈82ms、Settings 28 个 ≈71ms，其中 CTkToplevel
+    本身只占 4ms，其余全是 CustomTkinter widget 构造）。这里改为 withdraw，
+    下次 reopen_modal() 即可，重开成本接近 0。
+    """
+    try:
+        win.grab_release()
+    except Exception:
+        pass
+    win.withdraw()
+
+
+def _regrab_modal(win: ctk.CTkToplevel) -> None:
+    """延迟补回模态 grab（win 可能已在 120ms 内被销毁）。"""
+    try:
+        if win.winfo_exists():
+            win.grab_set()
+    except Exception:
+        pass
+
+
+def reopen_modal(win: ctk.CTkToplevel) -> bool:
+    """重新显示被 hide_modal() 隐藏的模态窗口。
+
+    必须补一次 grab：hide_modal() 做过 grab_release()，直接 deiconify 会让
+    背后主窗口仍可点击交互，丧失模态语义。延迟 120ms 与 setup_modal() 一致
+    （等窗口映射稳定再抢，避免抢早导致事件丢）。
+    """
+    try:
+        if not win.winfo_exists():
+            return False
+        win.deiconify()
+        win.lift()
+        win.focus_set()
+        win.after(120, _regrab_modal, win)
+        return True
+    except Exception:
+        return False
