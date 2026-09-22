@@ -176,69 +176,85 @@ class PcdmisConnector(MeasurementConnector):
             com_call_lock.release()
 
     def get_report_header_info(self) -> "ReportHeaderInfo":
+        """读取报告表头（程序名 / 零件名 / 序号 / 日期时间）。
+
+        整个 COM 段必须在 com_call_lock 内 —— 与 session_alive /
+        get_active_part_name / extract_features 保持一致。这里读的**不是**一个属性：
+        _bind_app() + ActivePartProgram + PartName / SerialNumber / GetVariableValue
+        是多次 COM 往返，漏锁时会与主线程探测交错（本方法历史上就漏了这把锁）。
+
+        用**阻塞**锁、而不是 get_active_part_name 那种非阻塞回退：本方法的调用方
+        全是「要结果」的场景（CLI 主线程、GUI 的两个工作线程），拿不到锁就返回空
+        表头会让导出文件名与出货表件号静默变空。调用方里没有 GUI 主线程，
+        因此不存在卡界面的风险。
+
+        ensure_session() 刻意留在锁**外**：它内部的 session_alive() 用的是非阻塞
+        抢锁，若在外层持锁会让那次探测退化（与 extract_features 的写法一致）。
+        """
         from ..core.models import ReportHeaderInfo
 
         info = self.ensure_session()
         if not info.connected:
             return ReportHeaderInfo()
-        with com_apartment():
-            from datetime import datetime
-            from pathlib import Path
+        with com_call_lock:
+            with com_apartment():
+                from datetime import datetime
+                from pathlib import Path
 
-            app = self._bind_app()
-            part = app.ActivePartProgram
-            if part is None:
-                return ReportHeaderInfo()
+                app = self._bind_app()
+                part = app.ActivePartProgram
+                if part is None:
+                    return ReportHeaderInfo()
 
-            program_name = ""
-            part_name = ""
-            serial = ""
-            try:
-                program_name = str(part.Name or "").strip()
-            except Exception:
-                pass
-            if program_name and not program_name.upper().endswith(".PRG"):
-                program_name = f"{program_name}.PRG"
-
-            try:
-                part_name = str(part.PartName or "").strip()
-            except Exception:
-                pass
-            if not part_name:
+                program_name = ""
+                part_name = ""
+                serial = ""
                 try:
-                    part_name = str(part.Name or "").strip()
+                    program_name = str(part.Name or "").strip()
                 except Exception:
                     pass
-                if part_name.upper().endswith(".PRG"):
-                    part_name = Path(part_name).stem
+                if program_name and not program_name.upper().endswith(".PRG"):
+                    program_name = f"{program_name}.PRG"
 
-            try:
-                serial = str(part.SerialNumber or "").strip()
-            except Exception:
-                serial = ""
-            if serial in ("0", "None", "False"):
-                serial = ""
-            if not serial:
-                for var_name in ("SN", "V_SN", "SERNO"):
+                try:
+                    part_name = str(part.PartName or "").strip()
+                except Exception:
+                    pass
+                if not part_name:
                     try:
-                        var_obj = part.GetVariableValue(var_name)
-                        val = str(getattr(var_obj, "StringValue", var_obj) or "").strip()
-                        if val and val not in ("0", "None", "False"):
-                            serial = val
-                            break
+                        part_name = str(part.Name or "").strip()
                     except Exception:
-                        continue
+                        pass
+                    if part_name.upper().endswith(".PRG"):
+                        part_name = Path(part_name).stem
 
-            now = datetime.now()
-            header = ReportHeaderInfo(
-                program_name=program_name,
-                part_name=part_name,
-                serial_number=serial,
-                report_date=now.strftime("%Y/%m/%d"),
-                report_time=now.strftime("%H:%M:%S"),
-            )
-            self._last_part_name = part_name or program_name
-            return header
+                try:
+                    serial = str(part.SerialNumber or "").strip()
+                except Exception:
+                    serial = ""
+                if serial in ("0", "None", "False"):
+                    serial = ""
+                if not serial:
+                    for var_name in ("SN", "V_SN", "SERNO"):
+                        try:
+                            var_obj = part.GetVariableValue(var_name)
+                            val = str(getattr(var_obj, "StringValue", var_obj) or "").strip()
+                            if val and val not in ("0", "None", "False"):
+                                serial = val
+                                break
+                        except Exception:
+                            continue
+
+                now = datetime.now()
+                header = ReportHeaderInfo(
+                    program_name=program_name,
+                    part_name=part_name,
+                    serial_number=serial,
+                    report_date=now.strftime("%Y/%m/%d"),
+                    report_time=now.strftime("%H:%M:%S"),
+                )
+                self._last_part_name = part_name or program_name
+                return header
 
     def extract_features(
         self,
