@@ -61,6 +61,11 @@ class PCToExcelModule(ModuleProtocol):
             if hasattr(self._instance, "_start_status_watcher"):
                 self._instance._start_status_watcher()
 
+    def on_deactivate(self) -> None:
+        """模块被隐藏时停止轮询，但保留界面实例以便快速切回。"""
+        if self._instance and hasattr(self._instance, "_stop_status_watcher"):
+            self._instance._stop_status_watcher()
+
     def request_auto_export(self) -> None:
         """PC-DMIS 工具栏 / IPC：连接当前程序并一键导出 Excel。"""
         if self._instance and hasattr(self._instance, "request_auto_export"):

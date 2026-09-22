@@ -164,8 +164,8 @@ def _create_shell(launch):
 
     root = ctk.CTk()
     root.title(f"{APP_TITLE} {APP_VERSION}")
-    root.geometry("1100x700")
-    root.minsize(900, 600)
+    root.geometry("1040x660")
+    root.minsize(860, 560)
     apply_window_icon(root)
     shell = Shell(
         root,

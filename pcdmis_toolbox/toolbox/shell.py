@@ -45,7 +45,7 @@ class Shell:
     └──────────────────────────────────────────────────────────┘
     """
 
-    NAV_WIDTH = 180
+    NAV_WIDTH = 156
 
     def __init__(
         self,
@@ -58,6 +58,8 @@ class Shell:
         self._active_module: Optional[object] = None
         self._active_module_name: Optional[str] = None
         self._modules: dict[str, object] = {}
+        self._module_hosts: dict[str, ctk.CTkFrame] = {}
+        self._mounted_modules: set[str] = set()
         self._running = True
         self._start_module = start_module
         self._auto_export = auto_export
@@ -127,38 +129,38 @@ class Shell:
         root = self.root
 
         # 顶栏 — 改用中性 surface 色（白/暗石板），把青绿留给 accent
-        self._header = ctk.CTkFrame(root, height=48, corner_radius=0)
+        self._header = ctk.CTkFrame(root, height=40, corner_radius=0)
         self._header.pack(fill="x", side="top")
         self._header.configure(fg_color=card_bg_color())
 
         title_frame = ctk.CTkFrame(self._header, fg_color="transparent")
-        title_frame.pack(side="left", padx=16, pady=0)
+        title_frame.pack(side="left", padx=12, pady=0)
 
-        self._header_logo = get_logo_image(28)
+        self._header_logo = get_logo_image(22)
         if self._header_logo is not None:
             ctk.CTkLabel(
                 title_frame, text="", image=self._header_logo, fg_color="transparent",
-            ).pack(side="left", padx=(0, 8))
+            ).pack(side="left", padx=(0, 6))
 
         ctk.CTkLabel(
             title_frame,
             text=f"{APP_TITLE} {APP_VERSION}",
-            font=("Microsoft YaHei", 14, "bold"),
+            font=("Microsoft YaHei", 13, "bold"),
             text_color=text_color(),
         ).pack(side="left", pady=0)
 
         # 顶栏右侧：关于 + 设置（清理日志 / OCR 缓存见设置面板）
         ctk.CTkButton(
-            self._header, text="关于", width=70, height=28,
+            self._header, text="关于", width=58, height=24,
             font=("Microsoft YaHei", 11),
             **{**primary_button_kwargs(), "command": self._show_about},
-        ).pack(side="right", padx=(6, 6), pady=10)
+        ).pack(side="right", padx=(4, 6), pady=8)
 
         ctk.CTkButton(
-            self._header, text="设置", width=70, height=28,
+            self._header, text="设置", width=58, height=24,
             font=("Microsoft YaHei", 11),
             **{**primary_button_kwargs(), "command": self._show_settings},
-        ).pack(side="right", padx=(6, 12), pady=10)
+        ).pack(side="right", padx=(4, 10), pady=8)
 
         # 主区域：左侧导航 + 内容
         self._body = ctk.CTkFrame(root, corner_radius=0, fg_color="transparent")
@@ -171,26 +173,26 @@ class Shell:
         self._nav.configure(fg_color=card_bg_color())
 
         self._nav_buttons: dict[str, ctk.CTkButton] = {}
-        self._content_frame = ctk.CTkFrame(self._body, corner_radius=0)
+        self._content_frame = ctk.CTkFrame(self._body, corner_radius=0, fg_color=page_bg_color())
         self._content_frame.pack(fill="both", expand=True, side="left")
 
         # 状态栏 — 改用 page_bg（柔和灰/深蓝），文字跟随主题
-        self._statusbar = ctk.CTkFrame(root, height=28, corner_radius=0)
+        self._statusbar = ctk.CTkFrame(root, height=24, corner_radius=0)
         self._statusbar.pack(fill="x", side="bottom")
         self._statusbar.configure(fg_color=page_bg_color())
 
         self._pcdmis_label = ctk.CTkLabel(
             self._statusbar,
             text="PC-DMIS: 未连接",
-            font=("Microsoft YaHei", 11),
+            font=("Microsoft YaHei", 10),
             text_color=muted_color(),
         )
-        self._pcdmis_label.pack(side="left", padx=(12, 24))
+        self._pcdmis_label.pack(side="left", padx=(10, 18))
 
         self._module_label = ctk.CTkLabel(
             self._statusbar,
             text="",
-            font=("Microsoft YaHei", 11),
+            font=("Microsoft YaHei", 10),
             text_color=text_color(),
         )
         self._module_label.pack(side="left", padx=0)
@@ -198,10 +200,10 @@ class Shell:
         self._msg_label = ctk.CTkLabel(
             self._statusbar,
             text="就绪",
-            font=("Microsoft YaHei", 11),
+            font=("Microsoft YaHei", 10),
             text_color=muted_color(),
         )
-        self._msg_label.pack(side="right", padx=12)
+        self._msg_label.pack(side="right", padx=10)
 
         # 内容区占位提示
         self._placeholder = ctk.CTkLabel(
@@ -230,9 +232,9 @@ class Shell:
         btn = ctk.CTkButton(
             self._nav,
             text=f"{module.icon}  {module.title}",
-            height=44,
+            height=36,
             corner_radius=0,
-            font=("Microsoft YaHei", 13),
+            font=("Microsoft YaHei", 12),
             anchor="w",
             fg_color="transparent",
             hover_color=accent_hover_color(),
@@ -311,15 +313,21 @@ class Shell:
         """切换到指定模块。"""
         if name not in self._modules:
             return
+        if name == self._active_module_name:
+            return
 
-        # 卸载当前模块
+        # 隐藏当前模块。模块实例保留，避免每次切换都重建整页 UI。
         if self._active_module is not None:
             old_name = self._active_module_name or "?"
             try:
-                self._active_module.unmount()
+                if hasattr(self._active_module, "on_deactivate"):
+                    self._active_module.on_deactivate()
+                host = self._module_hosts.get(old_name)
+                if host is not None:
+                    host.pack_forget()
                 audit("module_deactivate", module=old_name)
             except Exception as e:
-                logger.exception(f"unmount {old_name} 失败: {e}")
+                logger.exception(f"deactivate {old_name} 失败: {e}")
 
         # 切换高亮 — 选中态用更柔和的 accent_hover/primary 浅色
         for n, btn in self._nav_buttons.items():
@@ -334,16 +342,20 @@ class Shell:
                     text_color=text_color(),
                 )
 
-        # 清空内容区
-        for w in self._content_frame.winfo_children():
-            w.destroy()
-
-        # 挂载新模块
+        # 挂载或显示新模块
         module = self._modules[name]
         try:
+            self._placeholder.place_forget()
             # Shell 在 mount 时注入自己作为 shell 引用
             module.shell = self
-            module.mount(self._content_frame)
+            host = self._module_hosts.get(name)
+            if host is None:
+                host = ctk.CTkFrame(self._content_frame, corner_radius=0, fg_color=page_bg_color())
+                self._module_hosts[name] = host
+            host.pack(fill="both", expand=True)
+            if name not in self._mounted_modules:
+                module.mount(host)
+                self._mounted_modules.add(name)
             module.on_activate()
             self._active_module = module
             self._active_module_name = name
@@ -441,12 +453,17 @@ class Shell:
             root.destroy(),
         ))
 
-        # 卸载当前模块
-        if self._active_module is not None:
+        # 卸载所有已创建模块。切换时模块会缓存，退出时统一清理。
+        for name in list(self._mounted_modules):
+            module = self._modules.get(name)
+            if module is None:
+                continue
             try:
-                self._active_module.unmount()
+                module.unmount()
             except Exception as e:
-                logger.exception(f"unmount 异常: {e}")
+                logger.exception(f"unmount {name} 异常: {e}")
+        self._mounted_modules.clear()
+        self._module_hosts.clear()
 
         # 正常退出路径：取消 watchdog 后销毁
         try:

@@ -140,11 +140,41 @@ class FileLock:
         try:
             pid_str = self._lock_path.read_text(encoding="utf-8").strip()
             pid = int(pid_str)
-            # Windows: os.kill(pid, 0) 会抛异常
+            if pid <= 0:
+                return True
+            if sys.platform == "win32":
+                return not _pid_exists_windows(pid)
             os.kill(pid, 0)
             return False  # 进程存活
         except (ValueError, ProcessLookupError, PermissionError, OSError):
             return True  # 进程已死
+
+
+def _pid_exists_windows(pid: int) -> bool:
+    """Windows 进程存活检测；避免 os.kill(pid, 0) 触发 WinError 87。"""
+    import ctypes
+    from ctypes import wintypes
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    ERROR_ACCESS_DENIED = 5
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if handle:
+        exit_code = wintypes.DWORD()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+        kernel32.CloseHandle(handle)
+        return bool(ok) and exit_code.value == 259  # STILL_ACTIVE
+
+    # Access denied means the PID exists but this user cannot query it.
+    return ctypes.get_last_error() == ERROR_ACCESS_DENIED
 
 
 # ── 配置迁移 ────────────────────────────────────────────────────────────────

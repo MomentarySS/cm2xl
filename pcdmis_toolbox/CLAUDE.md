@@ -15,8 +15,18 @@
 ## 开发约定
 
 ### Python 环境
-- **必须 64-bit Python 3.12+**（PC-DMIS 2017 R2–2026.1 为 64 位应用；主测环境 2024.1）
+- **必须 64-bit Python**（PC-DMIS 2017 R2–2026.1 为 64 位应用；主测环境 2024.1）
+- **本机开发/测试固定用**：`D:\AI\miniconda3\envs\paddleocr_gpu\python.exe`
+- **不要用**：`D:\AI\miniconda3\python.exe`（base 环境，Python 3.14，Tk/DLL 链不稳定，可能导致启动窗口一闪而过）
 - 主要依赖：`customtkinter`、`paddlepaddle==2.6.2`、`paddleocr==2.10.0`、`pymupdf`、`openpyxl`、`pywin32`、`tkinterdnd2`
+
+本机已验证命令：
+```powershell
+cd D:\AI\work\a1\pcdmis_toolbox
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+```
 
 ### 导入路径
 - 本项目所有包用**0 连点**导入（`from utils.paths import paths`，`from toolbox.shell import Shell`）

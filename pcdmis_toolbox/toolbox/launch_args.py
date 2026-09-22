@@ -2,6 +2,9 @@
 
 工具栏一键出报告：
     cm2xl.exe --module pc_to_excel --auto-export
+
+开发快速看界面：
+    python main.py --skip-ocr
 """
 
 from __future__ import annotations
@@ -27,11 +30,14 @@ def parse_launch_args(argv: list[str] | None = None) -> LaunchArgs:
 
     module: str | None = None
     auto_export = False
+    skip_ocr = False
     i = 0
     while i < len(argv):
         token = argv[i]
         if token == "--auto-export":
             auto_export = True
+        elif token == "--skip-ocr":
+            skip_ocr = True
         elif token.startswith("--module="):
             module = token.split("=", 1)[1].strip() or None
         elif token == "--module" and i + 1 < len(argv):
@@ -44,5 +50,5 @@ def parse_launch_args(argv: list[str] | None = None) -> LaunchArgs:
     elif module not in KNOWN_MODULES:
         module = None
 
-    skip_ocr = auto_export or module == "pc_to_excel"
+    skip_ocr = skip_ocr or auto_export or module == "pc_to_excel"
     return LaunchArgs(module=module, auto_export=auto_export, skip_ocr=skip_ocr)

@@ -94,8 +94,8 @@ class MainWindow:
         if self._owns_root:
             self.root = ctk.CTk()
             self.root.title(f"{APP_TITLE} v{APP_VERSION}")
-            self.root.geometry("1000x780")
-            self.root.minsize(880, 700)
+            self.root.geometry("940x700")
+            self.root.minsize(820, 620)
             self.root.configure(fg_color=_C["page"])
         else:
             self.root = parent.winfo_toplevel()
@@ -239,8 +239,8 @@ class MainWindow:
             command=command,
             width=width,
             height=height,
-            corner_radius=10,
-            font=self._font(13, True),
+            corner_radius=6,
+            font=self._font(12, True),
             fg_color=_C["primary"],
             hover_color=_C["primary_hover"],
         )
@@ -252,8 +252,8 @@ class MainWindow:
             command=command,
             width=width,
             height=height,
-            corner_radius=10,
-            font=self._font(13, True),
+            corner_radius=6,
+            font=self._font(12, True),
             fg_color=_C["accent"],
             hover_color=_C["accent_hover"],
         )
@@ -265,7 +265,7 @@ class MainWindow:
             command=command,
             width=width,
             height=height,
-            corner_radius=10,
+            corner_radius=6,
             font=self._font(12),
             fg_color=_C["muted"],
             hover_color=_C["muted_hover"],
@@ -278,7 +278,7 @@ class MainWindow:
             command=command,
             width=width,
             height=height,
-            corner_radius=10,
+            corner_radius=6,
             font=self._font(12, True),
             fg_color=_C["warn"],
             hover_color=_C["warn_hover"],
@@ -299,8 +299,8 @@ class MainWindow:
             command=command,
             font=self._font(12),
             width=width,
-            checkbox_width=20,
-            checkbox_height=20,
+            checkbox_width=18,
+            checkbox_height=18,
             border_width=1,
             border_color=_C["card_border"],
             **kwargs,
@@ -349,15 +349,15 @@ class MainWindow:
         accent: bool = False,
     ) -> ctk.CTkFrame:
         outer = ctk.CTkFrame(parent, fg_color="transparent")
-        outer.pack(fill="x", pady=(0, 14))
+        outer.pack(fill="x", pady=(0, 8))
 
         if accent:
-            stripe = ctk.CTkFrame(outer, width=4, corner_radius=2, fg_color=_C["stripe"])
+            stripe = ctk.CTkFrame(outer, width=3, corner_radius=1, fg_color=_C["stripe"])
             stripe.pack(side="left", fill="y", padx=(0, 0))
 
         card = ctk.CTkFrame(
             outer,
-            corner_radius=16,
+            corner_radius=8,
             border_width=1,
             border_color=_C["card_border"],
             fg_color=_C["card"],
@@ -365,15 +365,15 @@ class MainWindow:
         card.pack(side="left", fill="both", expand=True)
 
         head = ctk.CTkFrame(card, fg_color="transparent")
-        head.pack(fill="x", padx=18, pady=(14, 4))
+        head.pack(fill="x", padx=12, pady=(10, 2))
         title_col = ctk.CTkFrame(head, fg_color="transparent")
         title_col.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(title_col, text=title, font=self._font(15, True), anchor="w").pack(anchor="w")
+        ctk.CTkLabel(title_col, text=title, font=self._font(13, True), anchor="w").pack(anchor="w")
         if subtitle:
             ctk.CTkLabel(
                 title_col,
                 text=subtitle,
-                font=self._font(11),
+                font=self._font(10),
                 text_color=_C["subtle"],
                 anchor="w",
             ).pack(anchor="w", pady=(2, 0))
@@ -385,7 +385,7 @@ class MainWindow:
 
             def _toggle(*_args) -> None:
                 if switch_var.get():
-                    body.pack(fill="x", padx=18, pady=(6, 16))
+                    body.pack(fill="x", padx=12, pady=(5, 10))
                 else:
                     body.pack_forget()
 
@@ -395,59 +395,52 @@ class MainWindow:
                 variable=switch_var,
                 command=_toggle,
                 font=self._font(12),
-                width=72,
+                width=64,
                 progress_color=_C["accent"],
             ).pack(side="right")
             if expanded:
-                body.pack(fill="x", padx=18, pady=(6, 16))
+                body.pack(fill="x", padx=12, pady=(5, 10))
         else:
-            body.pack(fill="x", padx=18, pady=(6, 16))
+            body.pack(fill="x", padx=12, pady=(5, 10))
 
         return body
 
     def _build_ui(self) -> None:
         # —— 顶栏 ——
         header = ctk.CTkFrame(self._container, fg_color="transparent")
-        header.pack(fill="x", padx=22, pady=(18, 10))
+        header.pack(fill="x", padx=14, pady=(10, 6))
 
         brand = ctk.CTkFrame(header, fg_color="transparent")
         brand.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(brand, text=APP_TITLE, font=self._font(24, True), anchor="w").pack(anchor="w")
-        ctk.CTkLabel(
-            brand,
-            text=f"v{APP_VERSION}  ·  测到一半也能出表  ·  出货表按序号填入",
-            font=self._font(12),
-            text_color=_C["subtle"],
-            anchor="w",
-        ).pack(anchor="w", pady=(4, 0))
+        ctk.CTkLabel(brand, text=APP_TITLE, font=self._font(18, True), anchor="w").pack(anchor="w")
 
         right = ctk.CTkFrame(header, fg_color="transparent")
         right.pack(side="right")
         self.conn_badge = ctk.CTkLabel(
             right, textvariable=self.conn_state_var, font=self._font(12, True), text_color=_C["idle"]
         )
-        self.conn_badge.pack(side="left", padx=(0, 12))
+        self.conn_badge.pack(side="left", padx=(0, 8))
 
         scroll = ctk.CTkScrollableFrame(self._container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=22, pady=(0, 8))
+        scroll.pack(fill="both", expand=True, padx=14, pady=(0, 6))
 
         # —— 连接 ——
         conn = self._section(scroll, "PCDMIS 连接", subtitle="与 PCDMIS 同权限运行（都普通或都管理员）")
         row1 = ctk.CTkFrame(conn, fg_color="transparent")
         row1.pack(fill="x")
-        self._btn_primary(row1, "连接 PCDMIS", self._connect, width=132).pack(side="left")
-        self._btn_muted(row1, "断开", self._disconnect, width=72).pack(side="left", padx=(8, 0))
-        ctk.CTkLabel(row1, textvariable=self.conn_var, font=self._font(13)).pack(side="left", padx=14)
-        ctk.CTkLabel(row1, textvariable=self.perm_var, font=self._font(11), text_color=_C["subtle"]).pack(
+        self._btn_primary(row1, "连接 PCDMIS", self._connect, width=116, height=32).pack(side="left")
+        self._btn_muted(row1, "断开", self._disconnect, width=64, height=32).pack(side="left", padx=(6, 0))
+        ctk.CTkLabel(row1, textvariable=self.conn_var, font=self._font(12)).pack(side="left", padx=10)
+        ctk.CTkLabel(row1, textvariable=self.perm_var, font=self._font(10), text_color=_C["subtle"]).pack(
             side="right"
         )
 
-        info = ctk.CTkFrame(conn, fg_color=_C["hint_bg"], corner_radius=10)
-        info.pack(fill="x", pady=(12, 0))
+        info = ctk.CTkFrame(conn, fg_color=_C["hint_bg"], corner_radius=6)
+        info.pack(fill="x", pady=(8, 0))
         inner = ctk.CTkFrame(info, fg_color="transparent")
-        inner.pack(fill="x", padx=12, pady=10)
-        ctk.CTkLabel(inner, text="当前程序", font=self._font(11), text_color=_C["subtle"]).pack(side="left")
-        ctk.CTkLabel(inner, textvariable=self.part_var, font=self._font(13, True)).pack(side="left", padx=10)
+        inner.pack(fill="x", padx=10, pady=7)
+        ctk.CTkLabel(inner, text="当前程序", font=self._font(10), text_color=_C["subtle"]).pack(side="left")
+        ctk.CTkLabel(inner, textvariable=self.part_var, font=self._font(12, True)).pack(side="left", padx=8)
 
         # —— 导出（主流程强调）——
         export = self._section(
@@ -458,14 +451,14 @@ class MainWindow:
         )
         dir_row = ctk.CTkFrame(export, fg_color="transparent")
         dir_row.pack(fill="x")
-        ctk.CTkLabel(dir_row, text="输出目录", width=72, anchor="w", font=self._font(12)).pack(side="left")
-        ctk.CTkEntry(dir_row, textvariable=self.export_dir_var, height=34, corner_radius=8).pack(
-            side="left", fill="x", expand=True, padx=8
+        ctk.CTkLabel(dir_row, text="输出目录", width=64, anchor="w", font=self._font(11)).pack(side="left")
+        ctk.CTkEntry(dir_row, textvariable=self.export_dir_var, height=30, corner_radius=5).pack(
+            side="left", fill="x", expand=True, padx=6
         )
-        self._btn_muted(dir_row, "浏览…", self._pick_export_dir, width=78, height=34).pack(side="right")
+        self._btn_muted(dir_row, "浏览…", self._pick_export_dir, width=68, height=30).pack(side="right")
 
         scope = ctk.CTkFrame(export, fg_color="transparent")
-        scope.pack(fill="x", pady=(12, 0))
+        scope.pack(fill="x", pady=(8, 0))
         self._checkbox(
             scope,
             text="仅报告窗口数据",
@@ -477,25 +470,25 @@ class MainWindow:
             text="仅 Mark 命令",
             variable=self.require_marked_var,
             command=self._save_settings_from_ui,
-        ).pack(side="left", padx=(18, 0))
+        ).pack(side="left", padx=(12, 0))
 
         btn_row = ctk.CTkFrame(export, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(16, 0))
-        self._btn_primary(btn_row, "一键导出 Excel", self._export_excel, width=168, height=40).pack(side="left")
-        self._btn_accent(btn_row, "部署工具栏启动器", self._deploy_toolbar, width=168, height=40).pack(
-            side="left", padx=(10, 0)
+        btn_row.pack(fill="x", pady=(10, 0))
+        self._btn_primary(btn_row, "一键导出 Excel", self._export_excel, width=150, height=34).pack(side="left")
+        self._btn_accent(btn_row, "部署工具栏启动器", self._deploy_toolbar, width=150, height=34).pack(
+            side="left", padx=(8, 0)
         )
-        self._btn_muted(btn_row, "打开启动器目录", self._open_launcher_dir, width=130, height=40).pack(
-            side="left", padx=(10, 0)
+        self._btn_muted(btn_row, "打开启动器目录", self._open_launcher_dir, width=118, height=34).pack(
+            side="left", padx=(8, 0)
         )
 
         ctk.CTkLabel(
             export,
             text="工具栏启动器：挂到 PC-DMIS 自定义按钮后，测完一点即按「仅 Mark」导出。完整列：NOMINAL / MEAS / ±TOL / BONUS / DEV / OUTTOL",
-            font=self._font(11),
+            font=self._font(10),
             text_color=_C["subtle"],
             anchor="w",
-        ).pack(fill="x", pady=(10, 0))
+        ).pack(fill="x", pady=(7, 0))
 
         # —— 出货表 ——
         form = self._section(
@@ -503,7 +496,7 @@ class MainWindow:
             "出货检测表填入",
             subtitle="按序号只写 CMM 行，多件续列；先预览再另存",
             collapsible=True,
-            expanded=False,
+            expanded=True,
         )
         form_row1 = ctk.CTkFrame(form, fg_color="transparent")
         form_row1.pack(fill="x")
@@ -514,31 +507,31 @@ class MainWindow:
             command=self._save_settings_from_ui,
             width=100,
         ).pack(side="left")
-        ctk.CTkEntry(form_row1, textvariable=self.form_path_var, height=34, corner_radius=8).pack(
-            side="left", fill="x", expand=True, padx=8
+        ctk.CTkEntry(form_row1, textvariable=self.form_path_var, height=30, corner_radius=5).pack(
+            side="left", fill="x", expand=True, padx=6
         )
-        self._btn_muted(form_row1, "选出货表…", self._pick_form, width=104, height=34).pack(side="right")
+        self._btn_muted(form_row1, "选出货表…", self._pick_form, width=96, height=30).pack(side="right")
 
         form_row2 = ctk.CTkFrame(form, fg_color="transparent")
-        form_row2.pack(fill="x", pady=(12, 0))
-        ctk.CTkLabel(form_row2, text="尺寸前缀", width=70, anchor="w", font=self._font(12)).pack(side="left")
-        ctk.CTkEntry(form_row2, textvariable=self.id_prefixes_var, width=200, height=34, corner_radius=8).pack(
-            side="left", padx=(0, 12)
+        form_row2.pack(fill="x", pady=(8, 0))
+        ctk.CTkLabel(form_row2, text="尺寸前缀", width=64, anchor="w", font=self._font(11)).pack(side="left")
+        ctk.CTkEntry(form_row2, textvariable=self.id_prefixes_var, width=180, height=30, corner_radius=5).pack(
+            side="left", padx=(0, 8)
         )
-        ctk.CTkLabel(form_row2, text="CMM代号", width=70, anchor="w", font=self._font(12)).pack(side="left")
-        ctk.CTkEntry(form_row2, textvariable=self.cmm_codes_var, width=90, height=34, corner_radius=8).pack(
-            side="left", padx=(0, 12)
+        ctk.CTkLabel(form_row2, text="CMM代号", width=64, anchor="w", font=self._font(11)).pack(side="left")
+        ctk.CTkEntry(form_row2, textvariable=self.cmm_codes_var, width=84, height=30, corner_radius=5).pack(
+            side="left", padx=(0, 8)
         )
-        ctk.CTkLabel(form_row2, text="写入列", width=55, anchor="w", font=self._font(12)).pack(side="left")
-        ctk.CTkEntry(form_row2, textvariable=self.target_col_var, width=70, height=34, corner_radius=8).pack(
+        ctk.CTkLabel(form_row2, text="写入列", width=50, anchor="w", font=self._font(11)).pack(side="left")
+        ctk.CTkEntry(form_row2, textvariable=self.target_col_var, width=64, height=30, corner_radius=5).pack(
             side="left"
         )
-        ctk.CTkLabel(form_row2, text="auto / H / I…", font=self._font(11), text_color=_C["subtle"]).pack(
-            side="left", padx=8
+        ctk.CTkLabel(form_row2, text="auto / H / I…", font=self._font(10), text_color=_C["subtle"]).pack(
+            side="left", padx=6
         )
 
         form_row3 = ctk.CTkFrame(form, fg_color="transparent")
-        form_row3.pack(fill="x", pady=(12, 0))
+        form_row3.pack(fill="x", pady=(8, 0))
         self._checkbox(
             form_row3,
             text="接着上次结果填入",
@@ -553,7 +546,7 @@ class MainWindow:
         ).pack(side="left", fill="x", expand=True)
 
         form_row_piece = ctk.CTkFrame(form, fg_color="transparent")
-        form_row_piece.pack(fill="x", pady=(12, 0))
+        form_row_piece.pack(fill="x", pady=(8, 0))
         self._checkbox(
             form_row_piece,
             text="写入件号",
@@ -565,9 +558,9 @@ class MainWindow:
             form_row_piece,
             textvariable=self.piece_id_var,
             placeholder_text="送检件号，如 721-001（空则用 PCDMIS 序列号）",
-            height=34,
-            corner_radius=8,
-        ).pack(side="left", fill="x", expand=True, padx=8)
+            height=30,
+            corner_radius=5,
+        ).pack(side="left", fill="x", expand=True, padx=6)
         self._checkbox(
             form_row_piece,
             text="核对规格/名义",
@@ -577,30 +570,30 @@ class MainWindow:
         ).pack(side="right")
 
         form_row_map = ctk.CTkFrame(form, fg_color="transparent")
-        form_row_map.pack(fill="x", pady=(12, 0))
-        ctk.CTkLabel(form_row_map, text="手工对照", width=70, anchor="w", font=self._font(12)).pack(side="left")
+        form_row_map.pack(fill="x", pady=(8, 0))
+        ctk.CTkLabel(form_row_map, text="手工对照", width=64, anchor="w", font=self._font(11)).pack(side="left")
         ctk.CTkEntry(
             form_row_map,
             textvariable=self.manual_map_var,
             placeholder_text=MANUAL_MAP_PLACEHOLDER,
-            height=34,
-            corner_radius=8,
-        ).pack(side="left", fill="x", expand=True, padx=8)
-        self._btn_muted(form_row_map, "恢复默认", self._restore_form_defaults, width=90, height=34).pack(
+            height=30,
+            corner_radius=5,
+        ).pack(side="left", fill="x", expand=True, padx=6)
+        self._btn_muted(form_row_map, "恢复默认", self._restore_form_defaults, width=82, height=30).pack(
             side="right"
         )
 
         form_row4 = ctk.CTkFrame(form, fg_color="transparent")
-        form_row4.pack(fill="x", pady=(16, 0))
-        self._btn_accent(form_row4, "填入出货检测表", self._fill_inspection_form, width=168, height=40).pack(
+        form_row4.pack(fill="x", pady=(10, 0))
+        self._btn_accent(form_row4, "填入出货检测表", self._fill_inspection_form, width=150, height=34).pack(
             side="left"
         )
         ctk.CTkLabel(
             form_row4,
             text="先预览匹配 → 确认另存；续填自动下一空列（不覆盖已有数据）",
-            font=self._font(11),
+            font=self._font(10),
             text_color=_C["subtle"],
-        ).pack(side="left", padx=14)
+        ).pack(side="left", padx=10)
 
         # —— 植入 ——
         inject = self._section(
@@ -608,7 +601,7 @@ class MainWindow:
             "PRG 命令植入",
             subtitle="测量中可把光标放到 PC2XL_EXPORT → 从光标执行（CSV）",
             collapsible=True,
-            expanded=False,
+            expanded=True,
         )
         self._hint(
             inject,
@@ -616,25 +609,25 @@ class MainWindow:
         )
         inj_row = ctk.CTkFrame(inject, fg_color="transparent")
         inj_row.pack(fill="x", pady=(4, 0))
-        self._btn_muted(inj_row, "部署 BAS 脚本", self._deploy_bas, width=130).pack(side="left")
-        self._btn_warn(inj_row, "植入 / 更新导出命令", self._inject_command, width=168).pack(
-            side="left", padx=8
+        self._btn_muted(inj_row, "部署 BAS 脚本", self._deploy_bas, width=116, height=32).pack(side="left")
+        self._btn_warn(inj_row, "植入 / 更新导出命令", self._inject_command, width=152, height=32).pack(
+            side="left", padx=6
         )
-        self._btn_muted(inj_row, "检查是否已植入", self._check_inject, width=130).pack(side="left")
+        self._btn_muted(inj_row, "检查是否已植入", self._check_inject, width=116, height=32).pack(side="left")
 
         # —— 说明 ——
         help_body = self._section(
             scroll,
             "PCDMIS 内执行说明",
             collapsible=True,
-            expanded=False,
+            expanded=True,
         )
         help_text = ctk.CTkTextbox(
             help_body,
             height=210,
             font=ctk.CTkFont(family="Consolas", size=12),
             wrap="word",
-            corner_radius=10,
+            corner_radius=6,
             border_width=1,
             border_color=_C["card_border"],
         )
@@ -658,28 +651,27 @@ class MainWindow:
         # —— 底栏 ——
         foot = ctk.CTkFrame(
             self._container,
-            fg_color=_C["card"],
-            corner_radius=12,
-            border_width=1,
-            border_color=_C["card_border"],
-            height=44,
+            fg_color="transparent",
+            corner_radius=0,
+            border_width=0,
+            height=26,
         )
-        foot.pack(fill="x", padx=22, pady=(0, 8))
+        foot.pack(fill="x", padx=14, pady=(0, 2))
         foot_inner = ctk.CTkFrame(foot, fg_color="transparent")
-        foot_inner.pack(fill="x", padx=14, pady=8)
-        ctk.CTkLabel(foot_inner, textvariable=self.progress_var, font=self._font(12), text_color=_C["subtle"]).pack(
+        foot_inner.pack(fill="x", padx=6, pady=2)
+        ctk.CTkLabel(foot_inner, textvariable=self.progress_var, font=self._font(11), text_color=_C["subtle"]).pack(
             side="left"
         )
-        ctk.CTkLabel(foot_inner, textvariable=self.status_var, font=self._font(12, True)).pack(side="right")
+        ctk.CTkLabel(foot_inner, textvariable=self.status_var, font=self._font(11, True)).pack(side="right")
 
         self.progress = ctk.CTkProgressBar(
             self._container,
             mode="indeterminate",
-            height=5,
-            corner_radius=3,
+            height=3,
+            corner_radius=1,
             progress_color=_C["accent"],
         )
-        self.progress.pack(fill="x", padx=22, pady=(0, 14))
+        self.progress.pack(fill="x", padx=14, pady=(0, 4))
         self.progress.set(0)
 
     def _perm_text(self) -> str:

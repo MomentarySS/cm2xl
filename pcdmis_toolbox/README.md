@@ -25,6 +25,28 @@ python -m modules.cmm_filler
 python -m modules.pc_to_excel
 ```
 
+### 本机测试方式（2026-09-22 验证）
+
+本仓库在这台机器上不要使用 `D:\AI\miniconda3\python.exe`（base 环境，Python 3.14，Tk/DLL 链不稳定），否则容易出现启动窗口一闪而过。请固定使用已验证的 `paddleocr_gpu` 环境：
+
+```powershell
+cd D:\AI\work\a1\pcdmis_toolbox
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
+```
+
+烟测命令：
+
+```powershell
+cd D:\AI\work\a1\pcdmis_toolbox
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+```
+
+如只想快速验证主窗口、跳过 OCR 预加载：
+
+```powershell
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
+```
+
 ### 打包（测量房离线部署）
 
 ```bash
@@ -36,7 +58,7 @@ build.bat
 
 # Step 2: 生成安装包（需先安装 Inno Setup 7）
 build_installer.bat
-# 产物：installer/output/cm2xl_Setup_1.0.12.exe
+# 产物：installer/output/cm2xl_Setup_1.0.2.exe
 ```
 
 打包前确保：
@@ -239,6 +261,6 @@ cm2xl；`build.bat` 会自动将该启动器复制到 `dist/cm2xl/`。
 
 ## 版本
 
-`1.0.12` —— v1.0.12 发布 2026-09-03
+`1.0.2` —— 当前开发版
 
 定义在 [`toolbox/app_meta.py`](toolbox/app_meta.py)。配置 schema 版本（`CONFIG_SCHEMA_VERSION`）为 `2.0.0`，与应用程序版本独立。

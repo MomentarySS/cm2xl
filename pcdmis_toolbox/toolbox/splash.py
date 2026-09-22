@@ -204,7 +204,6 @@ class SplashScreen:
                 self._close_splash()
 
         self._root.after(100, _poll)
-        self._root.after(100, _poll)   # 立即触发第一次
         self._root.mainloop()           # 阻塞，直到 _close_splash() 调用 destroy()
 
     def _set_progress(self, value: float, text: str = "") -> None:

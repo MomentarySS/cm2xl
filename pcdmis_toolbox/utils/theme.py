@@ -16,14 +16,14 @@ TOOLBOX_THEME = {
     "ok": "#15803D",
     "warn": "#C2410C",
     "bad": "#B91C1C",
-    # 界面色（暖灰纸感：降低纯白刺激，拉大层级对比）
+    # 界面色（浅色模式改为中性灰白，避免底部/卡片在浅色下发黄发脏）
     "muted": "#5B6775",
-    "card_bg": "#F0EEE6",
-    "card_border": "#B8BFC8",
-    "page_bg": "#E4E2DA",
-    "entry_bg": "#FAFAF8",
-    "entry_border": "#9CA8B6",
-    "hint_bg": "#D9EDE8",
+    "card_bg": "#FFFFFF",
+    "card_border": "#D6DCE5",
+    "page_bg": "#F4F6F8",
+    "entry_bg": "#FFFFFF",
+    "entry_border": "#AEB8C5",
+    "hint_bg": "#E6F5F2",
     # 文字
     "text": "#1A2332",
     "text_muted": "#4B5563",
@@ -53,7 +53,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
     完整字段参考：customtkinter/assets/themes/green.json
 
     配色策略：
-    - 浅色：暖灰纸背景 + 浅米卡片 + 清晰边框（降低眩光、提高控件可辨度）
+    - 浅色：中性浅灰背景 + 白色卡片 + 清晰边框，避免底部区域发黄发脏
     - 深色：用低饱和深石板，避免纯黑冷感
     - CTkLabel fg_color 设为 transparent，避免文字后出现灰色色块
     """
@@ -81,14 +81,14 @@ def _build_theme_json(dest: Path | None = None) -> None:
         "CTk": {"fg_color": [page_bg_l, page_bg_d]},
         "CTkToplevel": {"fg_color": [card_bg_l, card_bg_d]},
         "CTkFrame": {
-            "corner_radius": 8,
+            "corner_radius": 5,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [card_bg_l, card_bg_d],
             "top_fg_color": [page_bg_l, page_bg_d],
         },
         "CTkButton": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "border_width": 0,
             "border_color": [accent, accent_h],
             "fg_color": [accent, accent],
@@ -107,7 +107,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color": [text_l, text_d],
         },
         "CTkEntry": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "border_width": 1,
             "border_color": [entry_bd_l, card_bd_d],
             "fg_color": [entry_bg_l, page_bg_d],
@@ -115,7 +115,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "placeholder_text_color": [muted, muted_d],
         },
         "CTkOptionMenu": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "fg_color": [accent, accent],
             "button_color": [primary, primary],
             "button_hover_color": [accent_h, accent_pressed_d],
@@ -123,7 +123,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkProgressBar": {
-            "corner_radius": 6,
+            "corner_radius": 4,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [page_bg_l, page_bg_d],
@@ -151,7 +151,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "button_hover_color": [accent_h, accent_pressed_d],
         },
         "CTkComboBox": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "border_width": 1,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [page_bg_l, page_bg_d],
@@ -161,7 +161,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkCheckBox": {
-            "corner_radius": 6,
+            "corner_radius": 4,
             "border_width": 1,
             # fg_color = 勾选后方框填充色（须与白色勾形成对比，不能用浅底）
             "border_color": [checkbox_bd_l, card_bd_d],
@@ -182,7 +182,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkSegmentedButton": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "border_width": 0,
             "fg_color": [page_bg_l, page_bg_d],
             "selected_color": [accent, accent],
@@ -193,7 +193,7 @@ def _build_theme_json(dest: Path | None = None) -> None:
             "text_color_disabled": [muted, muted_d],
         },
         "CTkTextbox": {
-            "corner_radius": 6,
+            "corner_radius": 5,
             "border_width": 0,
             "border_color": [card_bd, card_bd_d],
             "fg_color": [card_bg_l, card_bg_d],
