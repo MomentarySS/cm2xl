@@ -153,7 +153,8 @@ def _acquire_instance_lock(*, handoff_auto_export: bool = False):
 def _preload_ocr():
     """后台线程：仅做 PaddleOCR 预加载（唯一耗时操作）。"""
     from paddleocr import PaddleOCR as _OCR
-    _OCR(use_angle_cls=True, lang='ch', show_log=False)
+    # use_gpu=True：偏好 GPU；paddle 非 CUDA 编译版时由 check_gpu() 自动降级 CPU
+    _OCR(use_gpu=True, use_angle_cls=True, lang='ch', show_log=False)
 
 
 def _create_shell(launch):

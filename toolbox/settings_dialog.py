@@ -342,9 +342,14 @@ class SettingsDialog:
             messagebox.showerror("保存失败", f"无法保存设置：\n{e}")
             return
 
-        # 运行时应用
+        # 运行时应用：after_idle 让模式切换推到当前事件循环之后，
+        # 避免 ctk.set_appearance_mode() 在保存按钮回调里同步遍历所有 widget
+        # （CMMFiller 预览窗口打开时 AppearanceModeTracker 回调可达上万，
+        #  同步执行会让主线程冻结几百 ms）
         try:
-            ctk.set_appearance_mode(self._working["appearance_mode"])
+            mode = self._working["appearance_mode"]
+            if mode in ("light", "dark", "system"):
+                self._win.after_idle(lambda m=mode: ctk.set_appearance_mode(m))
         except Exception:
             pass
         try:

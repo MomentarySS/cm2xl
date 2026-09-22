@@ -206,6 +206,7 @@ class PaddleOCREngine(OCREngine):
         logger.info(f'使用 OCR {tier_label} 模型 (det={det_dir})')
         logger.info(f'初始化 PaddleOCR 引擎 (tier={tier}, lang={lang}) ...')
         self._ocr = PaddleOCR(
+            use_gpu=True,   # 偏好 GPU；paddle 非 CUDA 编译版时由 check_gpu() 自动降级 CPU
             lang=lang,
             show_log=False,
             det_model_dir=det_dir,

@@ -1248,9 +1248,10 @@ class CMMFillerGUI:
                 row_bg = 'transparent'
             row = ctk.CTkFrame(body, fg_color=row_bg, corner_radius=4)
             row.pack(fill='x', padx=6, pady=1)
+            row.grid_columnconfigure(1, weight=1)
             ctk.CTkCheckBox(
                 row, text=' ', width=24, variable=var, command=self._preview_update_count,
-            ).pack(side='left')
+            ).grid(row=0, column=0, sticky='w')
 
             ng = m.get('ng', False)
             desc_color = self.COLORS['ng'] if ng else ('gray15', 'gray85')
@@ -1260,33 +1261,33 @@ class CMMFillerGUI:
                 desc_color = self.COLORS['warn']
             desc_font = ctk.CTkFont(size=13, weight='bold') if (ng or low_conf) else ctk.CTkFont(size=13)
 
-            cols = ctk.CTkFrame(row, fg_color="transparent")
-            cols.pack(side='left', fill='x', expand=True)
-            cols.grid_columnconfigure(1, weight=1)
-
-            ctk.CTkLabel(cols, text=label, width=80, anchor='w',
-                         font=ctk.CTkFont(size=13)).grid(row=0, column=0, sticky='w', padx=(2, 6))
+            # 合并 label + desc 为单 Label（省 1 widget/行；保留 tol 列与样式）
             desc_val = m.get('desc', '')
             if is_conflict:
                 desc_val = f'⚡ {desc_val}'
             elif low_conf:
                 desc_val = f'⚠ {desc_val}'
-            ctk.CTkLabel(cols, text=desc_val, anchor='w',
-                         font=desc_font, text_color=desc_color).grid(row=0, column=1, sticky='w', padx=(0, 6))
+            ctk.CTkLabel(
+                row, text=f"{label}  {desc_val}",
+                anchor='w', font=desc_font, text_color=desc_color, justify='left',
+            ).grid(row=0, column=1, sticky='ew', padx=(6, 6))
+
+            # tol 列保留：灰色 + size 12 + 右对齐，公差值独立视觉层级
             tol_val = f"{m['nominal']:g} +{m['upper_tol']:g}/-{abs(m['lower_tol']):g}"
             ctk.CTkLabel(
-                cols, text=tol_val,
+                row, text=tol_val,
                 width=130, anchor='e', font=ctk.CTkFont(size=12), text_color=('gray45', 'gray55'),
             ).grid(row=0, column=2, sticky='e', padx=(0, 6))
+
             meas_entry = ctk.CTkEntry(
-                cols, textvariable=measured_var, width=90, height=28,
+                row, textvariable=measured_var, width=90, height=28,
                 font=ctk.CTkFont(size=14, weight='bold'),
                 border_color=self.COLORS['warn'] if low_conf else None,
             )
             meas_entry.grid(row=0, column=3, sticky='e', padx=(0, 2))
             if ng:
                 ctk.CTkLabel(
-                    cols, text='NG', width=30,
+                    row, text='NG', width=30,
                     font=ctk.CTkFont(size=12, weight='bold'), text_color='white',
                     fg_color=self.COLORS['ng'], corner_radius=6,
                 ).grid(row=0, column=4, padx=(4, 0))
