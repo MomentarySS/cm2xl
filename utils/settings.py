@@ -278,37 +278,45 @@ def load_and_migrate_settings(module_name: str, config_path: Path) -> dict:
     return current
 
 
+def stamp_settings(data: dict, module_name: str) -> dict:
+    """
+    给配置字典盖上 schema 版本戳（_version / _schema / _updated_at）。
+
+    各模块保存配置时**必须**调用本函数：文件里没有 _version 时，下次启动会被
+    当成 0.0.0 走一遍迁移链（每次弹「配置已升级」并生成 .bak）。
+    与 _default_settings() 共用同一套字段，避免两处各写一份。
+    """
+    stamped = dict(data)
+    stamped["_version"] = CONFIG_SCHEMA_VERSION
+    stamped["_schema"] = f"{module_name}.settings"
+    stamped["_updated_at"] = datetime.now().isoformat()
+    return stamped
+
+
 def _default_settings(module_name: str) -> dict:
     """返回模块默认 settings（含 _version 和 _schema 字段）。"""
-    return {
-        "_version": CONFIG_SCHEMA_VERSION,
-        "_schema": f"{module_name}.settings",
-        "_updated_at": datetime.now().isoformat(),
-    }
+    return stamp_settings({}, module_name)
 
 
 # ── 模块迁移函数（旧 1.x → 当前 schema）────────────────────────────────────
 
 def migrate_cmm_filler_1_0_to_2_0(old: dict) -> dict:
-    """CMMFiller 1.0.0 → 2.0.0：路径记忆字段原样带入 + 版本字段。"""
-    new = _default_settings("cmm_filler")
-    for key in ("template_path", "pdf_folder", "output_folder"):
-        if key in old:
-            new[key] = old[key]
-    return new
+    """CMMFiller 1.0.0 → 2.0.0：保留原有全部字段 + 补齐版本字段。
+
+    这里**刻意不用白名单**：白名单会丢掉「新增、但忘记同步到本函数」的字段。
+    历史上 report_profile / custom_item_prefixes / ocr_roi 就是这样每次启动被抹掉的
+    —— 保存侧（gui._save_paths）写 6 个键，而本函数的白名单停在 3 个。
+    改为保留未知键后，「忘记同步」这个失效模式变得无害。
+
+    版本字段由 _default_settings() 覆盖写入（顺序：old 在前、默认值在后），
+    因此旧的 _version / _schema / _updated_at 会被刷新为当前值。
+    """
+    return {**old, **_default_settings("cmm_filler")}
 
 
 def migrate_pc_to_excel_1_4_to_2_0(old: dict) -> dict:
-    """pc to excel 1.4.5 → 2.0.0：顶层字段 + tolerance/form_fill 原样带入。"""
-    new = _default_settings("pc_to_excel")
-    for key in ("export_dir", "filename_pattern", "export_scope", "require_marked"):
-        if key in old:
-            new[key] = old[key]
-    if "tolerance" in old:
-        new["tolerance"] = old["tolerance"]
-    if "form_fill" in old:
-        new["form_fill"] = old["form_fill"]
-    return new
+    """pc to excel 1.4.5 → 2.0.0：保留原有全部字段 + 补齐版本字段（同上）。"""
+    return {**old, **_default_settings("pc_to_excel")}
 
 
 _MIGRATIONS.update({
@@ -319,21 +327,32 @@ _MIGRATIONS.update({
 
 # ── 降级导出 ───────────────────────────────────────────────────────────────
 
+# 各模块 2.0 schema 的「业务字段」白名单（不含 _ 前缀元数据），用于降级导出。
+#
+# 这里**必须**用白名单，方向与迁移函数相反：
+#   - 迁移：必须保留未知键 —— 否则丢用户数据
+#   - 降级导出：必须丢弃未知键 —— 目标是**冻结的** 1.x 格式，新字段旧工具不认识，
+#     带出去只会让「导出给旧工具的配置」内容不再可控
+_LEGACY_EXPORT_KEYS: dict[str, tuple[str, ...]] = {
+    "cmm_filler": ("template_path", "pdf_folder", "output_folder"),
+    "pc_to_excel": (
+        "export_dir",
+        "filename_pattern",
+        "tolerance",
+        "export_scope",
+        "require_marked",
+        "form_fill",
+    ),
+}
+
+
 def export_legacy_settings(module_name: str, target_path: Path, current_data: dict) -> None:
     """
     把 2.0 配置降级导出为 1.x 格式，导出给旧工具使用。
     详见 ARCHITECTURE.md 3.9.2。
     """
-    if module_name == "cmm_filler":
-        # 当前 2.0 schema 为顶层路径字段（与 filler.py load_settings 一致）
-        legacy = {
-            k: v for k, v in current_data.items()
-            if k in ("template_path", "pdf_folder", "output_folder")
-        }
-    elif module_name == "pc_to_excel":
-        legacy = {k: v for k, v in current_data.items() if not k.startswith("_")}
-    else:
-        legacy = {}
+    allowed = _LEGACY_EXPORT_KEYS.get(module_name, ())
+    legacy = {k: v for k, v in current_data.items() if k in allowed}
 
     from utils.file_io import atomic_write_text
 

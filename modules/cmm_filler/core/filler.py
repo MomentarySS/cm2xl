@@ -46,7 +46,7 @@ from .sub_item_conflict import (
 from .ng_analysis import collect_ng_stats, export_ng_workbook, format_ng_summary_text
 from utils.file_io import glob_pdfs
 from utils.paths import paths
-from utils.settings import save_settings_json_atomic
+from utils.settings import save_settings_json_atomic, stamp_settings
 
 # ── 日志 ──────────────────────────────────────────────
 logger = logging.getLogger('CMMFiller')
@@ -137,10 +137,16 @@ def load_settings() -> dict:
 
 
 def save_settings(data: dict):
-    """保存 GUI 路径记忆（原子写，避免中断留下半截文件）"""
+    """保存 GUI 路径记忆（原子写 + schema 版本戳，避免中断留下半截文件）
+
+    必须盖章：文件里没有 _version 时，下次启动会被当成 0.0.0 走一遍迁移链，
+    每次弹「配置已升级」并生成 .bak。
+    """
     try:
         Path(APP_DATA_DIR).mkdir(parents=True, exist_ok=True)
-        save_settings_json_atomic(Path(SETTINGS_PATH), data)
+        save_settings_json_atomic(
+            Path(SETTINGS_PATH), stamp_settings(data, 'cmm_filler')
+        )
     except OSError as e:
         logger.warning(f'保存设置失败: {e}')
 

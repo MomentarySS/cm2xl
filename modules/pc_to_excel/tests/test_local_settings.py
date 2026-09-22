@@ -17,6 +17,7 @@ from ..utils.local_settings import (
     load_settings,
     save_settings,
 )
+from utils.settings import CONFIG_SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +176,29 @@ def test_save_settings_creates_file(tmp_path: Path, populated_settings):
     data = json.loads(written.read_text(encoding="utf-8"))
     assert data["export_dir"] == "/custom/export"
     assert data["filename_pattern"] == "{part}_report"
+
+
+def test_save_settings_stamps_schema_version(tmp_path: Path, populated_settings):
+    """save_settings 必须写 _version。
+
+    否则文件里没有版本字段，下次启动会被当成 0.0.0 走一遍迁移链
+    （每次弹「配置已升级」并生成 .bak）。
+    """
+    fake = _FakePaths(tmp_path)
+    _patch_paths("paths", fake)
+
+    save_settings(populated_settings)
+    written = tmp_path / "config" / "pc_to_excel" / "settings.json"
+    data = json.loads(written.read_text(encoding="utf-8"))
+    assert data["_version"] == CONFIG_SCHEMA_VERSION
+    assert data["_schema"] == "pc_to_excel.settings"
+    # 业务字段不受影响
+    assert data["export_dir"] == "/custom/export"
+    assert data["require_marked"] is False
+    # 盖过章的文件能被原样读回（_ 前缀键不会干扰解析）
+    loaded = load_settings()
+    assert loaded.export_dir == "/custom/export"
+    assert loaded.require_marked is False
 
 
 def test_load_settings_full_roundtrip(tmp_path: Path):

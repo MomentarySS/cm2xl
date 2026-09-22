@@ -13,7 +13,7 @@ from pathlib import Path
 
 from ..app_meta import DEFAULT_TOLERANCE
 from utils.paths import paths
-from utils.settings import save_settings_json_atomic
+from utils.settings import save_settings_json_atomic, stamp_settings
 from ..export.inspection_form_fill import FormFillConfig
 
 
@@ -102,7 +102,11 @@ def save_settings(settings: AppSettings) -> None:
     payload = asdict(settings)
     # FormFillConfig 用显式 to_dict，避免嵌套 dataclass 序列化差异
     payload["form_fill"] = settings.form_fill.to_dict()
-    save_settings_json_atomic(settings_file, payload)
+    # 盖 schema 版本戳：否则文件里没有 _version，下次启动会被当成 0.0.0
+    # 走一遍迁移链（每次弹「配置已升级」并生成 .bak）
+    save_settings_json_atomic(
+        settings_file, stamp_settings(payload, "pc_to_excel")
+    )
 
 
 def build_export_filename(part_name: str, pattern: str | None = None) -> str:

@@ -37,6 +37,7 @@ from utils.settings import (
     migrate_settings_if_needed,
     save_settings_json_atomic,
     save_toolbox_settings,
+    stamp_settings,
     export_legacy_settings,
     CONFIG_SCHEMA_VERSION,
     _MIGRATIONS,
@@ -184,6 +185,64 @@ class TestVersionUpgradeChain:
         assert new["export_dir"] == "/d"
         assert new["tolerance"] == {"mode": "asymmetric"}
 
+    # ── 保留未知键（回归：白名单式迁移曾每次启动抹掉字段）──────────────────
+
+    def test_cmm_filler_migration_preserves_unknown_keys(self):
+        """保存侧写 6 个键、迁移白名单只有 3 个 → report_profile 等每次启动被抹掉。"""
+        old = {
+            "_version": "1.0.0",
+            "template_path": "tpl.xlsx",
+            "pdf_folder": "/pdf",
+            "output_folder": "/out",
+            "report_profile": "mt",
+            "custom_item_prefixes": ["FAI", "CC"],
+            "ocr_roi": {"top": 0.1, "left": 0.0, "bottom": 0.0, "right": 0.0},
+        }
+        new = migrate_cmm_filler_1_0_to_2_0(old)
+        assert new["report_profile"] == "mt"
+        assert new["custom_item_prefixes"] == ["FAI", "CC"]
+        assert new["ocr_roi"] == {"top": 0.1, "left": 0.0, "bottom": 0.0, "right": 0.0}
+        assert new["_version"] == CONFIG_SCHEMA_VERSION
+
+    def test_pc_to_excel_migration_preserves_unknown_keys(self):
+        """pc_to_excel 侧同构：将来新增的字段不能在迁移时被丢掉。"""
+        old = {"_version": "1.4.5", "export_dir": "/d", "future_field": 123}
+        new = migrate_pc_to_excel_1_4_to_2_0(old)
+        assert new["export_dir"] == "/d"
+        assert new["future_field"] == 123
+        assert new["_version"] == CONFIG_SCHEMA_VERSION
+
+    def test_migration_refreshes_stale_metadata(self):
+        """合并顺序必须是 old 在前、默认值在后，否则旧 _version 会被原样保留。"""
+        old = {
+            "_version": "1.0.0",
+            "_schema": "stale.schema",
+            "_updated_at": "2000-01-01T00:00:00",
+        }
+        new = migrate_cmm_filler_1_0_to_2_0(old)
+        assert new["_version"] == CONFIG_SCHEMA_VERSION
+        assert new["_schema"] == "cmm_filler.settings"
+        assert new["_updated_at"] != "2000-01-01T00:00:00"
+
+    def test_stamped_settings_skip_migration(self, tmp_dir):
+        """保存时盖章 → 下次启动不再走迁移链（不再每次弹「配置已升级」+ 生成 .bak）。"""
+        path = tmp_dir / "cmm_filler" / "settings.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                stamp_settings(
+                    {"template_path": "/t.xlsx", "report_profile": "mt"},
+                    "cmm_filler",
+                )
+            ),
+            encoding="utf-8",
+        )
+        result = load_and_migrate_settings("cmm_filler", path)
+        assert result["template_path"] == "/t.xlsx"
+        assert result["report_profile"] == "mt"
+        # 真正跑过迁移会留下 .v1.0.0.bak —— 没有备份即证明迁移未执行
+        assert list(path.parent.glob("*.bak")) == []
+
     def test_load_and_migrate_from_1_0(self, tmp_dir):
         path = tmp_dir / "cmm_filler" / "settings.json"
         path.parent.mkdir(parents=True)
@@ -241,6 +300,44 @@ class TestLegacyExport:
         loaded = json.loads(target.read_text(encoding="utf-8"))
         assert loaded["export_dir"] == "/d"
         assert loaded["tolerance"] == {"mode": "6pack"}
+
+    def test_pc_to_excel_export_drops_unknown_keys(self, tmp_dir):
+        """降级导出必须用白名单：历史/未来字段不得泄漏给旧工具。
+
+        旧实现是 `not k.startswith("_")` 黑名单 —— 一旦迁移改为保留未知键，
+        这些键就会被带进「给旧工具的配置」里。
+        """
+        target = tmp_dir / "legacy_pc_unknown.json"
+        data = {
+            "_version": "2.0.0",
+            "_schema": "pc_to_excel.settings",
+            "export_dir": "/d",
+            "tolerance": {"mode": "6pack"},
+            "report_profile": "mt",   # 历史遗留键
+            "ocr_roi": {"top": 1},    # 将来新增的键
+        }
+        export_legacy_settings("pc_to_excel", target, data)
+        loaded = json.loads(target.read_text(encoding="utf-8"))
+        assert loaded["export_dir"] == "/d"
+        assert loaded["tolerance"] == {"mode": "6pack"}
+        assert "report_profile" not in loaded
+        assert "ocr_roi" not in loaded
+        assert "_version" not in loaded
+
+    def test_cmm_filler_export_drops_unknown_keys(self, tmp_dir):
+        """cmm_filler 侧原本就是白名单，补一条防回归。"""
+        target = tmp_dir / "legacy_cmm_unknown.json"
+        data = {
+            "_version": "2.0.0",
+            "template_path": "/t.xlsx",
+            "report_profile": "mt",
+            "ocr_roi": {"top": 1},
+        }
+        export_legacy_settings("cmm_filler", target, data)
+        loaded = json.loads(target.read_text(encoding="utf-8"))
+        assert loaded["template_path"] == "/t.xlsx"
+        assert "report_profile" not in loaded
+        assert "ocr_roi" not in loaded
 
 
 # ── 6. Toolbox 全局设置 ─────────────────────────────────────────────────────
