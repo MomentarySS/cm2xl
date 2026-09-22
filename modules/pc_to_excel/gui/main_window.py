@@ -1305,6 +1305,9 @@ class MainWindow:
                 setattr(self, attr, None)
 
     def _schedule_status_watch(self) -> None:
+        # 本方法由 30s timer 调起时，说明上一个 _status_watcher_after_id 已触发，
+        # 先置 None 避免 _stop_status_watcher() 去 after_cancel 一个已执行过的 id。
+        self._status_watcher_after_id = None
         if not self._status_watcher_running:
             return
         # 首次 tick 推一帧：after(0) 意思是"当前 UI 事件处理完后下一轮事件循环"，
@@ -1314,6 +1317,8 @@ class MainWindow:
         self._status_watcher_after_id = self.root.after(30_000, self._schedule_status_watch)
 
     def _status_watcher_tick(self) -> None:
+        # 已被执行：id 失效，置 None 让 _stop_status_watcher() 不会尝试取消旧 id
+        self._status_watcher_tick_id = None
         if not self._status_watcher_running:
             return
         if self._busy:
