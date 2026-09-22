@@ -5,14 +5,15 @@
 >
 > **来源**：2026-09-22 全量**只读**审查（4 个代码域并行深查 → 逐条回源码与真实调用点核对）。
 >
-> **回归基线（2026-09-22 修正）**：必须**显式指名** `tests\phase8_smoke.py` ——
-> 该文件名不匹配 pytest 的 `test_*.py` 默认模式，`pytest tests` 收集到 **0 个**测试（见 P3-7）。
+> **回归基线**：裸跑即可 —— 收集范围由 `pytest.ini` 的 `testpaths` 限定，
+> `tests/phase8_smoke.py` 也已纳入（见 P3-7，2026-09-22 修复）。
 >
 > ```powershell
-> D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py modules\pc_to_excel\tests modules\cmm_filler\tests -q
+> D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 > ```
 >
-> 真实基线 **233 passed**（`tests/` 36 + `modules/*/tests` 197）。也就是说：**下列缺陷全部落在现有测试覆盖之外**。
+> 当前全量 **248 passed**（`tests/` 42 + `modules/*/tests` 206）。
+> 审查当时的基线是 233 —— 也就是说：**下列缺陷全部落在现有测试覆盖之外**。
 >
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
 > 每条开工前先读「语义边界」—— 那是本计划里最容易被忽略、也最容易改出回归的部分。
@@ -25,7 +26,7 @@
 |---|------|------|------|:---:|------|
 | P1-1 | 模板数据区上限截断（序号 >50 静默丢弃） | `cmm_filler/core/filler.py:858-882` | 静默丢数据 | ✅ | ✅ **已完成**（真机待验） |
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成**（真机待验） |
-| P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ⬜ 未开始 |
+| P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ✅ **已完成**（真机待验） |
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ⬜ 未开始 |
 | P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ⬜ 未开始 |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
@@ -38,7 +39,7 @@
 | P3-4 | 不捕 `UnicodeDecodeError` | `utils/settings.py:210,380` | 健壮性 | ❌ | ⬜ 未开始 |
 | P3-5 | 导出文件名秒级时间戳无去重 | `export/pcdmis_style_report.py:377` | 丢报告 | ❌ | ⬜ 未开始 |
 | P3-6 | COM 对象逃出 apartment（埋雷 API） | `connector/com_detector.py:427-432` | 架构 | ❌ | ⬜ 未开始 |
-| P3-7 | `tests/` 目录默认不被 pytest 收集（42 个测试静默不跑） | `tests/phase8_smoke.py` 文件名 | 测试可信度 | ❌ | ⬜ 未开始 |
+| P3-7 | `tests/` 目录默认不被 pytest 收集（42 个测试静默不跑） | `pytest.ini`（新建） | 测试可信度 | ❌ | ✅ **已完成** |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -50,8 +51,8 @@
 
 ```powershell
 git switch -c fix/core-defects
-# 基线对照（当前 233 passed）—— 注意必须显式指名 phase8_smoke.py，否则少跑 36 个测试
-D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py modules\pc_to_excel\tests modules\cmm_filler\tests -q
+# 基线对照（当前 248 passed；裸跑即可，收集范围见 pytest.ini）
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 # 真机验证前快照，方便比对「配置是否被改坏」
 copy "%LOCALAPPDATA%\cm2xl\config\cmm_filler\settings.json" settings.before.json
 ```
@@ -189,11 +190,44 @@ copy "%LOCALAPPDATA%\cm2xl\config\cmm_filler\settings.json" settings.before.json
 **语义边界**
 1. 哈希一变，**所有历史缓存图片变孤儿**。`_cleanup_cache()` 按 30 天 mtime 兜底，不会立刻膨胀，但 CHANGELOG 要提。
 2. `stem` 必须保留在文件名里 —— 先 grep 有没有别处按 PNG 文件名反查 stem（`CACHE_DIR.glob` / 解析文件名）。
-3. `dpi` 同样没进文件名（同一 PDF 换 dpi 会复用旧图）。这属于**扩大范围**，单开 commit 或明确不做。
-4. `_roi` 后缀保持现状。
+3. `dpi` **明确不做**（保持原计划边界）：它由构造参数固定为 300，GUI / CLI 都没有入口，
+   不构成实际冲突。已在代码 docstring 写明「若将来开放 dpi 设置，此处需一并补上」。
+4. `_roi` 后缀**从「保持现状」改为「一并修」** —— 见下方实施记录。它不是范围外的改动，
+   而是同一个缺陷（缓存标识不完整）的第二种触发方式，且用户能从 GUI 直接触发。
 
 **验证** — 单测：两个不同目录的同名 PDF 走 `pdf_to_images()`，断言生成两个不同路径。
 真机：汇总导出选两个同名 PDF，核对第二个 Sheet 的值。
+
+**实施记录（2026-09-22）**
+
+| 文件 | 改动 |
+|------|------|
+| `cmm_filler/core/pdf_extract.py` | 新增 `_path_cache_suffix()`；文件名改为 `{stem}_{路径哈希}{_pN}{_roi_...}.png`；ROI 后缀由布尔 `_roi` 改为带实际比例 |
+| `modules/cmm_filler/tests/test_pdf_extract.py` | +3 条测试 |
+
+**实施时的新发现：`roi_cache_suffix()` 是死代码**
+
+`report_profile.roi_cache_suffix()`（`report_profile.py:178`）的 docstring 写着
+「ROI 配置的短哈希后缀，用于 OCR 缓存 key」，但全仓**零引用** —— 作者本来就打算把 ROI
+纳入缓存标识，只是没接上。而旧实现用的是布尔 `_roi` 后缀：**把 ROI 从 0.2 改成 0.3，
+文件名不变 → 命中旧 OCR 结果**（图片会重新渲染，但 OCR 按文件名取缓存）。
+
+这不是范围外的新问题，而是同一个缺陷（缓存标识不完整）的第二种触发方式，且用户能从
+GUI 的 ROI 输入框直接触发。所以本次一并接上，复用了那个现成的 helper。
+
+**边界核实**
+
+- grep 确认**没有任何地方反查 PNG 文件名**：只有 `filler._cleanup_cache()` 用
+  `CACHE_DIR.glob('*.png')` 按 mtime 删 30 天前的文件，不解析名字。`stem` 保留在
+  文件名里（并加了测试守住），人工排查与日志仍可认图。
+- 哈希一变，历史缓存图片全部变孤儿；`_cleanup_cache()` 的 30 天 mtime 兜底，不会立刻膨胀。
+
+**验证（含「守卫是否有牙」的证明）**
+
+- 3 条测试：同名不同目录 → 不同图片；不同 ROI 值 → 不同图片；文件名保留 stem。
+- **证明有效**：`git stash` 退回修复前跑同一组测试 → **2 failed**，失败信息正是
+  `001.png == 001.png` 与 `roi_roi.png == roi_roi.png`（第三条是守卫，旧代码本就通过）。
+- 全量 `251 passed`（248 + 新增 3）。
 
 ---
 
@@ -538,6 +572,35 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 
 **验证** — 裸跑 `python -m pytest -q` 收集数 ≥ 233；`--collect-only` 里能看到 `tests/phase8_smoke.py` 的用例。
 
+**实施记录（2026-09-22）** —— 采用**改法 1**（加配置，不改文件名）
+
+| 文件 | 改动 |
+|------|------|
+| `pytest.ini` | **新建**：`python_files = test_*.py *_test.py phase8_smoke.py` + `testpaths = tests modules` |
+| `CLAUDE.md` | 「已验证命令」把 `pytest tests\phase8_smoke.py -q` 换成裸跑 `pytest -q`；Phase 8 的「130 tests passed」标注为已过期 |
+| `README.md` | 烟测命令改为裸跑 `pytest -q`，并加一句「只跑 phase8_smoke.py 会漏掉 modules/*/tests 下 200+ 个用例」 |
+| `docs/PERF_UI_LATENCY.md` | 补注：`TestCrashLog::test_exception_written` 现已通过；当时 `tests/` 不被收集，故该文的测试数字只覆盖 `modules/*/tests` |
+
+**两个实施细节**
+
+1. **`python_files` 是整体替换**，必须把默认的 `test_*.py` / `*_test.py` 一起写回来，
+   否则会把所有 `test_*.py` 一并关掉 —— 这比原缺陷更糟。
+2. **顺带加了 `testpaths = tests modules`**。原缺陷调查中实测：不加这一行，裸跑 `pytest`
+   会从当前目录递归扫描，而本仓库的 `dist/` 与 `build/` 就在工作区里 —— 打包进来的
+   第三方 `test_*.py` 将来可能被误收集。当前 `dist/` 里没有这类文件（已核实），
+   但这是个真实隐患。
+
+**验证结果**
+
+| 命令 | 修复前 | 修复后 |
+|------|:---:|:---:|
+| `pytest --collect-only -q`（裸跑） | 206（漏 `tests/` 全部） | **248** |
+| `pytest -q`（裸跑） | — | **248 passed** |
+| `pytest tests\phase8_smoke.py -q`（显式路径） | 42 passed | 42 passed（不受影响） |
+
+其中「裸跑收集到 `tests/phase8_smoke.py` 的用例数」= **42**，即全部找回。
+显式路径的用法不受 `testpaths` 影响（该选项只在无参数时生效）。
+
 ---
 
 ## 开放决策（需要现场/产品信息才能定）
@@ -571,7 +634,9 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P2-2：找一个多轴项核对报告
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`pytest tests modules\pc_to_excel\tests modules\cmm_filler\tests -q`（基线 197 passed）
+- [ ] 全量回归：`python -m pytest -q`（当前 251 passed）
+- [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
+      （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 
 ---
 
@@ -587,3 +652,6 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **P2-5 实施完成**：`get_report_header_info()` 的 COM 段包进 `com_call_lock`（阻塞式，附 3 条理由）；+4 条测试，其中源码守卫用 AST 判定并已证明「修复前会失败」。全量 `244 passed` |
 | 2026-09-22 | 已提交一轮到分支 `fix/core-defects`：`0331696` P1-2 / `56e3770` P2-5 / `d607e11` docs |
 | 2026-09-22 | **P1-1 实施完成**：`_get_max_data_row()` 锚点改为「序号列 ∪ 规格列」并覆盖全部 Sheet；新增 `_looks_like_serial()`。模板2 的 max_data_row 59 → 159，索引键 54 → 104（末键 `'100'`）。+4 条测试，已用 `git stash` 退回旧实现证明「修复前会失败」。全量 `248 passed`。**同时修正本节 P1-1 现象里的序号区间描述（1..100，非 109 个序号）** |
+| 2026-09-22 | 已提交 `fcbc19c`（P1-1 + CLAUDE.md 计数修正） |
+| 2026-09-22 | **P3-7 实施完成**：新建 `pytest.ini`（`python_files` 补上 `phase8_smoke.py` + `testpaths = tests modules`）。裸跑 `pytest` 收集数 206 → **248**，42 个用例全部找回；显式路径用法不受影响。同步 `CLAUDE.md` / `README.md` / `docs/PERF_UI_LATENCY.md` 里的历史测试数字与命令。**本文件的基线命令也随之简化为裸跑** |
+| 2026-09-22 | **P1-3 实施完成**：缓存图片名改为 `{stem}_{路径哈希}{_pN}{_roi_比例}.png`。新增 `_path_cache_suffix()`；顺带接上**原本零引用的** `roi_cache_suffix()`（旧实现只加布尔 `_roi`，改 ROI 后仍命中旧 OCR）。+3 条测试，已用 `git stash` 证明「修复前 2 failed」。全量 `251 passed`。`dpi` 按原边界明确不做并已在 docstring 说明 |
