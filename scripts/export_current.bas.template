@@ -6,21 +6,20 @@ Const DATA_TYPE_DIMENSION = "D"
 Const DATA_TYPE_FCF = "F"
 Const DATA_TYPE_FCFDIM = "FD"
 
-Const ID = 2
-Const AXIS = 132
-Const NOMINAL = 166
-Const F_PLUS_TOL = 167
-Const F_MINUS_TOL = 168
-Const DIM_MEASURED = 328
-Const DIM_LENGTH = 173
-Const DIM_BONUS = 324
-Const UNIT_TYPE = 49
-Const LINE1_FEATNAME = 645
-Const LINE1_NOMINAL = 646
-Const LINE1_MEAS = 647
-Const LINE1_PLUSTOL = 648
-Const LINE1_MINUSTOL = 649
-Const LINE1_BONUS = 782
+Const FLD_ID = 2
+Const FLD_AXIS = 132
+Const FLD_NOMINAL = 166
+Const FLD_F_PLUS_TOL = 167
+Const FLD_F_MINUS_TOL = 168
+Const FLD_DIM_MEASURED = 328
+Const FLD_DIM_LENGTH = 173
+Const FLD_DIM_BONUS = 324
+Const FLD_LINE1_FEATNAME = 645
+Const FLD_LINE1_NOMINAL = 646
+Const FLD_LINE1_MEAS = 647
+Const FLD_LINE1_PLUSTOL = 648
+Const FLD_LINE1_MINUSTOL = 649
+Const FLD_LINE1_BONUS = 782
 
 Sub Main
     On Error GoTo FatalError
@@ -146,7 +145,7 @@ Function readDimension(ByRef cmd As Object, ByRef fields() As String) As Boolean
 
     Dim idVal As String
     idVal = CStr(cmd.ID)
-    If idVal = "" Then idVal = CStr(cmd.GetText(ID, 0))
+    If idVal = "" Then idVal = CStr(cmd.GetText(FLD_ID, 0))
 
     Dim nominal As Variant, plusTol As Variant, minusTol As Variant
     Dim measured As Variant, bonus As Variant, axisVal As Variant
@@ -174,14 +173,14 @@ Function readDimension(ByRef cmd As Object, ByRef fields() As String) As Boolean
 
     fields(0) = idVal
     fields(1) = DATA_TYPE_DIMENSION
-    nominal = cmd.GetFieldValue(NOMINAL, 0)
-    plusTol = cmd.GetFieldValue(F_PLUS_TOL, 0)
-    minusTol = cmd.GetFieldValue(F_MINUS_TOL, 0)
-    measured = cmd.GetFieldValue(DIM_MEASURED, 0)
-    If measured = False Or measured = "" Then measured = cmd.GetFieldValue(DIM_LENGTH, 0)
-    bonus = cmd.GetFieldValue(DIM_BONUS, 0)
-    axisVal = cmd.GetFieldValue(AXIS, 0)
-    If axisVal = False Or axisVal = "" Then axisVal = cmd.GetText(AXIS, 0)
+    nominal = cmd.GetFieldValue(FLD_NOMINAL, 0)
+    plusTol = cmd.GetFieldValue(FLD_F_PLUS_TOL, 0)
+    minusTol = cmd.GetFieldValue(FLD_F_MINUS_TOL, 0)
+    measured = cmd.GetFieldValue(FLD_DIM_MEASURED, 0)
+    If measured = False Or measured = "" Then measured = cmd.GetFieldValue(FLD_DIM_LENGTH, 0)
+    bonus = cmd.GetFieldValue(FLD_DIM_BONUS, 0)
+    axisVal = cmd.GetFieldValue(FLD_AXIS, 0)
+    If axisVal = False Or axisVal = "" Then axisVal = cmd.GetText(FLD_AXIS, 0)
 
     If measured = False Or measured = "" Then Exit Function
 
@@ -199,16 +198,16 @@ Sub readFcfOld(ByRef cmd As Object, ByRef fields() As String, ByRef rows() As St
     Dim idid As String
     idid = cmd.ID
     Dim i As Long, total As Long
-    total = cmd.GetDataTypeCount(LINE1_MEAS)
+    total = cmd.GetDataTypeCount(FLD_LINE1_MEAS)
     For i = 1 To total
         fields(0) = idid
         fields(1) = DATA_TYPE_FCFDIM
-        fields(2) = cmd.GetFieldValue(LINE1_NOMINAL, i)
-        fields(3) = cmd.GetFieldValue(LINE1_PLUSTOL, i)
-        fields(4) = cmd.GetFieldValue(LINE1_MINUSTOL, i)
-        fields(5) = cmd.GetFieldValue(LINE1_MEAS, i)
-        fields(6) = cmd.GetFieldValue(LINE1_BONUS, i)
-        fields(7) = cmd.GetFieldValue(LINE1_FEATNAME, i)
+        fields(2) = cmd.GetFieldValue(FLD_LINE1_NOMINAL, i)
+        fields(3) = cmd.GetFieldValue(FLD_LINE1_PLUSTOL, i)
+        fields(4) = cmd.GetFieldValue(FLD_LINE1_MINUSTOL, i)
+        fields(5) = cmd.GetFieldValue(FLD_LINE1_MEAS, i)
+        fields(6) = cmd.GetFieldValue(FLD_LINE1_BONUS, i)
+        fields(7) = cmd.GetFieldValue(FLD_LINE1_FEATNAME, i)
         If fields(5) <> False And fields(5) <> "" Then
             rowCount = rowCount + 1
             ReDim Preserve rows(0 To rowCount)
