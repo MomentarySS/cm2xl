@@ -12,7 +12,7 @@
 > D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 > ```
 >
-> 当前全量 **278 passed**（`tests/` 42 + `modules/*/tests` 236）。
+> 当前全量 **309 passed**（`tests/` 42 + `modules/*/tests` 267；本次新增 31 = P1-5 的 25 + P1-6 的 6）。
 > 审查当时的基线是 233 —— 也就是说：**下列缺陷全部落在现有测试覆盖之外**。
 >
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
@@ -33,8 +33,7 @@
 | # | 要做什么 | 前置条件 | 通过判据 | 代码提交 |
 |---|---------|---------|---------|---------|
 | ~~**P1-2**~~ | ✅ **已完成 + 真机已验证**（2026-09-22 23:33 二次启动：0 条弹窗审计、配置未被再次改写、`_version` 未被写丢） | — | `0331696` |
-| **P1-4** | ① 重新点一次「部署 BAS 脚本」 ② PC-DMIS 内执行 `PC2XL_EXPORT` | **写侧已通过**（126 字节 / FF FE BOM / 干净两行）。**执行端待修完 P1-5 + P1-6 后一起跑**：脚本目前得编译不过、`saveCsv` 跑不到 | `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成 | `05f4e61` |
-| ⚠️ | **P1-4 的验证当前被 P1-5 阻塞** | 脚本第 9 行编译不过 | 先修 P1-5 再验 P1-4 | — |
+| **P1-4** | ① 重新点一次「部署 BAS 脚本」（含 P1-5 自动修复）② 植入/更新导出命令（验证 P1-6 不再报假失败）③ PC-DMIS 内执行 `PC2XL_EXPORT` | 写侧已通过；P1-5 + P1-6 代码侧已完成，单测全过。**一次端到端可同时验 P1-4 + P1-5 + P1-6** | `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成 + 不再弹「自动保存失败」 | `05f4e61` + `4ef50eb` + `836540e` |
 | **P1-1** | 跑一份 **>50 项**的 PDF 导出 | 需要这样一份 PDF | 序号 51+ 被写入 | `fcbc19c` |
 | **P1-3** | 汇总导出选**两个不同目录的同名 PDF** | 需要两个同名 PDF | 第二个 Sheet 不是第一个零件的值 | `9d1957d` |
 | **P2-1** | 构造「下公差读不到」的行 | **当前那份程序复现不了**（已实测 42 条里 0 条），需另找/另造 | 不丢行、无假超差 | `22a532f` + `66560d9` |
@@ -74,9 +73,9 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 
 ### 三、整体进度（截至 2026-09-23）
 
-**已完成 7 / 18，未开始 11 / 18。** 基线 233 → **278 passed**（`tests/` 42 + `modules/*/tests` 236）。
+**已完成 9 / 18，未开始 9 / 18。** 基线 233 → **309 passed**（`tests/` 42 + `modules/*/tests` 267，新增 31 测试）。
 
-**2026-09-22 晚 → 2026-09-23 上午：两轮真机验证 + 两个新 bug。** 进展如下：
+**2026-09-22 晚 → 2026-09-23 下午：两轮真机验证 + 两个新 bug + 改完。** 进展如下：
 
 | 时点 | 验证 | 真机结论 |
 |------|-------|---------|
@@ -85,15 +84,17 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | 09-22 23:30 | **P1-4** 写侧 | 重新部署后 126 字节 / `FF FE` BOM / 按 FSO 读法干净两行 / 路径已更新 ⇒ ✅ 写侧通过 |
 | 09-22 23:30 | **P1-4** PC2XL_EXPORT 执行 | **未跑成功** —— 不是「写入文件失败」，而是脚本根本**编译不过**（见 P1-5） |
 | 09-22 23:38 | **P1-4** 手动 Ctrl+S | PRG mtime 更新到 23:38:47 ⇒ 命令已落盘；但 `part.Save()` 仍报假失败（见 P1-6） |
+| 09-23 (待跑) | **P1-5 + P1-6 + P1-4** 端到端 | 待 PC-DMIS 开着后跑一轮：① 部署 BAS ② 植入命令 ③ 是否还报自动保存失败 ④ 跑 PC2XL_EXPORT ⑤ CSV 是否生成 |
 
-**新发现（均已定位到「照着就能写代码」精度，2026-09-23 早上复盘确认改法）**：
+**新发现（均已定位到「照着就能写代码」精度，并已修复，单测全过 + 真机待验）**：
 
-| # | 问题 | 类型 | 真机结论 |
-|---|------|------|---------|
-| **P1-5** | BAS 字段常量撞引擎内置名（`ID` 在第 9 行编译不过） | 功能不可用 | 攻 = 「Duplicate definition: ID」 |
-| **P1-6** | `part.Save()` 在 2024.1 是**属性**不是方法 | 自动保存恒失败 | 攻 = `'bool' object is not callable` |
+| # | 问题 | 类型 | 修复 commit | 真机 |
+|---|------|------|------|------|
+| **P1-5** | BAS 字段常量撞引擎内置名（`ID` 在第 9 行编译不过） | 功能不可用 | `4ef50eb` | 待验 |
+| **P1-6** | `part.Save()` 在 2024.1 是**属性**不是方法 | 自动保存恒失败 | `836540e` | 待验 |
 
-**下一动作（白天开工）**：P1-5 → P1-6 → 在 PC-DMIS 里跑 `PC2XL_EXPORT` 一轮同时验 P1-5 + P1-4。
+**下一动作**：在 PC-DMIS 里跑 `PC2XL_EXPORT` 一轮同时验 **P1-5 + P1-6 + P1-4**。
+改法代码侧已全部就绪（`4ef50eb` + `836540e`），且 P1-5 的「重新部署 BAS」与 P1-6 的「无副作用形态分派」互不影响；下一动作是唯一一次真机验证（5 个时点见真机清单）。
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -109,10 +110,13 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | — | P2-1 续与真机实测结论（P2-2 现成样本 + 两个新边界） | `fe5e107` |
 | P1-4 | `export_config.txt` 改按 UTF-16（带 BOM）写 | `05f4e61` |
 | — | P1-4 实施记录与真机前置事实 | `98e7997` |
+| P1-5 | BAS 字段常量加 `FLD_` 前缀一次消除整类冲突；删死代码 `UNIT_TYPE` | `4ef50eb` |
+| P1-6 | `part.Save` 按运行时形态分派 + `IsModified` 验证效果（防假成功） | `836540e` |
 
-**发布前还要做**（详见文末「真机验证清单」末两条）：写 CHANGELOG ——
+**发布前还要做**（详见文末「真机验证清单」末三条）：写 CHANGELOG ——
 ① OCR 缓存图片名变更 → 历史缓存图片全部失效；
-② `export_config.txt` 改 UTF-16 → **已部署机器必须重新部署 BAS 脚本**。
+② `export_config.txt` 改 UTF-16 → **已部署机器必须重新部署 BAS 脚本**；
+③ P1-5 BAS 常量改名 → **已部署机器必须重新部署 BAS 脚本**（否则引擎仍报「Duplicate definition」）。
 
 ---
 
@@ -124,8 +128,8 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | P1-2 | 配置迁移每次启动重跑，CMMFiller 丢 3 字段 | `utils/settings.py:292-311` + 两处 save | 静默丢配置 | ✅ | ✅ **已完成 + 真机已验证**（2026-09-22 23:33 二次启动） |
 | P1-3 | 同名 PDF 的 OCR 缓存串号 | `cmm_filler/core/pdf_extract.py:118` | 静默错值 | ✅ | ✅ **已完成**（真机待验） |
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
-| P1-5 | BAS 常量 `ID` 撞引擎内置名，脚本编译不过 | `scripts/export_current.bas.template:9,149` | 功能不可用 | ✅ | 🟡 改法已就绪，明天实施 |
-| P1-6 | `part.Save()` 在 2024.1 是**属性**不是方法 | `inject/save_helper.py:96` | 自动保存恒失败 | ✅ | 🟡 改法已就绪，明天实施 |
+| P1-5 | BAS 常量 `ID` 撞引擎内置名，脚本编译不过 | `scripts/export_current.bas.template:9,149` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
+| P1-6 | `part.Save()` 在 2024.1 是**属性**不是方法 | `inject/save_helper.py:96` | 自动保存恒失败 | ✅ | ✅ **已完成**（真机待验） |
 | P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ✅ **已完成**（真机待验） |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-3 | 「最差 NG 子项」只比一个样品 | `cmm_filler/core/sub_item_conflict.py:17-21` | 判定错 | ✅ | ⬜ 未开始 |
@@ -492,6 +496,25 @@ Error on line: 9 - Duplicate definition: ID
   **若报的是新的行号**，说明引擎预置的名字不止 `ID` —— 照上表继续加前缀即可，
   不需要重新分析。
 
+**实施记录（2026-09-23）**
+
+| 文件 | 改动 |
+|------|------|
+| `modules/pc_to_excel/scripts/export_current.bas.template` | 14 个字段常量声明（行 9-23）加 `FLD_` 前缀；删除 `Const UNIT_TYPE = 49`（死代码）；15 个引用行（148、176-183、201、205-210）同步改名。CRLF 保持。`CONFIG_PATH` / `DATA_TYPE_*` 不动。 |
+| `modules/pc_to_excel/tests/test_bas_template.py`（新文件） | 25 条测试：① 14 个 `test_field_const_declared_with_fld_prefix`（参数化正向）；② `test_no_bare_field_const_declarations`（一行正则扫全表，参数化 15 个名字）；③ `test_unit_type_removed`；④ 4 个 `test_com_property_access_preserved`（参数化反向守卫：cmd.ID / dimObj.ID / tolCmd.ID / dimObj.NOMINAL）；⑤ `test_csv_header_id_preserved`（字符串字面量）；⑥ 4 个 `test_kept_consts_still_declared`（参数化 CONFIG_PATH / DATA_TYPE_*）。 |
+
+**验证（含「守卫是否有牙」的证明）**
+
+- 25 条测试，全部静态断言（不依赖 PC-DMIS）。
+- **证明有效**：`git stash push -- modules/pc_to_excel/scripts/export_current.bas.template`
+  退回修复前实现，跑同一组测试 → **16 failed / 9 passed**：
+  - failed（16） = 1（`test_no_bare_field_const_declarations`，命中 14 条裸 Const）+ 1（`test_unit_type_removed`）+ 14（参数化 FLD_ 缺失）。**全是正向断言「应该改名而未改」**。
+  - passed（9） = 4（COM 属性访问 `cmd.ID`/`dimObj.ID`/`tolCmd.ID`/`dimObj.NOMINAL`） + 1（CSV 表头字面量 `"ID,类型..."`）+ 4（CONFIG_PATH/DATA_TYPE_* 保留常量）。**全是「应保留而保留」的反向守卫**。
+  - 失败信息明确指向「`Const LINE1_BONUS` 必须以 `FLD_LINE1_BONUS` 前缀重新声明」等等，与根因一一对应。
+- pop 后：25 passed / 0 failed。
+- 全量基线：278 → 303 passed（+25 新测试，0 旧测试变红）。
+- 变更细节见 commit `4ef50eb`。
+
 ---
 
 ### P1-6 `part.Save()` 在 2024.1 是属性不是方法
@@ -592,6 +615,31 @@ def try_save_part_program(part, app=None):
 | `IsModified` 读不到（抛异常） | `(True, ...含「未经验证」...)` |
 
 真机：植入一次，确认 `IsModified` 转 False 且 PRG mtime 更新。
+
+**实施记录（2026-09-23）**
+
+| 文件 | 改动 |
+|------|------|
+| `modules/pc_to_excel/inject/save_helper.py` | ① 新增 `_part_is_modified(part)`：读 `part.IsModified`，不存在 / 抛异常 / 类型非 bool 一律返回 None；② 新增 `_trigger_part_save(part)`：`getattr(part, "Save")` 若 callable 走 `save()`，否则 `part.Save = True`；③ 新增 `_save_failure_hint(exc, path)`：删原 4 条「常见原因」猜测（执行中 / 只读 / 另存为对话框 / 网络盘），加真实根因（`part.Save` 是属性 bool 不是方法），保留「Ctrl+S 手动保存」提示；④ 重写 `try_save_part_program`：触发保存后**必须**读 `IsModified` 三态处理 —— True 报失败（防属性 setter 空操作的假成功）/ False 成功 / None 退回「未经验证的成功」（路径后缀标注）。CRLF 保持。`check_save_preflight()` / `wait_app_ready()` / `part_program_path()` 不动。 |
+| `modules/pc_to_excel/tests/test_save_helper.py`（新文件） | 6 条测试：① `test_save_attr_property_succeeds`（形态 1）；② `test_save_method_succeeds`（形态 2，回归守卫）；③ `test_save_property_no_op_reports_failure`（形态 3，**核心防假成功**）；④ `test_is_modified_unreadable_falls_back_to_unverified`（形态 4，提示里必须含「未经验证」）；⑤ `test_failure_hint_keeps_ctrl_s_workaround`（反向守卫：Ctrl+S 提示必须保留、原 3 条猜测必须删除）；⑥ `test_failure_hint_mentions_real_root_cause`（真实根因提示必须含「属性」「bool」）。`_FakePart` 替身使用 class-level 真 property（getter + setter），与真机 COM 行为对齐；setter 钩子 `_save_setter_hook` 用于测试记数 / 模拟空操作。 |
+
+**验证（含「守卫是否有牙」的证明）**
+
+- 6 条测试，全部使用替身（不依赖 PC-DMIS）。
+- **证明有效**：`git stash push -- modules/pc_to_excel/inject/save_helper.py`
+  退回修复前实现，跑同一组测试 → **5 failed / 1 passed**：
+  - failed（5）：
+    - `test_save_attr_property_succeeds` —— 旧 `part.Save()` 在 bool 属性上抛 TypeError，触 except 分支返 `(False, ...)`；测试期望 `(True, path)` ⇒ **fail**。
+    - `test_save_property_no_op_reports_failure` —— 旧代码不走 `part.Save = True` 赋值分支（走 except），setter 计数 = 0 ⇒ **fail**（`call_count["n"] == 1`）。
+    - `test_is_modified_unreadable_falls_back_to_unverified` —— 同形态 1 原因，返 `(False, ...)` ⇒ **fail**。
+    - `test_failure_hint_keeps_ctrl_s_workaround` —— `ImportError: cannot import name '_save_failure_hint'`，旧代码未拆出该函数 ⇒ **fail**。
+    - `test_failure_hint_mentions_real_root_cause` —— 同上 ImportError ⇒ **fail**。
+  - passed（1）：
+    - `test_save_method_succeeds` —— 旧代码在「`Save` 是 callable 方法」形态下恰巧走对了（直接 `part.Save()` 调方法，落到 `_trigger_part_save` 的 `save()` 分支同样的语义），属**保留旧行为的回归守卫**，非 bug。
+  - 失败信息都直接指向根因（TypeError / setter 未触发 / 函数不存在），没有夹带无关失败。
+- pop 后：6 passed / 0 failed。
+- 全量基线：303 → 309 passed（+6 新测试，0 旧测试变红）。
+- 变更细节见 commit `836540e`。
 
 ---
 
@@ -1142,7 +1190,9 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P1-1：一份 >50 项的 PDF 导出，核对序号 51+
 - [x] P1-2：启动两次，确认只弹一次迁移提示且 3 个字段仍在（**已验证**：2026-09-22 23:33）
 - [ ] P1-3：汇总导出选两个不同目录的同名 PDF，核对第二个 Sheet
-- [ ] P1-4：**写侧已通过**（126 字节 / FF FE BOM / 干净两行）；**执行端验证待修完 P1-5 + P1-6 后一起跑**（先重新部署 BAS，在 PC-DMIS 内执行 `PC2XL_EXPORT`，确认 `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成）
+- [ ] **P1-4 + P1-5 + P1-6 端到端一轮**：① 重新部署 BAS 脚本（自动覆盖到 `FLD_` 前缀的模板）② 植入/更新导出命令 —— 应**不再**弹「自动保存失败」（P1-6）；若仍弹则回查 `IsModified` 替身测试覆盖 ③ 在 PC-DMIS 里把光标移到 `PC2XL_EXPORT` → 文件 → 部分执行 → 从光标执行 ④ `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成（P1-5 + P1-4 同时验）
+- [ ] P1-5（独立补充测试）：部署后 BAS 应通过 PCDMIS 引擎编译；不再报「Duplicate definition: ID」（引擎若报别的行号，按文档「逐行清单」表继续加前缀即可，不需要重新分析）
+- [ ] P1-6（独立补充测试）：植入后 PRG mtime 应更新（Ctrl+S 等效的落盘已发生）
 - [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差。
       **2026-09-22 实测：`马丁测试-2026-08-28-B版.PRG` 全程序 42 条记录里
       `minus_tol is None` = 0 条、COM 抛异常 0 处 ⇒ 这份程序复现不了，需另找/另造。**
@@ -1152,12 +1202,15 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
       （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 278 passed）
+- [ ] 全量回归：`python -m pytest -q`（当前 **309 passed** = 278 + P1-5 的 25 + P1-6 的 6）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 - [ ] **发布前写 CHANGELOG**：`export_config.txt` 写入编码改为 UTF-16 →
       **已部署过的机器必须重新点一次「部署 BAS 脚本」**，否则 `PC2XL_EXPORT` 仍会弹
       「写入文件失败」。见 P1-4 边界 3
+- [ ] **发布前写 CHANGELOG**：P1-5 BAS 字段常量加 `FLD_` 前缀 →
+      **已部署过的机器必须重新点一次「部署 BAS 脚本」**（否则 PC-DMIS 引擎仍报
+      「Duplicate definition: ID」）。见 P1-5 边界 4
 
 ---
 
@@ -1184,3 +1237,6 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-22 | **P1-4 实施完成**：`export_config.txt` 改按 UTF-16（带 BOM）写，对齐 BAS 读侧 `OpenTextFile(..., -1)`。本机复核根因：已部署文件 74 字节、前 4 字节 `44 3A 5C 41`、无 BOM；全仓仅一个写入方。+1 条测试，并**修正**原有那条按 utf-8 读回的测试（它过去通过正是 bug 被漏过的原因）。已用 `git stash` 证明「修复前 2 failed」（`assert b'C:' == b'\xff\xfe'`）。全量 `278 passed`。登记两条真机前置事实：编码修复不自动生效（需重新部署）；重新部署会同时把 CSV 落盘位置从旧项目路径换成 `cm2xl\data\reports`。本文件基线 277 → 278 |
 | 2026-09-22 | **P1-4 真机验证（部分）+ 新发现 P1-5 / P1-6**。已验证：重新部署后 `export_config.txt` = 126 字节、`FF FE` BOM、按 FSO 读法干净两行（写侧通过）；`pcdmis_inject success=True`；**P1-2 真机验证通过**（第二次启动 0 条迁移弹窗审计、配置未被再次改写、退出保存未写丢 `_version`；反证：白天 09:15–15:16 每次启动都弹，共 20 次）。新发现两个 bug（均已定位，见 P1-5 / P1-6）：**① BAS 第 9 行 `Const ID = 2` 撞引擎内置名，脚本编译不过** ⇒ 修正 P1-4 的「现象」——「写入文件失败」从未被观察到，是推演出来的，且 P1-4 的验证被 P1-5 阻塞；**② `part.Save()` 在 2024.1 是属性不是方法**（内省实测 `callable=False`）⇒ 自动保存恒失败。本文件条目数 16 → 18 |
 | 2026-09-23 | **进度刷新（仅文档）**。TL;DR 中 P1-2 标为「真机已验证」，P1-5 / P1-6 标为「改法已就绪，明天实施」；待办与进度总览把日期从「2026-09-22」升到「2026-09-23」，P1-2 行已验证划掉，P1-4 提示区分「写侧已通过 / 执行端待 P1-5+P1-6 后一起跑」，并加真机时间线表（5 个时点：两次启动 + P1-4 写侧 + P1-4 执行失败 + 手动 Ctrl+S 落盘）；真机清单 P1-2 打勾。本文件基线不变，仍 278 passed |
+| 2026-09-23 | **P1-5 实施完成**：14 个字段常量（`ID` / `AXIS` / `NOMINAL` / `F_PLUS_TOL` / `F_MINUS_TOL` / `DIM_MEASURED` / `DIM_LENGTH` / `DIM_BONUS` / `LINE1_FEATNAME` / `LINE1_NOMINAL` / `LINE1_MEAS` / `LINE1_PLUSTOL` / `LINE1_MINUSTOL` / `LINE1_BONUS`）统一加 `FLD_` 前缀一次消除整类冲突；删除死代码 `Const UNIT_TYPE = 49`（零引用）。`CONFIG_PATH` / `DATA_TYPE_*` 不动（不是字段常量，撞名风险低）。守住了两条最易踩坑的边界：① 不盲改 `\bID\b` / `\bNOMINAL\b` —— `cmd.ID` / `dimObj.ID` / `tolCmd.ID` / `dimObj.NOMINAL` 等 5 处 COM 属性访问完全原样保留（参数化反向守卫）；② 局部变量 `nominal` 不被误算成 `NOMINAL` 引用。+25 条测试，已用 `git stash push -- <模板>` 证明「修复前 16 failed / 9 passed」（失败的全是正向断言「裸 Const 不应存在 / 必须出现 FLD_X」，通过的全是反向守卫「COM 属性 / CSV 表头 / 保留常量」）。全量 `303 passed`。变更细节见 `4ef50eb` |
+| 2026-09-23 | **P1-6 实施完成**：`save_helper.py` 拆出 `_part_is_modified()`（读 `part.IsModified`，None 容错）/ `_trigger_part_save()`（`callable(save)` 分派：方法分支走 `save()`、属性分支走 `part.Save = True`）/ `_save_failure_hint(exc, path)`（删原 4 条「常见原因」猜测 —— 执行中 / 只读 / 另存为对话框 / 网络盘，**实测根因是 API 形态不符**；加真实根因说明；保留「Ctrl+S 手动保存」对用户有效的提示）。`try_save_part_program` 改为「触发保存后**必须**读 `IsModified` 验证效果」三态处理：True ⇒ 报失败（属性 setter 空操作的「假成功」比假失败更糟）、False ⇒ 成功、None ⇒ 退回「未经验证的成功」（路径后缀标注）。不动 `check_save_preflight()` 与 `SaveAs`。+6 条测试，已用 `git stash push -- <save_helper.py>` 证明「修复前 5 failed / 1 passed」（5 failed 覆盖「属性形态抛 TypeError」「setter 未触发」「IsModified 读不到仍判 False」「`_save_failure_hint` 不存在」；1 passed 是 `test_save_method_succeeds` —— 旧代码在「方法形态」下恰巧也走对了路径，是**保留旧行为的回归守卫**）。全量 `309 passed`。变更细节见 `836540e` |
+| 2026-09-23 | **进度刷新（仅文档）**：TL;DR P1-5 / P1-6 状态从 🟡 改 ✅「已完成（真机待验）」；待办总览 P1-4 行更新为「P1-5 + P1-6 代码已就绪，单测全过 → 一次端到端可同时验 P1-4 + P1-5 + P1-6」并加真机验证清单新条目；整体进度「已完成 7 / 18」改为「9 / 18」，基线 278 → 309；新增 P1-5 + P1-6 commit 引用 `4ef50eb` / `836540e`；新增发布前必须做的第三条 CHANGELOG 项（P1-5 部署时也得重新部署 BAS）。真机清单新增 P1-5 独立补充测试条目 |
