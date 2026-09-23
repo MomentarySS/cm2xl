@@ -64,16 +64,22 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m modules.pc_to_excel.cli dump-t
 | 2 | P3-5 | 丢报告 | 同秒两次导出静默覆盖；改法明确（保存侧唯一化）、无需设计决策、碰的面小 |
 | 3 | P3-2 / P3-4 / P3-1 / P3-3 | 健壮性 / 可诊断性 | 都小而独立，适合批量清 |
 | 4 | P2-3 | 判定错 | 价值高，但根因分析还没到「可照着写代码」 |
-| 5 | P3-6 | 架构 | 今天不可利用（埋雷 API），优先级最低 |
+| 5 | P3-8 | 死代码 | `export_pcdmis_csv()` 零调用 + 架构文档错归因。改法明确（删除）、碰面小。**与 P2-2 / P3-5 同文件** —— 见下方并行约束 |
+| 6 | P3-6 | 架构 | 今天不可利用（埋雷 API），优先级最低 |
 | — | P2-4 | 逻辑矛盾 | **实测未触发**，已降级 |
 
 **并行/冲突**：P2-2 碰 `_dimension.py` / `tolerance.py` / `export/pcdmis_style_report.py`；
-P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件但不同函数，
-可同版本合入，只是**不要同时开两条线改同一个文件**。P3 其余各项互不重叠。
+P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）；P3-8 同样碰
+`export/pcdmis_style_report.py`（删函数）—— **三者同文件但不同函数**，可同版本合入，
+只是**不要同时开两条线改同一个文件**。若同一轮要做多项，建议顺序：
+先 P3-8（纯删除，最小）→ 再 P3-5（保存侧改名）→ 最后 P2-2（判定侧，需先定设计决策）。
+P3 其余各项互不重叠。
 
 ### 三、整体进度（截至 2026-09-23 下午）
 
-**已完成 6 / 15，未开始 9 / 15。** 2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），本文件条目数 20 → 15。基线 233 → **250 passed**（`tests/` 42 + `modules/*/tests` 208，新增 53 - 删 64 + 增 38 = 历史净增）。
+**已完成 7 / 17，未开始 10 / 17。** 2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），并**新登记** P3-8（`export_pcdmis_csv` 死函数）+ P3-9（`build.bat` 残留检查，已随 `371a5c7` 修复），本文件条目数 20 → 15 → 17。基线 233 → **250 passed**（`tests/` 42 + `modules/*/tests` 208）。
+
+**2026-09-23 取消后的收尾清理**：删除 `76657ac` 遗漏的构建侧引用 —— `build.bat:22-28` 的「检查 BAS 模板」前置检查（会让打包第一步就 `exit /b 1`）+ `cm2xl.spec:112` 的 `modules.pc_to_excel.inject.toolbar_launcher` hiddenimport。另清理 `scripts/` 下两个一次性探针（`inspect_fai_labels.py` / `test_pdf_folder.py`，硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用）。
 
 **脚本输出功能取消（2026-09-23）**：连续三轮真机（15:13 / 15:33 / 16:11）下来 P1-4 + P1-5 + P1-6 + P1-7 + P1-8 全部命中代码侧，但 PC-DMIS 仍报 `执行 BASIC 脚本时出错`（具体错误信息被用户点击「确定」关闭未看清；最可能是引擎版本兼容或更深层问题）。用户判断「脚本输出本身就是为了锦上添花」⇒ **整 feature 取消**。软取消策略：保留 9 个 commit 作历史记录；删除 `modules/pc_to_excel/inject/` 整目录、`modules/pc_to_excel/scripts/` 整目录、仓库根 `scripts/export_current.bas*`、相关 4 个测试文件、相关 GUI 按钮 / CLI 子命令 / spec datas；CMMFiller / OCR / 故障诊断 / PDF 导出 / PartProgram 注入之外的功能**不受影响**。
 
@@ -176,6 +182,8 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | P3-5 | 导出文件名秒级时间戳无去重 | `export/pcdmis_style_report.py:377` | 丢报告 | ❌ | ⬜ 未开始 |
 | P3-6 | COM 对象逃出 apartment（埋雷 API） | `connector/com_detector.py:427-432` | 架构 | ❌ | ⬜ 未开始 |
 | P3-7 | `tests/` 目录默认不被 pytest 收集（42 个测试静默不跑） | `pytest.ini`（新建） | 测试可信度 | ❌ | ✅ **已完成** |
+| P3-8 | `export_pcdmis_csv()` 定义但零调用（死函数，且被架构文档错误归因为「BAS 脚本导出」） | `export/pcdmis_style_report.py:382` | 死代码 / 文档错归因 | ❌ | ⬜ 未开始（2026-09-23 登记） |
+| P3-9 | `build.bat` 残留已删除文件的检查 ⇒ 打包第一步就 `exit /b 1`（`76657ac` 遗漏） | `build.bat:22-28` | 构建失败 | ❌ | ✅ **已修**（`371a5c7`，与 spec hiddenimport 同一 commit） |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -1292,6 +1300,86 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 
 ---
 
+### P3-8 `export_pcdmis_csv()` 定义但零调用（死函数 + 文档错归因）
+
+**现象** — `export/pcdmis_style_report.py:382` 定义了 `export_pcdmis_csv(features, path, header=...)`，
+但**全仓零调用**：
+
+- 无 CLI 子命令调用（`cli.py` 只有 `export` / `fill-form` / `dump-tols`）
+- 无 GUI 调用点
+- 无测试引用（`test_pcdmis_style_report.py` 不覆盖它）
+- **不在** `export/__init__.py` 的 `__all__`（该处只 re-export `export_report`）
+- `pcdmis_style_report.py` 自身没有 `__all__`，所以它只是模块级函数，不构成对外契约
+
+**为什么容易误判为「BAS 脚本用的」** — `docs/ARCHITECTURE.md` 的数据流图把它标成
+`export_pcdmis_csv() ← BAS 脚本导出`，看起来像「BAS 路径的 Python 侧入口」。实际上
+**BAS 脚本用自己的 `saveCsv`（`Scripting.FileSystemObject` + `ADODB.Stream`）写 CSV，
+根本不经过 Python** —— 该标注是**归因错误**。
+
+**登记来源** — 2026-09-23 取消脚本输出功能后复查「哪些代码因取消而变孤儿」时发现。
+结论：**它不是本次取消造成的**（`git log` 显示最后一次改动是 `df91650` 的 flatten
+重构），是**预先存在**的死代码。
+
+**改法（待定，二选一）**
+1. 删除函数 + 修 `ARCHITECTURE.md` 数据流图的错标注。
+2. 保留但加 docstring 说明「当前零调用；若要做 Python 侧 CSV 导出，从这里接」。
+
+**倾向** — 选 1（删除）。理由：保留一个零调用的 CSV 导出函数只会让下一个人
+再次误判它是 BAS 路径的一部分；真要 Python 侧 CSV 导出时，`export_pcdmis_excel()`
+就在旁边，照抄改扩展名即可。
+
+**语义边界（若选 1）**
+1. 先确认无外部脚本 / 用户代码 `from modules.pc_to_excel.export.pcdmis_style_report import export_pcdmis_csv`
+   —— 已在 2026-09-23 全仓（含 `tests/`）确认零命中，但**打包分发后**的用户侧无法验证，
+   所以要在 CHANGELOG 里写一句「内部函数移除」。
+2. 同文件 `export_pcdmis_excel()` 必须保留（它是「一键导出 Excel」的实装）。
+3. 不动 `export/__init__.py`（它本来就没导出这个函数，无需改）。
+
+**验证** — 删除后全量回归应仍 **250 passed**（无测试引用它）；
+`python -c "import modules.pc_to_excel.export.pcdmis_style_report"` 仍能导入。
+
+**状态** — ⬜ **未开始**（按用户「发现新 bug 只登记不动手」纪律，2026-09-23 登记）。
+
+---
+
+### P3-9 `build.bat` 残留已删除文件的检查（构建失败）
+
+**现象** — 取消脚本输出功能（`76657ac`）删了 `scripts/export_current.bas.template`
+后，`build.bat:22-28` 仍做前置检查：
+
+```bat
+if not exist "scripts\export_current.bas.template" (
+    echo [ERROR] 未找到 scripts\export_current.bas.template
+    ...
+    exit /b 1
+)
+```
+
+⇒ **打包第一步就 `exit /b 1`，根本到不了 PyInstaller**。
+
+**根因** — `76657ac` 只改了 spec 与 Python 侧，漏了构建脚本侧。同类漏改还有
+`cm2xl.spec:112` 的 `"modules.pc_to_excel.inject.toolbar_launcher"` hiddenimport
+（该模块已整目录删除）。
+
+**改法** — 删除 `build.bat` 的检查段（替换为「已取消，不要再加回」注释）；
+删除 spec 里那行 hiddenimport。
+
+**语义边界 / 可复用排查法**（删任何模块或文件后都该跑一遍）
+1. spec 语法 + 非注释残留：`ast.parse` + 过滤注释行后搜旧模块名
+2. 全仓 Python 侧残留 import：搜 `from .*inject` / 被删的符号名
+3. 构建脚本侧残留：搜 `build.bat` / `build_installer.bat` / `installer/`
+4. 打包 datas / hiddenimports：搜 spec 的 `datas` 与 `hiddenimports` 列表
+
+**验证** — spec `ast.parse` 通过；全仓 `*.py` 搜 `inject` / `deploy_bas_script` /
+`BAS_FILENAME` / `OBTYPE_BASIC_SCRIPT` / `EXPORT_CMD_ID` = 0 命中；
+`build/` 只命中 `PADDLE_OCR_BASE_DIR` 假阳性；`installer/` 0 命中；
+pytest 250 passed。**未跑完整 PyInstaller 打包**（10–20 分钟，且只有测量房离线环境才需真验）。
+
+**实施记录（2026-09-23）** — ✅ **已修**，commit `371a5c7`（`build.bat` + `cm2xl.spec`
+同一 commit，同属一个回归）。
+
+---
+
 ## 开放决策（需要现场/产品信息才能定）
 
 | # | 决策点 | 结论 |
@@ -1308,7 +1396,7 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 |------|---------|
 | `_tolerance.py:360-362` FCF 每个 LINE 只取一个索引 | `_pick_fcf_line_index()` docstring 明确「跳过 - LS 与 FCF 名称」，是**刻意**选单一代表索引，非缺陷 |
 | `report_filter.py:36-47` 全零 `尺寸位置` 行被当占位丢弃 | 逻辑成立，但要求该行所有轴实测值均 < 1e-12，真实测量不可达 |
-| `inject/toolbar_launcher.py:201` 启动器 UTF-8 无 BOM 由 WSH/cmd 按 ANSI 读 | 只在非 ASCII 安装路径暴露；本机路径为 ASCII，**未能复现** |
+| ~~`inject/toolbar_launcher.py:201` 启动器 UTF-8 无 BOM 由 WSH/cmd 按 ANSI 读~~ | **已失效**（2026-09-23 该文件随脚本输出功能整 feature 移除，commit `76657ac`）—— 原排除理由：只在非 ASCII 安装路径暴露，本机路径为 ASCII，未能复现 |
 | `core/feature.py:15-25` `_get_point()` 忽略 COM 返回值 | 结构可疑（by-ref VARIANT 预置 0.0，失败不抛异常时返回 `(0,0,0)` 而非 `(None,None,None)`，`scope="all"` 下会导出「实测 0.000」的假数据）。但需**真机确认** `FeatureCommand.GetPoint` 失败时是抛异常还是返回 `False` —— 触发条件未确认前不动 |
 
 ---
@@ -1370,3 +1458,4 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-23 | **真机第二轮 + 新发现 P1-7 / P1-8**（已修 dev 部署路径 + 已补提示文案 + 登记两条新 P 项）。**15:13 第一轮**：P1-5 命中（部署 BAS 含 `FLD_*`），P1-6 命中（`pcdmis_inject success=True`），但 PC-DMIS 报「Duplicate definition: ID」—— 揭示**仓库根 `scripts/` 下还有一份旧模板副本**（commit `df91650` flatten 留下的），dev 部署命中它 ⇒ **修**：`765aad6` 把新模板同步到仓库根 scripts/。**15:33 第二轮**（dev 重启后）：BAS 编译通过（P1-5 真机已验证）；植入报「**Property '<unknown>.Save' can not be set**」—— 同一 PCDLRN.Application.19.1 在用户机器上 `Save` 是 read-only（P1-6 没覆盖该形态）；PC-DMIS 跑 PC2XL_EXPORT 时**第 30 行 MsgBox 中文乱码报 Syntax Error**——BAS 文件 UTF-8 但引擎按 GBK 解码 ⇒ **又两个新 P 项**（P1-7 / P1-8）。**P1-6 真机未通过**（用户机器具体实例上）。按用户选择「仅改提示，不改逻辑」纪律：`5d11cdd` 在 `_save_failure_hint` 增列「read-only 形态」+「无降级路径 ⇒ 走 Ctrl+S」文案；+1 测试 `test_failure_hint_mentions_read_only_form`，用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」。基线 309 → 310 passed。整体进度「已完成 9 / 18」改为「9 / 20」（新增 2 项未开始），TL;DR 加 P1-7 + P1-8 行；待办总览加「2026-09-23 下午真机新发现」表 + 真机时间线表加 2 行（dev 部署路径修复 + 端到端第二轮）；下一动作改为「**先修 P1-8（脚本前 5 个字符是乱码），再选 P1-7 方向**」；真机清单 P1-4 那一行合并为 P1-4 + P1-5 + P1-7 + P1-8 端到端，并加 P1-7 / P1-8 独立补充测试；发布前 CHANGELOG 加第四条（P1-8 BAS 文件部署出按 GBK 编码，已部署机器必须重新部署）。P1-7 / P1-8 详细见新加的章节 |
 | 2026-09-23 | **P1-7 + P1-8 实施完成**（按用户「修 P1-7 + P1-8」选择）。**P1-7**（`711753c`）：`_trigger_part_save` 加 `try/except` 捕获形态 C 的 `part.Save = True` 异常，降级到 `part.SaveAs(part.FullName or part.Path or "")`；SaveAs 也不存在时再 raise（让上层 `_save_failure_hint` 提示走 Ctrl+S）。+2 条替身测试 `test_save_read_only_falls_back_to_saveas` + `test_save_read_only_no_saveas_reports_failure`，已用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」（SaveAs 没被调，hit `saveas_call_count == 1` 反证）。`_FakePart` 替身扩展 `_save_setter_raises` / `saveas_callable` / `saveas_call_count` 三个字段。**P1-8**（`63b55c0`）：`deploy_bas_script` 的 BAS 写出从默认 UTF-8 改为 `encoding="gbk"`（PC-DMIS Basic Scripting Engine 按 ANSI/CP936 读）。模板源仍 CRLF + UTF-8 维护（git diff 友好），仅部署写出时换 GBK。+2 条测试 `test_deploy_bas_script_writes_gbk_encoding`（断言不能 UTF-8 BOM / 不能 UTF-16 BOM / 中文 UTF-8 字节不能原样 / raw 能按 GBK 干净解码且含中文原样）+ `test_deploy_bas_script_gbk_roundtrip_preserves_chinese`（断言 raw 含「无法连接」的 GBK 字节序列 CE DE C7 EB，反向断言不含 \u65e0\u6cd5 字面 —— 防 unicode_escape 退化改法），已用 `git stash push -- <command_injector.py>` 证明「修复前 2 failed」（GBK decode 抛 UnicodeDecodeError）。**修原有 1 条**：`test_deploy_bas_script_copies_and_substitutes` 的 `result.read_text(encoding="utf-8")` 改成 `encoding="gbk"`（**follow 新契约**，不是守护错误行为 —— 占位符仍被替换、`export_config.txt` 仍在内容里这两个本质契约没变）。`_write_bas_template` 加了中文 MsgBox 让 P1-8 测试有真东西可断。基线 310 → 314 passed（+4 新测试）。整体进度「已完成 9 / 20」改为「11 / 20」；TL;DR P1-7 / P1-8 从 🟡/⬜ 改 ✅「已完成（真机待验）」；下一动作改为「一次端到端同时验 P1-4 + P1-5 + P1-6 + P1-7 + P1-8」；真机清单 P1-7 / P1-8 独立补充测试条目更新（前者「不弹 Property can not be set / PRG mtime 更新」，后者「头部 GBK / 不再报 Syntax Error」）；P1-7 / P1-8 章节内的「验证」节改为「已做 + 待做」并引用 `711753c` / `63b55c0` |
 | 2026-09-23 | **脚本输出功能整 feature 取消（软取消，保留 commits 作历史）**。连续三轮真机下来 P1-4 + P1-5 + P1-6 + P1-7 + P1-8 全部命中代码侧，但 PC-DMIS 仍报 `执行 BASIC 脚本时出错`（最深可能仍是引擎版本兼容问题）。用户判断「脚本输出本身就是为了锦上添花」 ⇒ 整 feature 移除（**软取消**：保留 9 个 commit 作历史记录，不 `git revert`）。**改动**：删除 `modules/pc_to_excel/inject/` 整目录（command_injector + save_helper + toolbar_launcher + `__init__.py`，4 个文件）+ `modules/pc_to_excel/scripts/` 整目录（export_current.bas + export_current.bas.template）+ 仓库根 `scripts/export_current.bas` + `scripts/export_current.bas.template` + 4 个测试文件（test_bas_template.py / test_command_injector.py / test_save_helper.py / test_toolbar_launcher.py），共 12 文件。**改 5 个文件**：`modules/pc_to_excel/app_meta.py` + `toolbox/app_meta.py` + `toolbox/__init__.py` 移除 `EXPORT_CMD_ID` / `OBTYPE_BASIC_SCRIPT`；`modules/pc_to_excel/cli.py` 移除 `cmd_inject` 函数、`p_inject` subparser、`from .inject.command_injector import ...`；`modules/pc_to_excel/gui/main_window.py` 移除 PRG 命令植入分区、「部署 BAS 脚本」「植入 / 更新导出命令」「检查是否已植入」「部署工具栏启动器」「打开启动器目录」5 个按钮 + 对应 6 个方法（`_deploy_bas` / `_deploy_toolbar` / `_open_launcher_dir` / `_inject_command` / `_on_inject_done` / `_check_inject`）+ 「PRG 植入 CSV」「工具栏一键出 Excel」帮助文字 + `from ..inject.command_injector import ...` + `from ..inject.toolbar_launcher import ...`；`cm2xl.spec` 移除 `_scripts_src` / `_bas_template_src` 定义、`modules.pc_to_excel.inject` 等隐藏包清单、`(str(_bas_template_src), "scripts")` data 文件 + `modules/pc_to_excel/inject/__init__.py` 隐藏 init。**TL;DR P1-4 ~ P1-8 全部 🗑 取消**；整体进度「已完成 11 / 20」改为「6 / 15」（条目数 -5）；基线 314 → **250 passed**（-64 测试：test_bas_template 的 25 + test_command_injector 的 16 + test_save_helper 的 9 + test_toolbar_launcher 的 ~14）；真机清单 P1-4 ~ P1-8 端到端条目全部划掉改为「已取消」；发布前 CHANGELOG 三条（P1-4 / P1-5 / P1-8 重部署提示）全部划掉改为「已取消」；下一动作改为「~~跑 PC2XL_EXPORT 端到端~~ 已取消」。**未动**：CMMFiller / OCR / 故障诊断 / PDF 导出 / PartProgram 注入之外的所有功能。**对历史代码的告警**：从今往后用户 git blame `modules/pc_to_excel/inject/` 会看到 9 个 commit 落在一起（如追溯 BAS 部署逻辑），但该目录已不存在 —— 这正是「软取消保留证据」的副作用 |
+| 2026-09-23 | **取消后的收尾清理 + 登记 P3-8 / P3-9**（用户要求「先清理孤儿文件，然后更新 md」）。**① 修构建侧遗漏**（commit `371a5c7`）：`76657ac` 取消脚本输出功能时只改了 spec 与 Python 侧，漏了 `build.bat:22-28` 的「检查 `scripts/export_current.bas.template`」前置检查 —— 该文件已删 ⇒ **打包第一步就 `exit /b 1`**；同批还有 `cm2xl.spec:112` 残留 `"modules.pc_to_excel.inject.toolbar_launcher"` hiddenimport。两处一并删除。**② 清理孤儿探针**：删 `scripts/inspect_fai_labels.py` + `scripts/test_pdf_folder.py`（硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用、flatten 重构遗留），`scripts/` 目录随之清空。**③ 登记 P3-8**：`export/pcdmis_style_report.py:382` 的 `export_pcdmis_csv()` 定义但**零调用**（无 CLI/GUI/测试引用、不在 `export/__init__.py` 的 `__all__`），且 `ARCHITECTURE.md` 数据流图把它错误归因为「BAS 脚本导出」—— 实际 BAS 脚本用自己的 `saveCsv` 写 CSV，不经过 Python。**不是本次取消造成的**（最后改动是 `df91650`），是预先存在的死代码；按用户「发现新 bug 只登记不动手」纪律只登记。**④ 登记 P3-9**（已随 ① 修复）：`build.bat` 残留检查，属构建失败类。**⑤ 文档同步**：`README.md` 目录树去掉 `scripts/` 与 `inject/` 两条；`ARCHITECTURE.md` §3.25（EXPORT_CMD_ID 常量）+ §3.29 / §3.47（CLI `cmd_inject`）+ 数据流图（`export_pcdmis_csv` 错归因）+ 已排除候选表（`inject/toolbar_launcher.py:201` 条目失效）全部标注。**整体进度**「已完成 6 / 15」改为「7 / 17」（P3-9 已完成、P3-8 未开始），条目数 15 → 17。**基线 250 passed 不变**（无代码改动 —— 删的是零引用探针 + 构建配置）。**可复用排查法**（删任何模块/文件后都该跑）：① spec `ast.parse` + 过滤注释搜旧模块名 ② 全仓 `*.py` 搜被删符号 ③ 构建脚本（`build.bat` / `build_installer.bat` / `installer/`）搜旧路径 ④ spec 的 `datas` 与 `hiddenimports` 列表 |

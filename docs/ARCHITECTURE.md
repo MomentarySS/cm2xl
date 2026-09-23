@@ -1133,13 +1133,17 @@ datas=[
 
 ---
 
-### 3.25 注入命令的 PCDMIS 命令 ID 常量
+### 3.25 ~~注入命令的 PCDMIS 命令 ID 常量~~
 
-`pc to excel/config.py:EXPORT_CMD_ID = "PC2XL_EXPORT"` 是 PCDMIS BASIC SCRIPT 命令的固定 ID，植入后命令在 PRG 内的显示名为 `PC2XL_EXPORT`。
+> 🗑 **已取消**（2026-09-23，commit `76657ac`）。原保留为历史描述。
 
-`OBTYPE_BASIC_SCRIPT` 来自 `pcdlrn_constants.get_const("OBTYPE_BASIC_SCRIPT")`，用于 `cmds.Add(OBTYPE_BASIC_SCRIPT, True)` 插入 BASIC SCRIPT 命令类型。
+~~`pc to excel/config.py:EXPORT_CMD_ID = "PC2XL_EXPORT"` 是 PCDMIS BASIC SCRIPT 命令的固定 ID，植入后命令在 PRG 内的显示名为 `PC2XL_EXPORT`。~~
 
-**集成后约束**：常量统一从 `toolbox/app_meta.py` 引用，避免硬编码分散在多处。
+~~`OBTYPE_BASIC_SCRIPT` 来自 `pcdlrn_constants.get_const("OBTYPE_BASIC_SCRIPT")`，用于 `cmds.Add(OBTYPE_BASIC_SCRIPT, True)` 插入 BASIC SCRIPT 命令类型。~~
+
+~~**集成后约束**：常量统一从 `toolbox/app_meta.py` 引用，避免硬编码分散在多处。~~
+
+**取消说明**：`EXPORT_CMD_ID` 已从 `toolbox/app_meta.py` + `modules/pc_to_excel/app_meta.py` + `toolbox/__init__.py` 的 re-export 中移除；`OBTYPE_BASIC_SCRIPT` 一并移除。原因见 §3.7。
 
 ---
 
@@ -1216,10 +1220,12 @@ CMMFiller 已有一个完整的 Inno Setup 安装包脚本 `CMMFiller/installer/
 ```python
 # pc to excel/cli.py
 import argparse
-# 子命令：export / inject / fill / form / ...
+# 子命令：export / fill-form / dump-tols
+# （原 inject 子命令已于 2026-09-23 随脚本输出功能取消，commit 76657ac）
 
 def cmd_export(args): ...
-def cmd_inject(args): ...
+def cmd_fill_form(args): ...
+def cmd_dump_tols(args): ...
 ```
 
 **集成后策略**：
@@ -1682,7 +1688,7 @@ parser.add_argument('--version', action='version', version=f'CMMFiller {__versio
 
 # pc to excel/cli.py:43+
 def cmd_export(args): ...
-def cmd_inject(args): ...
+def cmd_inject(args): ...   # ← 2026-09-23 取消（脚本输出功能整 feature 移除，commit 76657ac）
 
 # CMMFiller/main.py (迁移后) — 顶层 GUI
 # pc to excel/main.py (迁移后) — 顶层 GUI
@@ -1781,9 +1787,15 @@ core/tolerance.py:apply_tolerance()
 list[FeatureRecord] with status
     │
     ├─→ export/pcdmis_style_report.py:export_pcdmis_excel()  ← "一键导出 Excel"
-    ├─→ export/pcdmis_style_report.py:export_pcdmis_csv()    ← BAS 脚本导出
+    ├─→ export/pcdmis_style_report.py:export_pcdmis_csv()    ← CSV 导出（**当前零调用**，见下方注）
     └─→ export/inspection_form_fill.py:fill_inspection_form() ← "填入出货表"
 ```
+
+> **注（2026-09-23）**：`export_pcdmis_csv()` 是**定义但零调用**的死函数（不在
+> `export/__init__.py` 的 `__all__` 里，全仓无 call site、无测试）。它与本次取消的
+> BAS 脚本**无关** —— BAS 脚本用自己的 `saveCsv` 写 CSV，不经过 Python。
+> 原图把它标成「BAS 脚本导出」是**归因错误**，实际从未被 BAS 路径调用。
+> 已登记为独立清理项（见 `docs/CORE_DEFECT_PLAN.md`），**未删除**。
 
 **集成后约束**：
 - 这条 pipeline 是 pc_to_excel 的**核心业务逻辑**，迁移时严禁改动

@@ -75,8 +75,6 @@ cm2xl/
 ├── build.bat / build_installer.bat / run_as_admin.bat
 ├── installer/cm2xl.iss           # Inno Setup 安装脚本
 ├── preview/index.html            # UI 修复对比预览（开发辅助）
-├── scripts/inspect_fai_labels.py  # 历史孤儿文件（未引用）
-├── scripts/test_pdf_folder.py     # 历史孤儿文件（未引用）
 ├── requirements/
 │   ├── base.txt                  # GUI / Excel / PyInstaller
 │   ├── cmm_filler.txt            # OCR + PDF 渲染
@@ -108,7 +106,6 @@ cm2xl/
 │       │   ├── classification.py # 分类统计
 │       │   └── models.py         # 数据模型
 │       ├── export/               # Excel 报告导出
-│       ├── inject/               # PCDMIS 命令植入
 │       └── utils/                # admin 权限 / 本地配置
 ├── utils/                        # 通用工具
 │   ├── paths.py                  # 路径管理（frozen/dev）
