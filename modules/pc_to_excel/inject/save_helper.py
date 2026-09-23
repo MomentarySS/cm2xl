@@ -115,14 +115,36 @@ def _trigger_part_save(part: Any) -> None:
 
     注：本函数只负责**触发**，不验证落盘。落盘与否由调用方用
     `_part_is_modified()` 验证（防「假成功」）。
+
+    P1-7（2026-09-23 真机新增）：同一 PCDLRN.Application.19.1 / 2024.1 在不同
+    PC-DMIS 实例上 `Save` 的 setter 存在性不一致：
+        - A. 老版本 / 部分 2024.1 实例：Save 是方法 ⇒ `save()` 工作
+        - B. 部分 2024.1 实例：Save 是 bool 属性、setter 存在 ⇒ `part.Save = True` 工作
+        - C. 部分 2024.1 实例：Save 是属性、**setter 不存在** ⇒ `part.Save = True`
+          抛 `Property '<unknown>.Save' can not be set`
+    本函数对形态 C 自动降级到 `part.SaveAs(part.FullName)`（SaveAs 是 callable
+    method；用户机器 2026-09-23 实测确认）。SaveAs 仍失败时再 raise —— 由上层
+    `_save_failure_hint` 处理（提示「无降级路径 ⇒ 走 Ctrl+S」）。
     """
     save = getattr(part, "Save", None)
     if callable(save):
-        save()                 # 老版本：方法
+        save()                 # 形态 A：方法
         return
-    # 2024.1：属性赋值触发。赋 True / False 都能触发落盘（PCDMIS 内部按 setter
-    # 实现判定），赋哪个值与落盘无关；按属性本意赋 True。
-    part.Save = True
+    try:
+        # 形态 B：属性赋值触发。赋 True / False 都能触发落盘（PCDMIS 内部按 setter
+        # 实现判定），赋哪个值与落盘无关；按属性本意赋 True。
+        part.Save = True
+    except Exception:
+        # 形态 C：read-only 属性，降级到 SaveAs(part.FullName)
+        saveas = getattr(part, "SaveAs", None)
+        if not callable(saveas):
+            raise  # 既无 Save 也无 SaveAs，让上层 hint 提示走 Ctrl+S
+        path_str = (
+            getattr(part, "FullName", None)
+            or getattr(part, "Path", None)
+            or ""
+        )
+        saveas(path_str)
 
 
 def _save_failure_hint(exc: BaseException, path: Path | None) -> str:

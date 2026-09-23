@@ -56,6 +56,11 @@ class _FakePart:
 
         self._save_attr = save_attr
         self._save_setter_hook: Any = None
+        # 形态 C：setter 抛异常（模拟「Property ... can not be set」）
+        self._save_setter_raises: BaseException | None = None
+        # SaveAs 降级路径（形态 C 用）：callable 实例 / None（不存在）
+        self.saveas_callable: Any = None
+        self.saveas_call_count = 0
 
         # IsModified 行为：True / False / 一个抛异常的 sentinel
         self._is_modified_value = is_modified_after
@@ -68,9 +73,24 @@ class _FakePart:
     @Save.setter
     def Save(self, value: Any) -> None:
         # 测试钩子：setter 被调多少次、是否真做落盘
+        if self._save_setter_raises is not None:
+            raise self._save_setter_raises
         if self._save_setter_hook is not None:
             self._save_setter_hook(value)
         self._save_attr = value
+
+    def SaveAs(self, path_str: str) -> None:
+        """SaveAs 降级路径 —— 形态 C（read-only Save）时调用。
+
+        `saveas_callable` 为 None ⇒ 模拟「SaveAs 也不存在」，抛 AttributeError
+        上层（事实上这是不可能的形态，但留着降级链的最后一档可测性）。
+        """
+        self.saveas_call_count += 1
+        if self.saveas_callable is None:
+            raise AttributeError(
+                f"'FakePart' has no SaveAs (saveas_callable=None)"
+            )
+        self.saveas_callable(path_str)
 
     @property
     def IsModified(self) -> bool:
@@ -284,4 +304,79 @@ def test_failure_hint_mentions_read_only_form():
     assert "无降级路径" in hint, (
         f"read-only 形态下 cm2xl 没有降级路径 —— 提示必须明说『走 Ctrl+S』。"
         f"实际：{hint!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# P1-7（2026-09-23 真机新增）：形态 C —— Save read-only 属性 + SaveAs 降级
+# ---------------------------------------------------------------------------
+
+
+def test_save_read_only_falls_back_to_saveas(writable_prg: Path):
+    """形态 C：Save 是 read-only 属性（setter 抛 Property can not be set）+
+    SaveAs 是 callable method ⇒ cm2xl 自动降级到 `part.SaveAs(part.FullName)`，
+    IsModified 应转 False。
+
+    对应用户真机（PCDLRN.Application.19.1 / 2024.1，part.Save 求值 True / callable=False；
+    part.SaveAs 求值 <bound method SaveAs> / callable=True）。
+    """
+
+    saveas_calls: list[str] = []
+
+    def _saveas_impl(path_str: str) -> None:
+        saveas_calls.append(path_str)
+
+    part = _FakePart(
+        prg_path=writable_prg,
+        save_attr=True,            # Save 求值是真值 ⇒ 属性形态
+        is_modified_after=False,   # 落盘后 IsModified 转 False
+    )
+    part._save_setter_raises = RuntimeError("Property '<unknown>.Save' can not be set.")
+    part.saveas_callable = _saveas_impl
+
+    saved, msg = try_save_part_program(part)
+
+    # 核心：SaveAs 降级成功
+    assert saved is True, (
+        f"SaveAs 降级路径必须工作（SaveAs 可调 ⇒ 视为保存成功）。"
+        f"实际：saved = {saved}, msg = {msg!r}"
+    )
+    assert str(writable_prg) in msg
+    # SaveAs 必须被调用过一次（这是关键反证：证明走了降级路径，不是恰好别的原因返回 True）
+    assert part.saveas_call_count == 1, (
+        f"SaveAs 应被调用过一次 —— 没调说明没走降级。"
+        f"saveas_call_count = {part.saveas_call_count}"
+    )
+    # SaveAs 必须接到 FullName（或 Path）
+    assert saveas_calls, "SaveAs 必须被调用并接到路径"
+    assert saveas_calls[0] == str(writable_prg), (
+        f"SaveAs 应接 FullName，传错路径等于没存。"
+        f"实际传给 SaveAs: {saveas_calls[0]!r}"
+    )
+
+
+def test_save_read_only_no_saveas_reports_failure(writable_prg: Path):
+    """形态 C 极端：Save read-only + SaveAs 也不存在 ⇒ 必须报失败（不静默吞）。
+
+    这是「P1-7 终极降级链断了」的兜底 —— 既无 Save 也无 SaveAs，cm2xl 没招，
+    必须走 hint 提示「走 Ctrl+S」（提示里已经有「无降级路径」说明）。
+    """
+
+    part = _FakePart(
+        prg_path=writable_prg,
+        save_attr=True,
+        is_modified_after=True,     # 任意：IsModified 在降级失败后不会被读到
+    )
+    part._save_setter_raises = RuntimeError("Property '<unknown>.Save' can not be set.")
+    # saveas_callable 留 None ⇒ SaveAs 调用抛 AttributeError
+
+    saved, msg = try_save_part_program(part)
+
+    assert saved is False, (
+        "Save read-only + SaveAs 不存在 ⇒ 必须报失败（不静默吞）。"
+        f"实际：saved = {saved}, msg = {msg!r}"
+    )
+    assert "无降级路径" in msg, (
+        f"失败提示里必须含『无降级路径』字样（让用户/排查者立刻看清根因）。"
+        f"实际：{msg!r}"
     )
