@@ -50,11 +50,10 @@ for _candidate in (
         break
 _has_models = _cmm_models_src is not None
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BAS 脚本模板（dev 源路径 → 打包后目标路径）
-# ══════════════════════════════════════════════════════════════════════════════
-_scripts_src = ROOT / "scripts"
-_bas_template_src = _scripts_src / "export_current.bas.template"
+# P1-4 ~ P1-8（脚本输出功能）于 2026-09-23 取消：
+#   BAS 脚本模板（scripts/export_current.bas.template）与 _scripts_src /
+#   _bas_template_src 整段移除；inject 子模块不打包（modules/pc_to_excel/inject
+#   已整目录删除）。
 
 # ══════════════════════════════════════════════════════════════════════════════
 # customtkinter assets
@@ -110,9 +109,6 @@ _all_hidden = list(set(_extra_hidden + [
     "modules.pc_to_excel.export.inspection_form_fill",
     "modules.pc_to_excel.export.pcdmis_style_report",
     "modules.pc_to_excel.export.template_report",
-    "modules.pc_to_excel.inject",
-    "modules.pc_to_excel.inject.command_injector",
-    "modules.pc_to_excel.inject.save_helper",
     "modules.pc_to_excel.inject.toolbar_launcher",
     "modules.pc_to_excel.utils",
     "modules.pc_to_excel.utils.action_hints",
@@ -184,8 +180,6 @@ datas = [
     (_cython_util, "Cython/Utility"),
     # 自定义主题 JSON（避免冷启动重新生成时丢失 weight 等字段）
     (str(ROOT / "utils" / "theme.json"), "utils"),
-    # BAS 脚本模板（pc_to_excel 运行时部署到 LocalAppData）
-    (str(_bas_template_src), "scripts"),
     # 应用图标（运行时窗口标题栏 + 界面 Logo）
     (str(ROOT / "cm2xl.ico"), "."),
     (str(ROOT / "assets" / "app_logo.png"), "assets"),
@@ -215,7 +209,6 @@ _local_pkgs = [
     "modules/pc_to_excel/core/__init__.py",
     "modules/pc_to_excel/gui/__init__.py",
     "modules/pc_to_excel/export/__init__.py",
-    "modules/pc_to_excel/inject/__init__.py",
     "modules/pc_to_excel/utils/__init__.py",
 ]
 for rel in _local_pkgs:

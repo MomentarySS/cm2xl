@@ -26,8 +26,6 @@ from .export.inspection_form_fill import default_fill_output_path, fill_inspecti
 
 from .export.template_report import export_report
 
-from .inject.command_injector import deploy_bas_script, inject_export_command
-
 from .utils.local_settings import build_export_filename, ensure_default_dirs, load_settings
 
 
@@ -232,35 +230,11 @@ def cmd_fill_form(args: argparse.Namespace) -> int:
 
 
 
-def cmd_inject(args: argparse.Namespace) -> int:
-
-    bas = deploy_bas_script()
-
-    connector = PcdmisConnector()
-
-    info = connector.connect()
-
-    if not info.connected:
-
-        print(info.message, file=sys.stderr)
-
-        return 1
-
-
-
-    from .connector.com_detector import com_apartment, dispatch_pcdmis
-
-
-
-    with com_apartment():
-
-        app = dispatch_pcdmis(connector.prog_id)
-
-        result = inject_export_command(app, bas_path=bas, prog_id=connector.prog_id)
-
-    print(result.message)
-
-    return 0 if result.success else 1
+# P1-4 ~ P1-8（脚本输出功能）已于 2026-09-23 取消：
+#   cmd_inject / p_inject subparser 移除，对应的 BAS 部署与导出命令
+#   植入代码（modules/pc_to_excel/inject/）整目录删除。CLI 不再支持
+#   \inject\ 子命令；如需 PCDMIS → CSV 导出，请走 PC-DMIS 工具栏或
+#   手动操作。
 
 
 
@@ -550,9 +524,6 @@ def main() -> None:
 
 
 
-    p_inject = sub.add_parser("inject", help="向当前 PRG 植入导出命令")
-
-    p_inject.set_defaults(func=cmd_inject)
 
     p_dump = sub.add_parser(
         "dump-tols",

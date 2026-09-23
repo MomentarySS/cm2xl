@@ -9,9 +9,6 @@ APP_TITLE = "cm2xl"
 APP_VERSION = "1.1.0"
 APP_BUILD = "1"
 
-# PCDMIS BASIC SCRIPT 命令 ID（固定，由 PCDMIS 菜单项引用）
-EXPORT_CMD_ID = "PC2XL_EXPORT"
-
 # PCDMIS COM ProgID 版本映射（用于自动发现）
 PCDLRN_PROGIDS = [
     "PCDLRN.Application.24.0",  # 2026

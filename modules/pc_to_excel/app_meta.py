@@ -4,9 +4,6 @@ from toolbox.app_meta import APP_VERSION
 APP_TITLE = "PCDMIS导出"
 __version__ = APP_VERSION
 
-EXPORT_CMD_ID = "PC2XL_EXPORT"
-OBTYPE_BASIC_SCRIPT = 12346
-
 # 产品名 → COM 内部版本（日历年 − 2005）。2017 R2 起均为 64 位。
 PCDMIS_RELEASES: tuple[tuple[str, int, int], ...] = (
     ("2026.1", 21, 1),
