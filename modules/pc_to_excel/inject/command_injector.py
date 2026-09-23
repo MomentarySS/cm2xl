@@ -102,7 +102,11 @@ def deploy_bas_script(target_dir: Path | None = None) -> Path:
         "@@CONFIG_PATH@@",
         str(config_path.resolve()).replace("\\", "\\\\"),
     )
-    atomic_write_text(dest, source_text)
+    # P1-8：PC-DMIS Basic Scripting Engine 按中文 Windows 系统 ANSI（GBK/CP936）
+    # 解码 BAS 文件，不认 UTF-8 中文（会把「无法连接」读成「鏃犳硶」 ⇒ MsgBox
+    # 字符串语法错 ⇒ Syntax Error on line 29）。源模板仍按 UTF-8 + CRLF 维护
+    # （git diff 友好），仅在部署写出时换成 GBK。
+    atomic_write_text(dest, source_text, encoding="gbk")
     _verify_bas_deployed(dest)
     try:
         from .toolbar_launcher import deploy_toolbar_launcher

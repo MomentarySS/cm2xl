@@ -117,9 +117,12 @@ def _write_bas_template(root: Path, name: str = "export_current.bas.template") -
     scripts = root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     template = scripts / name
+    # 内含中文字符串（MsgBox 文案）—— 与真模板对齐，
+    # 让 P1-8 的 GBK 编码测试有真东西可断（不是空壳断言）。
     template.write_text(
         'SCRIPT/FILENAME="@@CONFIG_PATH@@"\n'
         "FUNCTION/Main,SHOW=NO,,\n"
+        'MsgBox "无法连接 PC-DMIS 活动程序。", 16, "导出失败"\n'
         "STARTSCRIPT/\n"
         "ENDSCRIPT/",
         encoding="utf-8",
@@ -170,7 +173,9 @@ def test_deploy_bas_script_copies_and_substitutes(tmp_path: Path, monkeypatch):
 
     assert result.name == BAS_FILENAME
     assert result.exists()
-    content = result.read_text(encoding="utf-8")
+    # P1-8：部署出的 BAS 按 GBK 编码（PC-DMIS Basic Scripting Engine 按 ANSI 读）。
+    # 模板源是 UTF-8（CRLF），仅部署写出时换成 GBK。这里读回也要走 GBK。
+    content = result.read_text(encoding="gbk")
     # 占位符被替换
     assert "@@CONFIG_PATH@@" not in content
     assert "export_config.txt" in content
@@ -254,6 +259,122 @@ def test_export_config_is_utf16_with_bom(tmp_path: Path, monkeypatch):
     assert legacy[:2] != b"\xff\xfe"
     legacy_lines = legacy.decode("utf-16", errors="replace").splitlines()
     assert not (len(legacy_lines) == 2 and legacy_lines[1].strip() == "YES")
+
+
+# ---------------------------------------------------------------------------
+# P1-8（2026-09-23 真机新增）：BAS 文件部署出必须按 GBK 编码
+# ---------------------------------------------------------------------------
+
+
+def test_deploy_bas_script_writes_gbk_encoding(tmp_path: Path, monkeypatch):
+    """P1-8：PC-DMIS Basic Scripting Engine 按系统 ANSI（中文 Windows = GBK/CP936）
+    解码 BAS 文件，不认 UTF-8 中文。deploy_bas_script 必须按 GBK 写出。
+
+    测试策略：
+    1. 模板里有 `MsgBox "无法连接 PC-DMIS 活动程序。"`（UTF-8 字节 = `E6 97 A0 ...`）
+    2. 部署后**绝不能**保留 UTF-8 字节（GBK 编码里同样字符是 2 字节，码点不同）
+    3. 部署后按 GBK 能干净 decode，且 round-trip 内容与源匹配
+    """
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    _write_bas_template(project_root)
+    deploy_dir = tmp_path / "deploy"
+    deploy_dir.mkdir()
+
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector.paths",
+        _FullFakePaths(project_root, deploy_dir),
+    )
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
+        project_root,
+    )
+
+    deploy_bas_script(deploy_dir)
+    raw = (deploy_dir / BAS_FILENAME).read_bytes()
+
+    # 1) 不能是 UTF-8 BOM（GBK 不带 BOM；UTF-8 BOM 会让引擎误判）
+    assert raw[:3] != b"\xef\xbb\xbf", (
+        "deploy_bas_script 不应写 UTF-8 BOM —— "
+        "PC-DMIS 引擎按 GBK 解码 UTF-8 中文会乱码。"
+    )
+    # 2) 不能是 UTF-16 BOM（那是 export_config.txt 的，P1-4 修过；BAS 不该用）
+    assert raw[:2] != b"\xff\xfe" and raw[:2] != b"\xfe\xff", (
+        "BAS 文件不应是 UTF-16 —— BAS 引擎按 ANSI 读。"
+    )
+
+    # 3) 模板里的中文「无法连接」UTF-8 字节 = E6 97 A0 E6 B3 95 E8 BF 9E E6 8E A5
+    #    这些字节**绝不能**原样出现在部署结果里 —— 否则说明仍按 UTF-8 写。
+    utf8_3bytes = "无法连接".encode("utf-8")
+    assert utf8_3bytes not in raw, (
+        f"deploy_bas_script 仍按 UTF-8 部署（发现模板里中文的 UTF-8 字节 "
+        f"{utf8_3bytes.hex()} 原样存在）。应改按 GBK 写出。"
+    )
+
+    # 4) 按 GBK 必须能干净 decode
+    text = raw.decode("gbk")
+    assert "无法连接" in text, (
+        f"按 GBK decode 后应能找到模板里的中文「无法连接」。"
+    )
+
+    # 5) 反向守卫：证明「按 GBK decode」不是空壳 —— 用 GBK 解 UTF-8 内容会乱码
+    utf8_bytes_with_chinese = b"' foo\nMsgBox \"\xe6\x97\xa0\xe6\xb3\x95\xe8\xbf\x9e\xe6\x8e\xa5\"\n"
+    assert "无法连接" not in utf8_bytes_with_chinese.decode("gbk"), (
+        "反向守卫：UTF-8 中文按 GBK 解码**不**还原原文 —— "
+        "证明 'DeploymentBS 写 GBK = utf-8 内容含中文 → 回原' 这条测试不是空壳。"
+    )
+
+
+def test_deploy_bas_script_gbk_roundtrip_preserves_chinese(tmp_path: Path, monkeypatch):
+    r"""Round-trip 守卫：按 GBK 写出的内容**字节**必须是真 GBK，不能是 Python repr。
+
+    防「unicode escape」或「str repr」之类的退化改法 —— GBK 是字节编码，
+    不是 Python repr。
+
+    检测法：
+    1. 正向：raw 字节里必须包含「无法连接」的 GBK 字节序列（CE DE C7 EB）
+       —— 这只在「真按 GBK 写」时成立
+    2. 反向：raw 字节里**不**应包含 Python repr 的字面 `\u65e0\u6cd5`（这条
+       在「按 repr 写」时才成立）
+    """
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    _write_bas_template(project_root)
+    deploy_dir = tmp_path / "deploy"
+    deploy_dir.mkdir()
+
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector.paths",
+        _FullFakePaths(project_root, deploy_dir),
+    )
+    monkeypatch.setattr(
+        "modules.pc_to_excel.inject.command_injector._BUNDLE_DIR",
+        project_root,
+    )
+
+    deploy_bas_script(deploy_dir)
+    raw = (deploy_dir / BAS_FILENAME).read_bytes()
+    text = raw.decode("gbk")
+
+    # 占位符必须被替换
+    assert "@@CONFIG_PATH@@" not in text
+    # 中文必须原样
+    assert "无法连接" in text
+    assert "导出失败" in text
+
+    # 正向：raw 字节必须含「无法连接」的 GBK 字节序列
+    gbk_bytes = "无法连接".encode("gbk")
+    assert gbk_bytes in raw, (
+        f"raw 字节应包含「无法连接」的 GBK 编码（{gbk_bytes.hex()}），"
+        f"实测 raw 头 80 字节：{raw[:80].hex()}"
+    )
+
+    # 反向：raw 字节**不**应含 Python repr 的字面 \u65e0\u6cd5（防退化改法）
+    repr_bytes = b"\\u65e0\\u6cd5"
+    assert repr_bytes not in raw, (
+        f"raw 字节不应含 Python repr 的字面 \\u65e0\\u6cd5 —— "
+        f"说明被人改成了 unicode_escape / repr 而非真 GBK。"
+    )
 
 
 # ---------------------------------------------------------------------------
