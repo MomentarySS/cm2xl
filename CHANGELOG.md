@@ -195,7 +195,7 @@
 - 应用图标：`cm2xl.ico` 换新；新增 `utils/app_icon.py` 统一窗口标题栏图标与界面 Logo（Splash / 关于 / 顶栏 / 子窗口）
 - `assets/app_logo.png`：界面内 Logo 资源；`pcdmis_toolbox.spec` 打包 `cm2xl.ico` 与 `assets/app_logo.png`
 - 浅色主题「暖灰纸感」：`utils/theme.py` 调整页面/卡片/边框/输入框对比度，修复勾选框白勾不可见（`CTkCheckBox.fg_color` 改回品牌青绿）
-- `build/generate_theme_preview.py`：主题改善前后对比预览图生成脚本
+- `build/generate_theme_preview.py`：主题改善前后对比预览图生成脚本 🗑 **已于 2026-09-23 移除**（一次性产物，主题工作完成后无复用价值）
 
 ### pc_to_excel 模块
 
