@@ -183,7 +183,7 @@ P3 其余各项互不重叠。
 | P3-6 | COM 对象逃出 apartment（埋雷 API） | `connector/com_detector.py:427-432` | 架构 | ❌ | ⬜ 未开始 |
 | P3-7 | `tests/` 目录默认不被 pytest 收集（42 个测试静默不跑） | `pytest.ini`（新建） | 测试可信度 | ❌ | ✅ **已完成** |
 | P3-8 | `export_pcdmis_csv()` 定义但零调用（死函数，且被架构文档错误归因为「BAS 脚本导出」） | `export/pcdmis_style_report.py:382` | 死代码 / 文档错归因 | ❌ | ⬜ 未开始（2026-09-23 登记） |
-| P3-9 | `build.bat` 残留已删除文件的检查 ⇒ 打包第一步就 `exit /b 1`（`76657ac` 遗漏） | `build.bat:22-28` | 构建失败 | ❌ | ✅ **已修**（`371a5c7`，与 spec hiddenimport 同一 commit） |
+| P3-9 | `build.bat` 残留已删除文件的检查 ⇒ 打包第一步就 `exit /b 1`（`76657ac` 遗漏） | `build.bat:22-28` | 构建失败 | ❌ | ✅ **已修 + 完整打包实跑验证**（`371a5c7`；6/6 步全过 + exe 冒烟通过） |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -1373,10 +1373,61 @@ if not exist "scripts\export_current.bas.template" (
 **验证** — spec `ast.parse` 通过；全仓 `*.py` 搜 `inject` / `deploy_bas_script` /
 `BAS_FILENAME` / `OBTYPE_BASIC_SCRIPT` / `EXPORT_CMD_ID` = 0 命中；
 `build/` 只命中 `PADDLE_OCR_BASE_DIR` 假阳性；`installer/` 0 命中；
-pytest 250 passed。**未跑完整 PyInstaller 打包**（10–20 分钟，且只有测量房离线环境才需真验）。
+pytest 250 passed。
 
 **实施记录（2026-09-23）** — ✅ **已修**，commit `371a5c7`（`build.bat` + `cm2xl.spec`
 同一 commit，同属一个回归）。
+
+**完整打包实跑验证（2026-09-23 17:24–17:31）** — ✅ **6/6 步全过**
+
+| 步骤 | 结果 |
+|------|------|
+| `[0/6]` PaddleOCR 模型检测 | ✅ 找到 `modules\cmm_filler\models\paddleocr` |
+| `[1/6]` 清理旧构建 | ✅ 删掉 2026-09-04 的陈旧 `dist/`（594 MB） |
+| **原先会挂的那一步** | ✅ **通过** —— 修前此处 `[ERROR] 未找到 scripts\export_current.bas.template` + `exit /b 1`，到不了 PyInstaller |
+| `[2/6]` PyInstaller | ✅ 6.21.0 / Python 3.12.10（系统 env，依赖全齐） |
+| `[3/6]` `fix_dist.py` | ✅ `Fix complete!`（paddleocr 包/工具/字典复制 + frozen import 补丁 + 品牌资源） |
+| `[4/6]` 管理员启动器 | ✅ |
+| `[5/6]` 删 ffmpeg DLL | ✅ |
+| `[6/6]` 输出校验 | ✅ `Build OK: dist\cm2xl\` |
+
+**产物核验**：`cm2xl.exe` 26.3 MB（17:28:29）· `run_as_admin.bat` · `_internal/utils/theme.json` ·
+`_internal/cm2xl.ico` · dist 总 592.4 MB · **BAS/inject 残留 = 0** · ffmpeg DLL 已清 ·
+本地模块 `__init__.py` 打包 10 个，**`inject/__init__.py` 已正确消失**（spec `_local_pkgs` 改动生效）。
+
+**依赖完整性**：`warn-cm2xl.txt` 439 条**全是噪声**。11 个关键三方依赖
+（`customtkinter` / `paddleocr` / `paddle` / `fitz` / `openpyxl` / `win32com` /
+`tkinterdnd2` / `PIL` / `lxml` / `cv2` / `lmdb`）**全部 OK 无 missing**。
+剩余警告可解释：Unix-only（`pwd`/`grp`/`fcntl`/`termios`）、`numpy._core.*`
+（属性被误判为子模块）、`pytesseract`/`easyocr`（OCR 可选备用后端）、
+`pandas.core`（本项目零处 `import pandas`）、`etcd3`/`jax`（paddle/scipy 可选后端）。
+**警告里完全没有 `inject` / `command_injector` / `save_helper` / `toolbar_launcher`** ⇒ 取消干净。
+
+**exe 冒烟测试**（按 CLAUDE.md「打包后必须跑 exe 才算验证」）：✅ **通过**
+```
+17:30:39  cm2xl 1.1.0 启动中...
+17:30:39  初始化 Shell... module=None auto_export=False skip_ocr=False
+17:30:47  创建 Shell...
+17:30:49  导航项注册: cmm_filler
+17:30:49  导航项注册: pc_to_excel
+17:30:50  模块已激活: cmm_filler
+17:30:50  Shell 初始化完成
+```
+进程存活、内存 236.2 MB、**零 ERROR / Traceback**；frozen 数据落在
+`%LOCALAPPDATA%\cm2xl\`（符合约定）。
+
+**顺带核对的两条**（都不是本轮引入）：
+1. `%LOCALAPPDATA%\cm2xl\logs\crash.log` 是 **2026-08-28 的历史残留**（按时间戳核对）。
+   它记录的 `utils/app_icon.py:81` 在 frozen 下传 str 而非 `PIL.Image` 的崩溃
+   **已在 `df91650` 重构中修掉**（现在返回 `pil.copy()` 或 `None`，
+   `splash.py:129-139` 有 None fallback 到文字标签）。本轮无新崩溃。
+2. `build.bat` 调裸 `python` → 解析到**系统 Python 3.12**（依赖全齐含 pandas）；
+   `paddleocr_gpu`(3.10) 缺 pandas（但本项目零处用 pandas）。两者都能打包，
+   本次走 3.12。若要把构建固定到 `paddleocr_gpu`，需显式改 `build.bat` 的
+   `python` → 绝对路径 —— **独立决策，本轮未动**。
+
+**非交互执行提示** — `build.bat` 末尾有 `pause`，agent/CI 里跑会挂住。
+用 `cmd /c "build.bat < NUL"` 绕开（本次即如此）。
 
 ---
 
@@ -1460,3 +1511,4 @@ pytest 250 passed。**未跑完整 PyInstaller 打包**（10–20 分钟，且�
 | 2026-09-23 | **脚本输出功能整 feature 取消（软取消，保留 commits 作历史）**。连续三轮真机下来 P1-4 + P1-5 + P1-6 + P1-7 + P1-8 全部命中代码侧，但 PC-DMIS 仍报 `执行 BASIC 脚本时出错`（最深可能仍是引擎版本兼容问题）。用户判断「脚本输出本身就是为了锦上添花」 ⇒ 整 feature 移除（**软取消**：保留 9 个 commit 作历史记录，不 `git revert`）。**改动**：删除 `modules/pc_to_excel/inject/` 整目录（command_injector + save_helper + toolbar_launcher + `__init__.py`，4 个文件）+ `modules/pc_to_excel/scripts/` 整目录（export_current.bas + export_current.bas.template）+ 仓库根 `scripts/export_current.bas` + `scripts/export_current.bas.template` + 4 个测试文件（test_bas_template.py / test_command_injector.py / test_save_helper.py / test_toolbar_launcher.py），共 12 文件。**改 5 个文件**：`modules/pc_to_excel/app_meta.py` + `toolbox/app_meta.py` + `toolbox/__init__.py` 移除 `EXPORT_CMD_ID` / `OBTYPE_BASIC_SCRIPT`；`modules/pc_to_excel/cli.py` 移除 `cmd_inject` 函数、`p_inject` subparser、`from .inject.command_injector import ...`；`modules/pc_to_excel/gui/main_window.py` 移除 PRG 命令植入分区、「部署 BAS 脚本」「植入 / 更新导出命令」「检查是否已植入」「部署工具栏启动器」「打开启动器目录」5 个按钮 + 对应 6 个方法（`_deploy_bas` / `_deploy_toolbar` / `_open_launcher_dir` / `_inject_command` / `_on_inject_done` / `_check_inject`）+ 「PRG 植入 CSV」「工具栏一键出 Excel」帮助文字 + `from ..inject.command_injector import ...` + `from ..inject.toolbar_launcher import ...`；`cm2xl.spec` 移除 `_scripts_src` / `_bas_template_src` 定义、`modules.pc_to_excel.inject` 等隐藏包清单、`(str(_bas_template_src), "scripts")` data 文件 + `modules/pc_to_excel/inject/__init__.py` 隐藏 init。**TL;DR P1-4 ~ P1-8 全部 🗑 取消**；整体进度「已完成 11 / 20」改为「6 / 15」（条目数 -5）；基线 314 → **250 passed**（-64 测试：test_bas_template 的 25 + test_command_injector 的 16 + test_save_helper 的 9 + test_toolbar_launcher 的 ~14）；真机清单 P1-4 ~ P1-8 端到端条目全部划掉改为「已取消」；发布前 CHANGELOG 三条（P1-4 / P1-5 / P1-8 重部署提示）全部划掉改为「已取消」；下一动作改为「~~跑 PC2XL_EXPORT 端到端~~ 已取消」。**未动**：CMMFiller / OCR / 故障诊断 / PDF 导出 / PartProgram 注入之外的所有功能。**对历史代码的告警**：从今往后用户 git blame `modules/pc_to_excel/inject/` 会看到 9 个 commit 落在一起（如追溯 BAS 部署逻辑），但该目录已不存在 —— 这正是「软取消保留证据」的副作用 |
 | 2026-09-23 | **取消后的收尾清理 + 登记 P3-8 / P3-9**（用户要求「先清理孤儿文件，然后更新 md」）。**① 修构建侧遗漏**（commit `371a5c7`）：`76657ac` 取消脚本输出功能时只改了 spec 与 Python 侧，漏了 `build.bat:22-28` 的「检查 `scripts/export_current.bas.template`」前置检查 —— 该文件已删 ⇒ **打包第一步就 `exit /b 1`**；同批还有 `cm2xl.spec:112` 残留 `"modules.pc_to_excel.inject.toolbar_launcher"` hiddenimport。两处一并删除。**② 清理孤儿探针**：删 `scripts/inspect_fai_labels.py` + `scripts/test_pdf_folder.py`（硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用、flatten 重构遗留），`scripts/` 目录随之清空。**③ 登记 P3-8**：`export/pcdmis_style_report.py:382` 的 `export_pcdmis_csv()` 定义但**零调用**（无 CLI/GUI/测试引用、不在 `export/__init__.py` 的 `__all__`），且 `ARCHITECTURE.md` 数据流图把它错误归因为「BAS 脚本导出」—— 实际 BAS 脚本用自己的 `saveCsv` 写 CSV，不经过 Python。**不是本次取消造成的**（最后改动是 `df91650`），是预先存在的死代码；按用户「发现新 bug 只登记不动手」纪律只登记。**④ 登记 P3-9**（已随 ① 修复）：`build.bat` 残留检查，属构建失败类。**⑤ 文档同步**：`README.md` 目录树去掉 `scripts/` 与 `inject/` 两条；`ARCHITECTURE.md` §3.25（EXPORT_CMD_ID 常量）+ §3.29 / §3.47（CLI `cmd_inject`）+ 数据流图（`export_pcdmis_csv` 错归因）+ 已排除候选表（`inject/toolbar_launcher.py:201` 条目失效）全部标注。**整体进度**「已完成 6 / 15」改为「7 / 17」（P3-9 已完成、P3-8 未开始），条目数 15 → 17。**基线 250 passed 不变**（无代码改动 —— 删的是零引用探针 + 构建配置）。**可复用排查法**（删任何模块/文件后都该跑）：① spec `ast.parse` + 过滤注释搜旧模块名 ② 全仓 `*.py` 搜被删符号 ③ 构建脚本（`build.bat` / `build_installer.bat` / `installer/`）搜旧路径 ④ spec 的 `datas` 与 `hiddenimports` 列表 |
 | 2026-09-23 | **孤儿扫描收尾：删主题预览脚本 + 清本地 ignored 产物**（用户选择「只删主题预览脚本」）。**① 删 `build/generate_theme_preview.py`**（6.5 KB）：一次性脚本，硬编码 OLD/NEW 两套配色生成主题改善前后对比图 `cm2xl_theme_preview.png`；主题工作已完成（`utils/theme.py` 定稿），该对比图冻结在过去的配色上、无复用价值。**保留 `preview/index.html`**（11.6 KB 静态 UI mock，作为 UI 设计参考）。**② 清本地 ignored 产物**（均被 `.gitignore` 的 Junk files 段覆盖、不入库）：`cm2xl_theme_preview.png`、`cm2xl_preview.png`、`build/icon_concepts/`（6 张图标概念稿 ~810 KB）、`build/__pycache__/generate_theme_preview.cpython-314.pyc`。**③ 系统扫描结论（受跟踪文件已无真孤儿）**：写脚本对全部受跟踪文件做「是否被其它文件提及」检查，剩余命中全部可解释 —— 6 个 `test_*.py` + `conftest.py`（pytest 自动收集）、`build/hooks/hook-customtkinter.py`（spec:225 `hookspath` 按约定自动加载该目录所有 `hook-*.py`）、`build_installer.bat` / `requirements/cmm_filler_optional.txt`（顶层入口 / 依赖清单）、配置与文档。**④ 清残留空目录与陈旧字节码**：`modules/pc_to_excel/inject/`（已删模块的目录壳 + 8 个 cpython-312/314 陈旧 `.pyc`）、`scripts/__pycache__/`、`scripts/`。**⑤ 文档**：`CHANGELOG.md` 的 v1.1.0 历史条目加「🗑 已于 2026-09-23 移除」标记；`README.md` 未提及该脚本，无需改。**基线 250 passed 不变**（删的是无引用脚本）。**`.gitignore` 未动**：三个 Junk files 条目的生产者虽已全部不在仓库里，但保留作防御性兜底（万一本地再生成同类产物仍被忽略） |
+| 2026-09-23 | **P3-9 完整打包实跑验证通过**（用户要求「先跑一次 build.bat 确认打包真的能过」）。`build.bat` 6/6 步全过：`[0/6]` 模型检测 → `[1/6]` 清理旧 dist（2026-09-04 的 594 MB 陈旧构建）→ **原先会挂的 BAS 模板检查已通过**（修前此处 `exit /b 1`）→ `[2/6]` PyInstaller 6.21.0 / Python 3.12.10 → `[3/6]` `fix_dist.py` `Fix complete!` → `[4/6]` 启动器 → `[5/6]` 删 ffmpeg DLL → `[6/6]` `Build OK: dist\cm2xl\`。**产物核验**：`cm2xl.exe` 26.3 MB · dist 总 592.4 MB · **BAS/inject 残留 = 0** · 本地模块 `__init__.py` 打包 10 个且 **`inject/__init__.py` 已正确消失**（spec `_local_pkgs` 生效）。**依赖完整性**：`warn-cm2xl.txt` 439 条全是噪声；11 个关键三方依赖（customtkinter / paddleocr / paddle / fitz / openpyxl / win32com / tkinterdnd2 / PIL / lxml / cv2 / lmdb）**全部 OK 无 missing**；警告里完全没有 `inject` / `command_injector` / `save_helper` / `toolbar_launcher` ⇒ 取消干净。**exe 冒烟测试通过**（按 CLAUDE.md「打包后必须跑 exe」）：启动 → Shell 初始化 → 2 模块注册，零 ERROR / Traceback，进程存活 236.2 MB，frozen 数据落 `%LOCALAPPDATA%\cm2xl\`。**顺带核对两条**（都非本轮引入）：① `crash.log` 是 2026-08-28 历史残留，它记录的 `utils/app_icon.py:81` frozen 下传 str 而非 `PIL.Image` 的崩溃**已在 `df91650` 修掉**（现返回 `pil.copy()` 或 `None`，`splash.py:129-139` 有 None fallback）；② `build.bat` 调裸 `python` → 系统 Python 3.12（依赖全齐含 pandas），`paddleocr_gpu`(3.10) 缺 pandas 但本项目零处用 pandas —— 两者都能打包，本次走 3.12；若要固定到 `paddleocr_gpu` 需显式改 `build.bat`，属**独立决策本轮未动**。**非交互执行提示**：`build.bat` 末尾 `pause` 会让 agent/CI 挂住，用 `cmd /c "build.bat < NUL"` 绕开。TL;DR P3-9 状态改为「已修 + 完整打包实跑验证」；P3-9 节补「完整打包实跑验证」小节。**基线 250 passed 不变**（纯文档回填） |
