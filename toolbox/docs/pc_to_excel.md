@@ -44,10 +44,17 @@ python main.py --module pc_to_excel --auto-export
 2. 配置件号、目标列、公差等。
 3. 点击 **填入**，生成新文件（不覆盖原表）。
 
-### BAS 命令植入（可选）
+### ~~BAS 命令植入（可选）~~
 
-1. **部署 BAS 脚本** → 写入 `%LOCALAPPDATA%\PCDMIS_ExcelExporter\scripts\`
-2. 在 PCDMIS 中 **植入** `PC2XL_EXPORT` 命令，可在测量程序内一键触发导出。
+> 🗑 **已取消**（2026-09-23，commit `76657ac`）。
+>
+> 原流程：
+> 1. 部署 BAS 脚本 → 写入 `%LOCALAPPDATA%\PCDMIS_ExcelExporter\scripts\`
+> 2. 在 PCDMIS 中植入 `PC2XL_EXPORT` 命令，可在测量程序内一键触发导出。
+>
+> 取消原因：连续三轮真机下来脚本始终报 `执行 BASIC 脚本时出错`，用户判断「脚本输出本身就是为了锦上添花」 ⇒ 整 feature 移除。
+>
+> 当前替代：从 cm2xl GUI 用「一键导出 Excel」直接抽数到 xlsx。
 
 ## 独立模式引导
 

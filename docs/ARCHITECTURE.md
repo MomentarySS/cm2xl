@@ -26,7 +26,7 @@
 ### 三、核心设计决策（50 个子节）
 - 3.0 依赖分条件安装 / 3.1 模块独立性 / 3.2 tkinterdnd2 挂载 / 3.3 模块接口协议
 - 3.4 主题统一策略 / 3.5 路径管理 / **3.6 日志系统（统一 + 轮转 + GUI Handler）**
-- 3.7 BAS 脚本部署 / 3.8 版本文件统一 / 3.9 配置迁移 / 3.9.1 版本升级 / 3.9.2 降级回退
+- 3.7 ~~BAS 脚本部署~~（2026-09-23 取消）/ 3.8 版本文件统一 / 3.9 配置迁移 / 3.9.1 版本升级 / 3.9.2 降级回退
 - 3.10 PyInstaller spec / 3.11 fix_dist.py / 3.12 PaddleOCR 环境变量 / 3.13 自定义 Hook
 - 3.14 admin 启动器 / 3.15 Python 64 位 / 3.16 COM Apartment
 - 3.17 模板向导 / 3.18 用户文档 / 3.19 PCDMIS 状态轮询 / 3.20 freeze_support / 3.21 默认配置 / 3.22 测试套件
@@ -453,19 +453,23 @@ class GuiLogHandler(logging.Handler):
 
 ---
 
-### 3.7 BAS 脚本部署路径约束（pc to excel 专用）
+### 3.7 ~~BAS 脚本部署路径约束（pc to excel 专用）~~
 
-pc to excel 通过 COM 连接 PCDMIS，再注入 BAS 脚本执行数据导出。BAS 脚本必须部署到固定路径供 PCDMIS 调用。
+> 🗑 **已取消**（2026-09-23，commit `76657ac`）。原保留为历史描述。
+
+~~pc to excel 通过 COM 连接 PCDMIS，再注入 BAS 脚本执行数据导出。BAS 脚本必须部署到固定路径供 PCDMIS 调用。~~
 
 ```
 DEPLOY_DIR = LocalAppData/PCDMIS_ExcelExporter/scripts/
 ```
 
 **约束**：
-- BAS 脚本文件名固定为 `export_current.bas`（由 PCDMIS 菜单项引用）
-- `DEPLOY_DIR` 路径不能含空格，不能在 `Program Files` 等需要权限的目录
-- 打包后，BAS 脚本通过 PyInstaller `binaries` 注入到 `DEPLOY_DIR`
-- Shell 无需感知 BAS 脚本，仅 pc_to_excel 模块内部处理
+- ~~BAS 脚本文件名固定为 `export_current.bas`（由 PCDMIS 菜单项引用）~~
+- ~~`DEPLOY_DIR` 路径不能含空格，不能在 `Program Files` 等需要权限的目录~~
+- ~~打包后，BAS 脚本通过 PyInstaller `binaries` 注入到 `DEPLOY_DIR`~~
+- ~~Shell 无需感知 BAS 脚本，仅 pc_to_excel 模块内部处理~~
+
+**取消原因**：连续三轮真机下来脚本始终报 `执行 BASIC 脚本时出错`，用户判断「脚本输出本身就是为了锦上添花」 ⇒ 整 feature 移除。9 个 commit (`4ef50eb` ~ `fcf8bad`) 保留为历史记录。当前替代：从 cm2xl GUI 用「一键导出 Excel」直接抽数到 xlsx。
 
 ---
 
