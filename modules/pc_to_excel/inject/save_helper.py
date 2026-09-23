@@ -132,6 +132,16 @@ def _save_failure_hint(exc: BaseException, path: Path | None) -> str:
       - 原「常见原因 4 条」（执行中 / 只读 / 网络盘 / 另存为对话框）是**猜测性**的，
         实际根因是 API 形态不符。删除那些条目，避免误导下一个排查的人。
       - 保留「Ctrl+S 手动保存」这条 —— 命令已写入内存，对用户仍有效。
+
+    2026-09-23 真机又发现 P1-6 没覆盖的第三种形态（同一 PCDLRN 版本，不同实例
+    表现不同 —— 字段常量在 PC-DMIS 内部按 apartment 分配，Save 属性 setter 存在性
+    跟着变）：
+      - 形态 A：老版本 → Save 是方法 ⇒ `part.Save()` 工作
+      - 形态 B：2024.1 部分实例 → Save 是 bool 属性、setter 存在 ⇒ `part.Save = True` 工作
+      - **形态 C**：2024.1 部分实例 → Save 是属性、**setter 不存在** ⇒ `part.Save = True`
+        抛 `Property '<unknown>.Save' can not be set`（用户真机 2026-09-23 复现）
+    P1-7 登记该形态的完整修法（SaveAs 降级 / 走 Ctrl+S 终极路径）。本次仅**更新
+    提示文案**，不动运行时逻辑。
     """
     text = str(exc).strip() or repr(exc)
     return "\n".join([
@@ -139,8 +149,12 @@ def _save_failure_hint(exc: BaseException, path: Path | None) -> str:
         f"目标文件：{path}",
         "",
         "实测根因（PC-DMIS 2024.1）：",
-        "  `part.Save` 是属性（bool）而不是方法 —— 老版本是方法。",
-        "  原代码 `part.Save()` 在 2024.1 上必然抛 'bool' object is not callable。",
+        "  `part.Save` 在不同实例上形态不一致（同一 PCDLRN.Application.19.1，",
+        "  不同 PRG / COM 上下文会暴露不同表现）：",
+        "    · 老版本 / 部分 2024.1 实例：Save 是方法",
+        "    · 部分 2024.1 实例：Save 是 bool 属性、setter 存在",
+        "    · 部分 2024.1 实例：Save 是属性、**setter 不存在** ⇒ 抛 'Property can not be set'",
+        "  cm2xl 已按运行时形态分派；但 read-only 这种 cm2xl 无降级路径。",
         "",
         "命令已写入内存，可在 PCDMIS 中按 Ctrl+S 手动保存。",
     ])

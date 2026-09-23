@@ -256,3 +256,32 @@ def test_failure_hint_mentions_real_root_cause():
     assert "属性" in hint and "bool" in hint, (
         f"提示必须解释真实根因（Save 是属性而非方法）。实际：{hint!r}"
     )
+
+
+def test_failure_hint_mentions_read_only_form():
+    """2026-09-23 真机发现第三种形态：Save 属性 setter 不存在 ⇒ 抛 'Property can not be set'。
+
+    P1-6 没覆盖 —— 本次按用户选择「仅改提示，不改逻辑」，所以提示里**必须**
+    明确提到 read-only 这种形态与「cm2xl 无降级路径 ⇒ 走 Ctrl+S」。若有人再把
+    这种形态的报错漏在 hint 外，下一个排查者会再次走错路。
+
+    关键字选择说明：不能直接断言 "can not be set"（旧 hint 也会从异常原文
+    echo 进去）—— 必须断言新文案才有的字符串（"setter 不存在"）。
+    """
+    from ..inject.save_helper import _save_failure_hint
+
+    hint = _save_failure_hint(
+        RuntimeError("Property '<unknown>.Save' can not be set."),
+        Path("/tmp/demo.PRG"),
+    )
+    # 正向：read-only 形态必须在提示里有专门的解释（不是只 echo 异常）
+    assert "setter 不存在" in hint, (
+        f"提示必须解释 read-only 形态的根因（属性 setter 不存在） —— "
+        f"不能只 echo 原异常 'Property can not be set'。"
+        f"实际：{hint!r}"
+    )
+    # 正向：必须明说 cm2xl 对 read-only 无降级路径 ⇒ 走 Ctrl+S
+    assert "无降级路径" in hint, (
+        f"read-only 形态下 cm2xl 没有降级路径 —— 提示必须明说『走 Ctrl+S』。"
+        f"实际：{hint!r}"
+    )
