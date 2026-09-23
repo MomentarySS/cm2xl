@@ -109,7 +109,6 @@ _all_hidden = list(set(_extra_hidden + [
     "modules.pc_to_excel.export.inspection_form_fill",
     "modules.pc_to_excel.export.pcdmis_style_report",
     "modules.pc_to_excel.export.template_report",
-    "modules.pc_to_excel.inject.toolbar_launcher",
     "modules.pc_to_excel.utils",
     "modules.pc_to_excel.utils.action_hints",
     "modules.pc_to_excel.utils.admin",
