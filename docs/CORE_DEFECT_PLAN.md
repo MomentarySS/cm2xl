@@ -12,7 +12,7 @@
 > D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 > ```
 >
-> 当前全量 **310 passed**（`tests/` 42 + `modules/*/tests` 268；本次新增 32 = P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1）。
+> 当前全量 **314 passed**（`tests/` 42 + `modules/*/tests` 272；本次新增 36 = P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1 + P1-7 降级路径的 2 + P1-8 的 2）。
 > 审查当时的基线是 233 —— 也就是说：**下列缺陷全部落在现有测试覆盖之外**。
 >
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
@@ -73,7 +73,7 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 
 ### 三、整体进度（截至 2026-09-23 下午）
 
-**已完成 9 / 20，未开始 11 / 20。** 基线 233 → **310 passed**（`tests/` 42 + `modules/*/tests` 268，新增 32 测试 = P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1）。
+**已完成 11 / 20，未开始 9 / 20。** 基线 233 → **314 passed**（`tests/` 42 + `modules/*/tests` 272，新增 36 测试 = P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1 + P1-7 降级路径的 2 + P1-8 的 2）。
 
 **2026-09-22 晚 → 2026-09-23 下午：两轮真机验证 + 4 个新 bug（已修 2 + 登记 2）。** 进展如下：
 
@@ -102,9 +102,9 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | **P1-7** | `part.Save` 在**部分 PC-DMIS 2024.1 实例上 setter 不存在** ⇒ `Property '<unknown>.Save' can not be set` ⇒ cm2xl 触发「自动保存失败」。**P1-6 没覆盖该形态**：原代码写死 `part.Save()` 在 setter 不存在的实例上也必失败；用户的 `登科DEMO` PRG 就是这个形态。 | 自动保存恒失败（特定实例） | **已部分缓解**：`5d11cdd` 在 `_save_failure_hint` 提示中明列第三种形态 +「无降级路径 ⇒ 走 Ctrl+S」；运行时修法（SaveAs 降级 / 完全放弃自动保存）**未做**，按用户选择「仅改提示」纪律 |
 | **P1-8** | BAS 文件用 UTF-8 写，但 PC-DMIS Basic Scripting Engine 按系统 ANSI（中文 Windows = GBK/CP936）解码 → 中文 `MsgBox` 字符串乱码 → 第 30 行 `MsgBox` 报「Syntax Error on line: 29」。**P1-4 修了 `export_config.txt`，但没修 BAS 文件本身的编码**。 | 功能不可用 | ⬜ **未开始**：把模板文件整体改成 GBK 写盘（最直接），或全部 MsgBox / 注释改 ASCII（参考项目做法，工作量大） |
 
-**下一动作**：在 PC-DMIS 里跑 `PC2XL_EXPORT` 一轮同时验 **P1-4 + P1-5 + P1-7 + P1-8**。
-**P1-8 是新的 blocker**（脚本编译错误在 30 行，不是 9 行；P1-5 修复**确实**生效到真机了）；不先修 P1-8，后面都没法跑。
-**P1-7 也要先选方向**（先在用户机器 `dir(part.SaveAs)` 确认 `SaveAs` 存在性 ⇒ 决定走 SaveAs 降级还是彻底放弃自动保存）。
+**下一动作**：在 PC-DMIS 里跑 `PC2XL_EXPORT` 一轮同时验 **P1-4 + P1-5 + P1-6 + P1-7 + P1-8**。
+P1-7 / P1-8 代码侧已全部就绪（`711753c` + `63b55c0`），且与 P1-5 / P1-6 互不影响。
+下一动作是**唯一一次真机验证**（5 个时点见真机清单）。
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -124,6 +124,8 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | — | 仓库根 `scripts/export_current.bas.template` 同步到 modules 子树（dev 部署命中正确模板的前提） | `765aad6` |
 | P1-6 | `part.Save` 按运行时形态分派 + `IsModified` 验证效果（防假成功） | `836540e` |
 | P1-7（提示补全）| `_save_failure_hint` 增列 read-only 形态说明，明示「cm2xl 无降级路径 ⇒ 走 Ctrl+S」 | `5d11cdd` |
+| P1-7（运行时）| `_trigger_part_save` 形态 C 降级到 `SaveAs(part.FullName)`（实测可调） | `711753c` |
+| P1-8 | `deploy_bas_script` 按 GBK 编码写出 BAS（PC-DMIS Basic Scripting Engine 按 ANSI 读） | `63b55c0` |
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -160,8 +162,8 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）—— 两者同文件
 | P1-4 | BAS `export_config.txt` 编码不匹配 | `inject/command_injector.py:82-85` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
 | P1-5 | BAS 常量 `ID` 撞引擎内置名，脚本编译不过 | `scripts/export_current.bas.template:9,149` | 功能不可用 | ✅ | ✅ **已完成**（真机待验） |
 | P1-6 | `part.Save()` 在 2024.1 是**属性**不是方法 | `inject/save_helper.py:96` | 自动保存恒失败 | ✅ | ✅ **已完成**（真机待验） |
-| P1-7 | `part.Save` 在某些 PC-DMIS 2024.1 实例上是**属性且 setter 不存在**（P1-6 没覆盖的第三种形态） | `inject/save_helper.py:_trigger_part_save` | 自动保存恒失败（特定实例） | ✅ | 🟡 **已登记**；本次仅补 `_save_failure_hint` 文案（`5d11cdd`），运行时修法待下一轮 |
-| P1-8 | BAS 文件用 UTF-8 写，但 PC-DMIS Basic Scripting Engine 按 GBK 解码 → 中文 `MsgBox` 字符串乱码 → Syntax Error | `scripts/export_current.bas.template`（整体编码） | 功能不可用 | ✅ | ⬜ 未开始 |
+| P1-7 | `part.Save` 在某些 PC-DMIS 2024.1 实例上是**属性且 setter 不存在**（P1-6 没覆盖的第三种形态） | `inject/save_helper.py:_trigger_part_save` | 自动保存恒失败（特定实例） | ✅ | ✅ **已完成 + 单测有牙**（提示补全 `5d11cdd` + SaveAs 降级 `711753c`）；真机待验 |
+| P1-8 | BAS 文件用 UTF-8 写，但 PC-DMIS Basic Scripting Engine 按 GBK 解码 → 中文 `MsgBox` 字符串乱码 → Syntax Error | `inject/command_injector.py:deploy_bas_script`（部署出编码） | 功能不可用 | ✅ | ✅ **已完成 + 单测有牙**（`63b55c0`）；真机待验 |
 | P2-1 | 下公差未做 COM 失败防护 | `pc_to_excel/core/_tolerance.py:201,283` | 假超差/丢行 | ✅ | ✅ **已完成**（真机待验） |
 | P2-2 | 多轴记录按首轴 ± 判定 | `pc_to_excel/core/tolerance.py:67-72` | 判定错 | ✅ | ⬜ 未开始 |
 | P2-3 | 「最差 NG 子项」只比一个样品 | `cmm_filler/core/sub_item_conflict.py:17-21` | 判定错 | ✅ | ⬜ 未开始 |
@@ -709,10 +711,11 @@ P1-6 在形态 C 上仍然失败 —— `_trigger_part_save` 只覆盖了 callab
 3. 不动 `check_save_preflight()`。
 
 **验证（已做 + 待做）**
-- 已做：`_save_failure_hint` 提示包含「setter 不存在」「无降级路径」关键字（`5d11cdd`）。+1 条测试 `test_failure_hint_mentions_read_only_form`，已用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」（`setter 不存在` 不在旧文案里）。
-- 待做：下一轮实施运行时降级路径时再加 4 条替身测试（`SaveAs` 成功 / `SaveAs` 抛异常 / `IsModified` 转 False / `IsModified` 仍 True）。
+- 已做（**提示补全** `5d11cdd`）：`_save_failure_hint` 提示包含「setter 不存在」「无降级路径」关键字。+1 条测试 `test_failure_hint_mentions_read_only_form`，已用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」（`setter 不存在` 不在旧文案里）。
+- 已做（**运行时降级** `711753c`）：`_trigger_part_save` 捕获形态 C 的 `part.Save = True` 异常，降级到 `part.SaveAs(part.FullName or part.Path or "")`。+2 条替身测试 `test_save_read_only_falls_back_to_saveas` + `test_save_read_only_no_saveas_reports_failure`，已用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」（SaveAs 没被调，hit `saveas_call_count == 1` 反证）。降级链全断（SaveAs 也不存在）时 `(False, ...)` + 提示含「无降级路径」—— 不静默吞错。
+- 待做：真机端到端（详见文末真机清单）—— 用户机器上点「植入/更新导出命令」应**不再**弹「Property can not be set」，PRG mtime 应更新。
 
-真机：在用户机器上先 `dir(part.SaveAs)` 确认 `SaveAs` 存在性（从 PCDLRN.Application 上看不到但 PartProgram 上可能有），再决定走哪条。
+真机：在用户机器上已确认 `SaveAs(part.FullName)` 可调（2026-09-23 真机诊断：`<bound method SaveAs of ...> / callable=True`），无需再决策走哪条。
 
 ---
 
@@ -760,11 +763,11 @@ P1-4 修了 `export_config.txt`（FSO `OpenTextFile(..., -1)` 按 TristateTrue �
 2. Python 模板里写 `Dim msg As String` 之类的 ASCII 不受编码影响 —— 只 `MsgBox` 字符串字面量和注释里的中文会被 GBK 重编码。
 3. 真机验证：部署后用 16 进制查看 `export_current.bas` 前若干字节应是 GBK 形式（在 UTF-8 中文是 3 bytes / 字符，在 GBK 是 2 bytes / 字符；同样的「无法连接」在 GBK 是 `CE DE C7 EB BD D3 C6 AC`，UTF-8 是 `E6 97 A0 E6 B3 95 E8 BF 9E E6 8E A5`）；引擎不应再报 Syntax Error。
 
-**验证**（待做）
-- 单测（部署路径）：在 dev 部署后断言 `export_current.bas` 用 GBK 编码（head 字节、charset 库判定、或直接 round-trip：用 `gbk` 读回与源字符串比较）。
-- 真机：再跑一遍 `PC2XL_EXPORT`，确认引擎不再报 Syntax Error，CSV 正常生成。
+**验证**（已做 + 待做）
+- 已做（`63b55c0`）：`command_injector.py:deploy_bas_script` 的 `atomic_write_text(dest, source_text)` 改成 `atomic_write_text(dest, source_text, encoding="gbk")`。+2 条测试 `test_deploy_bas_script_writes_gbk_encoding` + `test_deploy_bas_script_gbk_roundtrip_preserves_chinese`，已用 `git stash push -- <command_injector.py>` 证明「修复前 2 failed」（GBK decode 抛 UnicodeDecodeError）。`test_deploy_bas_script_copies_and_substitutes` 原按 `utf-8` 读回 ⇒ **改了读法跟新契约对齐**（守护的本质契约「占位符被替换、`export_config.txt` 在内容里」没变，只是 encoding 跟着 P1-8 走）。`_write_bas_template` 加了中文 MsgBox 让 P1-8 测试有真东西可断（不是空壳断言）。
+- 待做：真机端到端（详见文末真机清单）—— 部署后用 16 进制看 `export_current.bas` 中文部分应是 GBK 字节（不是 UTF-8）；再跑 PC2XL_EXPORT 不再报 Syntax Error。
 
-真机清单该条与 P1-5 + P1-6 合并到「P1-4 + P1-5 + P1-6 端到端」那一条 —— 实际跑时 P1-8 阻塞了「脚本能跑起来」，需要先修 P1-8 才能完整跑 P1-5 / P1-6 真机验证。
+真机清单该条与 P1-5 + P1-6 + P1-7 合并到「P1-4 + P1-5 + P1-6 + P1-7 + P1-8 端到端」那一条 —— 一次跑完整验。
 
 ---
 
@@ -1315,11 +1318,11 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 - [ ] P1-1：一份 >50 项的 PDF 导出，核对序号 51+
 - [x] P1-2：启动两次，确认只弹一次迁移提示且 3 个字段仍在（**已验证**：2026-09-22 23:33）
 - [ ] P1-3：汇总导出选两个不同目录的同名 PDF，核对第二个 Sheet
-- [ ] **P1-4 + P1-5 + P1-6 + P1-7 + P1-8 端到端一轮**：① 重新部署 BAS 脚本（自动覆盖到 `FLD_` 前缀 + GBK 编码的模板 —— **P1-8 阻塞**：当前部署出的是 UTF-8，引擎读第 30 行 MsgBox 中文乱码 ⇒ Syntax Error，先修 P1-8）② 植入/更新导出命令 —— 用户机器上**仍会**弹「Property can not be set」（P1-7 未修），不在实机范围，按 Ctrl+S 手动保存；其他形态的 PC-DMIS 实例应**不再**弹「自动保存失败」（P1-6）③ 在 PC-DMIS 里把光标移到 `PC2XL_EXPORT` → 文件 → 部分执行 → 从光标执行 ④ `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成（P1-5 + P1-4 + P1-8 同时验）
+- [ ] **P1-4 + P1-5 + P1-6 + P1-7 + P1-8 端到端一轮**：① 重新部署 BAS 脚本（**P1-5 命中**：自动覆盖 `FLD_` 前缀；**P1-8 命中**：自动按 GBK 写出）② 植入/更新导出命令 —— 应**不再**弹「Property can not be set」**P1-7 命中**（SaveAs 降级路径）；也不再弹「自动保存失败」（P1-6 形态 B/C 都覆盖）；弹「已保存: …PRG」的概率高 ③ 在 PC-DMIS 里把光标移到 `PC2XL_EXPORT` → 文件 → 部分执行 → 从光标执行 ④ `D:\AI\work\cm2xl\data\reports\pcdmis_partial_export.csv` 生成（**P1-5 + P1-4 + P1-8 同时验**）
 - [ ] P1-5（独立补充测试）：部署后 BAS 应通过 PCDMIS 引擎编译；不再报「Duplicate definition: ID」（引擎若报别的行号，按文档「逐行清单」表继续加前缀即可，不需要重新分析）
 - [ ] P1-6（独立补充测试）：植入后 PRG mtime 应更新（Ctrl+S 等效的落盘已发生）
-- [ ] **P1-7（独立补充测试）**：在用户机器上跑 `import win32com.client; part = ...; print(dir(part))` 查 `SaveAs` 是否存在。若有 ⇒ 选「`SaveAs` 降级」方案；若没有 ⇒ 选「彻底放弃自动保存」方案
-- [ ] **P1-8（独立补充测试）**：部署后 `export_current.bas` 头部应是 GBK 编码（用 `charset-normalizer` / `chardet` 自动判定或前 4 字节核对）；再跑 PC2XL_EXPORT 不再报 Syntax Error
+- [ ] **P1-7（独立补充测试）**：用户机器上植入应**不再**弹「Property can not be set」；PRG mtime 应更新（`SaveAs(part.FullName)` 降级成功）；`IsModified` 应转 False
+- [ ] **P1-8（独立补充测试）**：部署后 `export_current.bas` 头部应是 GBK 编码（用 16 进制查看：原 UTF-8「无」是 `E6 97 A0`，GBK 是 `CE DE`，有显著区别）；再跑 PC2XL_EXPORT 不再报 Syntax Error
 - [ ] P2-1：构造下公差读不到的行，确认不丢行、无假超差。
       **2026-09-22 实测：`马丁测试-2026-08-28-B版.PRG` 全程序 42 条记录里
       `minus_tol is None` = 0 条、COM 抛异常 0 处 ⇒ 这份程序复现不了，需另找/另造。**
@@ -1329,7 +1332,7 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
       （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 **310 passed** = 278 + P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1）
+- [ ] 全量回归：`python -m pytest -q`（当前 **314 passed** = 278 + P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1 + P1-7 降级路径的 2 + P1-8 的 2）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 - [ ] **发布前写 CHANGELOG**：`export_config.txt` 写入编码改为 UTF-16 →
@@ -1371,3 +1374,4 @@ crash 日志、toolbox 全局设置、日志级别切换）静默不跑。本次
 | 2026-09-23 | **P1-6 实施完成**：`save_helper.py` 拆出 `_part_is_modified()`（读 `part.IsModified`，None 容错）/ `_trigger_part_save()`（`callable(save)` 分派：方法分支走 `save()`、属性分支走 `part.Save = True`）/ `_save_failure_hint(exc, path)`（删原 4 条「常见原因」猜测 —— 执行中 / 只读 / 另存为对话框 / 网络盘，**实测根因是 API 形态不符**；加真实根因说明；保留「Ctrl+S 手动保存」对用户有效的提示）。`try_save_part_program` 改为「触发保存后**必须**读 `IsModified` 验证效果」三态处理：True ⇒ 报失败（属性 setter 空操作的「假成功」比假失败更糟）、False ⇒ 成功、None ⇒ 退回「未经验证的成功」（路径后缀标注）。不动 `check_save_preflight()` 与 `SaveAs`。+6 条测试，已用 `git stash push -- <save_helper.py>` 证明「修复前 5 failed / 1 passed」（5 failed 覆盖「属性形态抛 TypeError」「setter 未触发」「IsModified 读不到仍判 False」「`_save_failure_hint` 不存在」；1 passed 是 `test_save_method_succeeds` —— 旧代码在「方法形态」下恰巧也走对了路径，是**保留旧行为的回归守卫**）。全量 `309 passed`。变更细节见 `836540e` |
 | 2026-09-23 | **进度刷新（仅文档）**：TL;DR P1-5 / P1-6 状态从 🟡 改 ✅「已完成（真机待验）」；待办总览 P1-4 行更新为「P1-5 + P1-6 代码已就绪，单测全过 → 一次端到端可同时验 P1-4 + P1-5 + P1-6」并加真机验证清单新条目；整体进度「已完成 7 / 18」改为「9 / 18」，基线 278 → 309；新增 P1-5 + P1-6 commit 引用 `4ef50eb` / `836540e`；新增发布前必须做的第三条 CHANGELOG 项（P1-5 部署时也得重新部署 BAS）。真机清单新增 P1-5 独立补充测试条目 |
 | 2026-09-23 | **真机第二轮 + 新发现 P1-7 / P1-8**（已修 dev 部署路径 + 已补提示文案 + 登记两条新 P 项）。**15:13 第一轮**：P1-5 命中（部署 BAS 含 `FLD_*`），P1-6 命中（`pcdmis_inject success=True`），但 PC-DMIS 报「Duplicate definition: ID」—— 揭示**仓库根 `scripts/` 下还有一份旧模板副本**（commit `df91650` flatten 留下的），dev 部署命中它 ⇒ **修**：`765aad6` 把新模板同步到仓库根 scripts/。**15:33 第二轮**（dev 重启后）：BAS 编译通过（P1-5 真机已验证）；植入报「**Property '<unknown>.Save' can not be set**」—— 同一 PCDLRN.Application.19.1 在用户机器上 `Save` 是 read-only（P1-6 没覆盖该形态）；PC-DMIS 跑 PC2XL_EXPORT 时**第 30 行 MsgBox 中文乱码报 Syntax Error**——BAS 文件 UTF-8 但引擎按 GBK 解码 ⇒ **又两个新 P 项**（P1-7 / P1-8）。**P1-6 真机未通过**（用户机器具体实例上）。按用户选择「仅改提示，不改逻辑」纪律：`5d11cdd` 在 `_save_failure_hint` 增列「read-only 形态」+「无降级路径 ⇒ 走 Ctrl+S」文案；+1 测试 `test_failure_hint_mentions_read_only_form`，用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」。基线 309 → 310 passed。整体进度「已完成 9 / 18」改为「9 / 20」（新增 2 项未开始），TL;DR 加 P1-7 + P1-8 行；待办总览加「2026-09-23 下午真机新发现」表 + 真机时间线表加 2 行（dev 部署路径修复 + 端到端第二轮）；下一动作改为「**先修 P1-8（脚本前 5 个字符是乱码），再选 P1-7 方向**」；真机清单 P1-4 那一行合并为 P1-4 + P1-5 + P1-7 + P1-8 端到端，并加 P1-7 / P1-8 独立补充测试；发布前 CHANGELOG 加第四条（P1-8 BAS 文件部署出按 GBK 编码，已部署机器必须重新部署）。P1-7 / P1-8 详细见新加的章节 |
+| 2026-09-23 | **P1-7 + P1-8 实施完成**（按用户「修 P1-7 + P1-8」选择）。**P1-7**（`711753c`）：`_trigger_part_save` 加 `try/except` 捕获形态 C 的 `part.Save = True` 异常，降级到 `part.SaveAs(part.FullName or part.Path or "")`；SaveAs 也不存在时再 raise（让上层 `_save_failure_hint` 提示走 Ctrl+S）。+2 条替身测试 `test_save_read_only_falls_back_to_saveas` + `test_save_read_only_no_saveas_reports_failure`，已用 `git stash push -- <save_helper.py>` 证明「修复前 1 failed」（SaveAs 没被调，hit `saveas_call_count == 1` 反证）。`_FakePart` 替身扩展 `_save_setter_raises` / `saveas_callable` / `saveas_call_count` 三个字段。**P1-8**（`63b55c0`）：`deploy_bas_script` 的 BAS 写出从默认 UTF-8 改为 `encoding="gbk"`（PC-DMIS Basic Scripting Engine 按 ANSI/CP936 读）。模板源仍 CRLF + UTF-8 维护（git diff 友好），仅部署写出时换 GBK。+2 条测试 `test_deploy_bas_script_writes_gbk_encoding`（断言不能 UTF-8 BOM / 不能 UTF-16 BOM / 中文 UTF-8 字节不能原样 / raw 能按 GBK 干净解码且含中文原样）+ `test_deploy_bas_script_gbk_roundtrip_preserves_chinese`（断言 raw 含「无法连接」的 GBK 字节序列 CE DE C7 EB，反向断言不含 \u65e0\u6cd5 字面 —— 防 unicode_escape 退化改法），已用 `git stash push -- <command_injector.py>` 证明「修复前 2 failed」（GBK decode 抛 UnicodeDecodeError）。**修原有 1 条**：`test_deploy_bas_script_copies_and_substitutes` 的 `result.read_text(encoding="utf-8")` 改成 `encoding="gbk"`（**follow 新契约**，不是守护错误行为 —— 占位符仍被替换、`export_config.txt` 仍在内容里这两个本质契约没变）。`_write_bas_template` 加了中文 MsgBox 让 P1-8 测试有真东西可断。基线 310 → 314 passed（+4 新测试）。整体进度「已完成 9 / 20」改为「11 / 20」；TL;DR P1-7 / P1-8 从 🟡/⬜ 改 ✅「已完成（真机待验）」；下一动作改为「一次端到端同时验 P1-4 + P1-5 + P1-6 + P1-7 + P1-8」；真机清单 P1-7 / P1-8 独立补充测试条目更新（前者「不弹 Property can not be set / PRG mtime 更新」，后者「头部 GBK / 不再报 Syntax Error」）；P1-7 / P1-8 章节内的「验证」节改为「已做 + 待做」并引用 `711753c` / `63b55c0` |
