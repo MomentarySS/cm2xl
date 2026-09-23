@@ -82,8 +82,84 @@ def wait_app_ready(app: Any, timeout: float = 10.0) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# P1-6 拆分：part.Save 的形态分派与效果验证
+# ---------------------------------------------------------------------------
+
+
+def _part_is_modified(part: Any) -> bool | None:
+    """读 `part.IsModified`（2024.1 实测存在且可读）。
+
+    返回值：
+      True  —— 已被修改（未落盘）
+      False —— 未修改（已落盘）
+      None  —— 读不到（属性不存在 / 抛异常 / 类型不是 bool）—— 视为未知
+
+    注：早期版本的 part 未必有 IsModified 字段；本函数容错返回 None，
+    调用方需自行降级。
+    """
+    try:
+        val = getattr(part, "IsModified")
+    except Exception:
+        return None
+    return val if isinstance(val, bool) else None
+
+
+def _trigger_part_save(part: Any) -> None:
+    """触发保存当前程序。
+
+    2024.1 实测：`part.Save` 是**属性**（读出来是 bool、`callable=False`），
+    `PCDLRN.Application` 上没有任何 Save* 成员；老版本 `Save` 是**方法**。
+    按运行时形态分派 —— 写死 `part.Save()` 在 2024.1 会恒抛
+    `TypeError: 'bool' object is not callable`。
+
+    注：本函数只负责**触发**，不验证落盘。落盘与否由调用方用
+    `_part_is_modified()` 验证（防「假成功」）。
+    """
+    save = getattr(part, "Save", None)
+    if callable(save):
+        save()                 # 老版本：方法
+        return
+    # 2024.1：属性赋值触发。赋 True / False 都能触发落盘（PCDMIS 内部按 setter
+    # 实现判定），赋哪个值与落盘无关；按属性本意赋 True。
+    part.Save = True
+
+
+def _save_failure_hint(exc: BaseException, path: Path | None) -> str:
+    """把保存失败原因格式化成对用户有用的多行提示。
+
+    P1-6 改法要点：
+      - 原「常见原因 4 条」（执行中 / 只读 / 网络盘 / 另存为对话框）是**猜测性**的，
+        实际根因是 API 形态不符。删除那些条目，避免误导下一个排查的人。
+      - 保留「Ctrl+S 手动保存」这条 —— 命令已写入内存，对用户仍有效。
+    """
+    text = str(exc).strip() or repr(exc)
+    return "\n".join([
+        f"COM 保存失败：{text}",
+        f"目标文件：{path}",
+        "",
+        "实测根因（PC-DMIS 2024.1）：",
+        "  `part.Save` 是属性（bool）而不是方法 —— 老版本是方法。",
+        "  原代码 `part.Save()` 在 2024.1 上必然抛 'bool' object is not callable。",
+        "",
+        "命令已写入内存，可在 PCDMIS 中按 Ctrl+S 手动保存。",
+    ])
+
+
 def try_save_part_program(part: Any, app: Any | None = None) -> tuple[bool, str]:
-    """尝试 COM Save；成功返回 (True, 保存路径)，失败返回 (False, 原因)。"""
+    """尝试 COM Save；成功返回 (True, 保存路径)，失败返回 (False, 原因)。
+
+    P1-6 关键变更：
+      - `part.Save` 按运行时形态分派（方法 / 属性），不写死一种。
+      - 触发后**必须**用 `IsModified` 验证效果：若仍为 True，说明「没抛异常也
+        没落盘」（属性 setter 是空操作），必须照实报失败 ——「假成功」比假失败
+        更难排查。
+      - 读不到 `IsModified` 时退回「未抛异常即视为成功」，但返回值里标注
+        「未经验证」，方便调用方按需降级。
+
+    调用契约保持不变：`(bool, str)` —— `(True, path)` 或 `(False, reason)`，
+    或 `(True, "path（保存结果未经验证）")` 用于读不到 IsModified 的回退分支。
+    """
     ok, reason = check_save_preflight(part)
     if not ok:
         return False, reason
@@ -92,21 +168,21 @@ def try_save_part_program(part: Any, app: Any | None = None) -> tuple[bool, str]
         wait_app_ready(app)
 
     path = part_program_path(part)
+
     try:
-        part.Save()
-        return True, str(path or "")
+        _trigger_part_save(part)
     except Exception as exc:
-        text = str(exc).strip() or repr(exc)
-        hints = [
-            f"COM Save() 失败：{text}",
-            f"目标文件：{path}",
-            "",
-            "常见原因：",
-            "1. PCDMIS 正在执行测量程序（请先停止执行再植入）",
-            "2. PRG 只读或无写入权限（见上）",
-            "3. 程序在网络盘/受控文件夹，策略禁止外部程序保存",
-            "4. PCDMIS 弹出「另存为」对话框（COM 无法点确定）",
-            "",
-            "命令已写入内存，可在 PCDMIS 中按 Ctrl+S 手动保存。",
-        ]
-        return False, "\n".join(hints)
+        return False, _save_failure_hint(exc, path)
+
+    # 验证效果：仅看「没抛异常」会被「空 setter」骗过（属性 setter 若是空操作，
+    # 异常不抛、IsModified 也不动），所以必须落盘后读 IsModified。
+    after = _part_is_modified(part)
+    if after is True:
+        # setter 被调用、未抛异常，但 IsModified 仍 True ⇒ 未落盘 ⇒ 报失败
+        return False, _save_failure_hint(
+            RuntimeError("Save 已触发且未抛异常，但 IsModified 仍为 True（未落盘）"),
+            path,
+        )
+    if after is None:
+        return True, f"{path}（未能读取 IsModified，保存结果未经验证）"
+    return True, str(path or "")
