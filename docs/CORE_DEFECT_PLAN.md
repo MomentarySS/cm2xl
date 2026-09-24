@@ -77,14 +77,16 @@ P3 其余各项互不重叠。
 
 ### 三、整体进度（截至 2026-09-24 下午）
 
-**已完成 10 / 20，未开始 10 / 20。** 2026-09-24 真机试用 cm2xl 1.1.0 dev 模式时发现 3 个 UX/健壮性问题：
+**已完成 11 / 21，未开始 10 / 21。** 2026-09-24 真机试用 cm2xl 1.1.0 dev 模式时发现 3 个 UX/健壮性问题：
 - **P3-10**（主页面 ↔ 向导模板路径分裂）：UX 重复设置 + 漂移风险 ⇒ **B 方案**：首页只读 + 向导预填
 - **P3-12**（`_save_config` 字段空值）：首启向导点保存即崩 ⇒ 已在 `622db57` 修
 - **P3-13**（CTk 滚轮回调噪声）：日志被 600+ 行 `AttributeError` traceback 淹没 ⇒ 已在 `49165cc` 精确静音
 
-三项已实现 + 测试通过（基线 250 → **271 passed**），PR/合并待办。
+三项已实现 + 测试通过（基线 250 → **271 passed**），PR #2 已开（https://github.com/MomentarySS/cm2xl/pull/2）。
 
-历史脉络：2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），并**新登记** P3-8（`export_pcdmis_csv` 死函数）+ P3-9（`build.bat` 残留检查，已随 `371a5c7` 修复），本文件条目数 20 → 15 → 17 → 20（+P3-10/12/13）。基线 233 → 250 → **271 passed**（`tests/` 42 + `modules/*/tests` 229）。
+后续真机试用 `cm2xl开发用报告2.PDF` 又发现 1 类核心解析问题（**P3-11**）：形位公差（GD&T）OCR 后处理全线失守 —— 符号框丢失或误读为相邻字符、公差列边界错把单值公差当成 ±上下公差。已在 `ac105f9` + `d469da3` 修识别层 + 集成层（+58 仓 / 0 回归），多表嵌套 follow-up。
+
+历史脉络：2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），并**新登记** P3-8（`export_pcdmis_csv` 死函数）+ P3-9（`build.bat` 残留检查，已随 `371a5c7` 修复），本文件条目数 20 → 15 → 17 → 20（+P3-10/12/13）→ 21（+P3-11）。基线 233 → 250 → 271 → **329 passed**（`tests/` 42 + `modules/*/tests` 287）。
 
 **2026-09-23 取消后的收尾清理**：删除 `76657ac` 遗漏的构建侧引用 —— `build.bat:22-28` 的「检查 BAS 模板」前置检查（会让打包第一步就 `exit /b 1`）+ `cm2xl.spec:112` 的 `modules.pc_to_excel.inject.toolbar_launcher` hiddenimport。另清理 `scripts/` 下两个一次性探针（`inspect_fai_labels.py` / `test_pdf_folder.py`，硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用）。
 
@@ -142,6 +144,8 @@ P3 其余各项互不重叠。
 | P3-12 | 模板向导 `_save_config` 字段空值兜底（`_safe_int` 工具 + sheet_name 'FAI' 默认） | `622db57` |
 | P3-13 | 模板向导装 Tk 回调异常处理器，精确静音 CTk 滚轮噪声（不影响其它异常） | `49165cc` |
 | P3-10 / B 方案 | 主页面模板改为只读显示 + 向导接收 `initial_template_path` 预填 | `6876e65` |
+| P3-11（识别层）| `_looks_like_gdt_spec` + `_extract_gdt_tolerance` helpers（覆盖 8 种形位符号 OCR 形态） | `ac105f9` |
+| P3-11（集成层）| `_is_gdt_label_row` + `_resolve_gdt_nums` 接到 `parse_from_ocr_boxes`，形位 spec 走单值公差分支 | `d469da3` |
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -197,6 +201,7 @@ P3 其余各项互不重叠。
 | P3-10 | 主页面 Excel 模板与向导内部模板状态分裂（重复设置、漂移） | `cmm_filler/gui.py:234-242` + `template_wizard.py:42-66` | UX / 配置漂移 | ✅ | ✅ **已修（B 方案）**（`622db57` + `6876e65`；主页只读 + 向导预填） |
 | P3-12 | `_save_config()` 字段空值未防护 ⇒ `int('')` 抛 `ValueError` | `cmm_filler/template_wizard.py:_save_config` | 健壮性 | ✅ | ✅ **已修 + 真机已撞**（`622db57`；2026-09-24 13:54 traceback） |
 | P3-13 | CTk 5.x 滚轮回调在 widget 销毁后访问 `event.widget.master` 抛 `AttributeError`，刷屏 600+ 行 traceback | `ctk_scrollable_frame.py:_check_if_valid_scroll`（库内部） | 可诊断性 / 日志噪声 | ✅ | ✅ **已修 + 精确静音**（`49165cc`；只放行 CTk 滚轮 + master + AttributeError，其它照常） |
+| P3-11 | 形位公差（GD&T）OCR 后处理：符号框丢失 + 公差列边界误判，±上下公差解析路径吞掉单值公差 | `cmm_filler/core/parse_measurements.py:_resolve_pc_dmis_nums` | 健壮性 / 解析正确性 | ✅ | ✅ **已修（识别层 + 集成层）**（`ac105f9` + `d469da3`；8 种形位符号识别 + 单值公差分支；多表嵌套 follow-up） |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -1618,6 +1623,104 @@ traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INF
 
 ---
 
+### P3-11 形位公差（GD&T）OCR 后处理失守
+
+**位置**：`modules/cmm_filler/core/parse_measurements.py:_resolve_pc_dmis_nums` 路径
+
+**现象**：用户跑参考 PDF（`cm2xl开发用报告2.PDF`，2026-09-24 提供）发现形位公差行解析结果完全错位：
+
+- **CC_8**（⌒ 轮廓度 0.5 ABC）：解析成 `+14.5/-9.000`（实际单值 0.5）
+- **CC_21**（○ 圆度 0.3）：解析成 `尺寸 | 14.5 +10.0/-86.267`（实际 0.3 单值）
+- 8 种形位符号全部受影响
+
+**真机首撞**：2026-09-24 13:48 dev 启动后用 `cm2xl开发用报告2.PDF` 跑 OCR 直接复现。
+
+**根因**（基于本机 PaddleOCR 实测 OCR 输出）：
+
+8 种形位特征 + OCR 后的误读形态：
+
+| 真实符号 | OCR 输出 | 模式 |
+|---|---|---|
+| ⊕ 位置度 | 完全丢失 | 符号框跳 OCR |
+| ⊥ 垂直度 | 完全丢失 | 同上 |
+| ↗ 圆跳动 | 完全丢失 | 同上 |
+| ⌒ 轮廓度 | 完全丢失 | 同上 |
+| ◎ 同轴度 | `①` | 圆圈 → 圆圈数字 |
+| // 平行度 | `//` | **正确**（横线对易识别） |
+| ∠ 倾斜度 | `<` | 角度符号 → 小于号 |
+| ○ 圆度 | `\|` | 圆圈 → 竖线 |
+
+**最关键的现象**：符号 + 公差值 + 基准字母 被 OCR 合并到**单个 bbox**
+（如 `'0.3ABC'`、`'00.6A'`、`'①0.5] MEDIAN'`）→ 即使想做列切分也切不开。
+
+下游 `_resolve_pc_dmis_nums` 默认按 ±上下公差扫描，**拿相邻 ±上下公差值填**形位单值公差 → 出现 `+14.5/-9.000`、`+10.0/-86.267` 这种乱码。
+
+**改法**（`modules/cmm_filler/core/parse_measurements.py`，分两个 commit）：
+
+**识别层（commit `ac105f9`）**：
+1. 4 条正则常量（`_GDT_DATUM_TAIL_RE` / `_GDT_PARALLEL_RE` / `_GDT_CONCENTRIC_RE` / `_GDT_ANGULAR_RE`）
+2. `_looks_like_gdt_spec(text)`：spec token 静态识别。返回 True 的信号（任一）：
+   - 单值 + 1-3 datums（`'0.5A'`、`'0.3ABC'`）
+   - `//` 前缀（`'//0.5C'`）
+   - `①` 前缀（`'①0.5]'`）
+   - `<` 前缀（`'0.2 A'`）
+   - 排除：含 ± 上下公差对、仅数字、空白、表头文字
+3. `_extract_gdt_tolerance(text) -> float \| None`：从 spec token 提取单值公差（绝对值）。跳前缀 `// ① <` + 跳后缀 `]` `)` `MEDIAN` `ASME Y14.5` + 跳末尾 datums
+
+**集成层（commit `d469da3`）**：
+4. `_is_gdt_label_row(row_cells, item_prefixes)`：判定 spec 行是否 GD&T
+   - 同行含 `'ASME Y14.5'` 即 True（PC-DMIS 报告里 ASME 标只在形位 spec 行右端）
+   - 或同行任一 cell 通过 `_looks_like_gdt_spec`
+5. `_resolve_gdt_nums(rows, label_idx, parsed, ...)`：GD&T 单值公差解析路径
+   - 返回 `[nominal=0, +TOL=spec_value, -TOL=0, measured=data_row_first_nonzero]`
+   - **只**取通过 `_looks_like_gdt_spec` 的 cell 的公差值（避免把 CC_50 的 50 当 spec）
+6. `parse_from_ocr_boxes` 主流程集成：label_positions 循环前先判 GD&T，是则走 `_resolve_gdt_nums`，否则照旧 `_resolve_pc_dmis_nums`
+
+**语义边界（最要紧）**：
+
+1. **nominal 恒为 0** —— 形位公差是相对基准的偏差，没有"名义值"。`normalize_tolerances` 在 nominal≈0 且 lower≈0 时已是单边公差分支（line 263-267），本次修复让 nominal 强制为 0，**更早**就走对路径。
+2. **-TOL 恒为 0** —— GD&T 是单边公差。
+3. **measured 取数据行第一个非零数字** —— 当前实现不区分 +TOL 列 vs MEAS 列（CC_43 同轴度 MEAS=错误 → 取 +TOL 0.5 当 measured，**已知 follow-up**）。
+4. **不处理多表嵌套**（CC_21 「尺寸」+「圆度」两张堆叠表）—— 单值公差会取第一张表的 measured，**已知 follow-up**。
+6. **不动 `_resolve_pc_dmis_nums`** —— 普通 ±上下公差行不受影响（329 = 271 + 58 全过）。
+7. **`_extract_gdt_tolerance` 仅看 spec token 本身** —— **不**结合 ASME Y14.5 邻列 / CC_N 标签等上下文（由调用方决定上下文）。
+
+**测试矩阵**（`modules/cmm_filler/tests/test_gdt_ocr.py`，58 用例）：
+
+- `TestLooksLikeGdtSpec`（30 用例）：13 True + 17 False（参数化）
+  - True：5 种 datum 形态 + `//` / `①` / `<` / ±0 前缀
+  - False：± 上下公差、仅数字、空白、表头文字（`NOMINAL`/`AX`/`毫米`/`MEDIAN`/`ASME Y14.5`/`特征`）
+- `TestExtractGdtTolerance`（16 用例）：参数化
+  - 成功：5 种 datum + `//` / `①` / `<` / ±0 / 纯数值
+  - 边界：含 `-` 号、纯 datum 字母、空、纯字母
+- `TestIsGdtLabelRow`（8 用例）：
+  - ASME Y14.5 标签识别（CC_38 / CC_52 / CC_43 / CC_69 真机 OCR 形态）
+  - GD&T spec token 识别（无 ASME 但有 datums 的形态）
+  - 普通尺寸行拒绝（含 ±上下公差 / 仅描述文字）
+- `TestResolveGdtNums`（4 用例）：
+  - 典型 GD&T 布局 → 返回 `[0, 0.3, 0, 0]`（CC_38 真机）
+  - 同轴度 MEAS=错误 → 测 fallback 行为
+  - spec 无 GD&T token → 返回 `None`
+  - 紧贴下一个 CC 标签 → measured=0 fallback
+
+**「有牙」验证**（两次 `git stash push -- <parse_measurements.py>` 退回修复前）：
+- 识别层（`ac105f9`）：46 个测试全部 ERROR（ImportError: cannot import name '_extract_gdt_tolerance'）
+- 集成层（`d469da3`）：58 个测试全部 ERROR（ImportError: cannot import name '_is_gdt_label_row'）
+
+**回归基线**：
+- 识别层：271 → **317 passed**（+46）
+- 集成层：317 → **329 passed**（+12）
+- 全程 **0 旧测试变红**
+
+**已知 follow-up**（待真机对照后定优先级）：
+
+1. **多表嵌套**（CC_21 「尺寸」+「圆度」两张堆叠表）的精确归属 —— 当前在第一张表就停，可能要拆成两个 measurement
+2. **+TOL 列 vs MEAS 列边界判定** —— 当前 measured 取第一个非零，会撞 +TOL（CC_43 同轴度 MEAS=错误场景）
+3. **形位符号描述文字**（"轮廓度"/"圆度" 等中文）的 OCR 后修 —— 当前解析已不再走入错误路径，但描述字段可能仍是噪声字符
+4. **OCR 模型升级** —— 根治符号丢失问题，超出本 PR 范围
+
+---
+
 ## 开放决策（需要现场/产品信息才能定）
 
 | # | 决策点 | 结论 |
@@ -1658,7 +1761,24 @@ traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INF
       （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 **271 passed** = 250 + P3-12 的 11 + P3-13 的 3 + P3-10 的 7）
+- [ ] 全量回归：`python -m pytest -q`（当前 **329 passed** = 250 + P3-12 的 11 + P3-13 的 3 + P3-10 的 7 + P3-11 的 46 helpers + 12 集成）
+
+### P3-11 真机验证清单（commit `d469da3`）
+
+- [ ] **拿 `cm2xl开发用报告2.PDF` 跑一遍 OCR + 解析**（dev 模式或 CLI），对照下面 8 个 GD&T 行的解析输出：
+  - CC_8（⌒ 轮廓度 0.5 ABC）：预期 `nominal=0, +TOL=0.5, -TOL=0, measured=0`
+  - CC_38（⊕ 位置度 Ø0.3 ABC）：预期 `nominal=0, +TOL=0.3, -TOL=0, measured=0`
+  - CC_39（⊥ 垂直度 Ø0.6 A）：预期 `nominal=0, +TOL=0.6, -TOL=0, measured=0`
+  - CC_43（◎ 同轴度 Ø0.5 MEDIAN）：预期 `nominal=0, +TOL=0.5, -TOL=0, measured=0`（MEAS=错误已知 follow-up）
+  - CC_49（⌒ 轮廓度 0.5）：预期 `nominal=0, +TOL=0.5, -TOL=0, measured=0`
+  - CC_50（⊥ 垂直度 0.5 A）：预期 `nominal=0, +TOL=0.5, -TOL=0, measured=0`
+  - CC_52（// 平行度 0.5 C）：预期 `nominal=0, +TOL=0.5, -TOL=0, measured=0`
+  - CC_69（∠ 倾斜度 0.2 A）：预期 `nominal=0, +TOL=0.2, -TOL=0, measured=0`
+- [ ] **普通尺寸行不受影响**：CC_1 ~ CC_7 / CC_9 ~ CC_20 等 ±上下公差行的解析结果应保持原样（基线 271 个测试已覆盖）
+- [ ] **已知 follow-up 验证**（不在本 PR 范围）：
+  - CC_21 「尺寸」+「圆度」两张堆叠表 —— 当前实现在第一张表就停，需观察是否要拆成两个 measurement
+  - CC_43 MEAS=错误时 measured 取到 +TOL 列（0.5 而非 0）—— 是 +TOL/MEAS 列边界判定的 follow-up
+- [ ] **真机日志检查**：形位符号描述文字（"轮廓度"/"圆度"等中文）在 OCR 后**仍可能**是噪声字符（如 "尺寸" 替代 "圆度"），但解析已不再因此走入错误路径。是否需要修描述文字 follow-up？
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 - [ ] ~~**发布前写 CHANGELOG**：`export_config.txt` 写入编码改为 UTF-16 →~~ **已取消**（P1-4 整 feature 移除；2026-09-23）
@@ -1735,3 +1855,4 @@ traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INF
 | 2026-09-24 | **P3-12 实施完成（commit `622db57`）**。新增模块级 `_safe_int(value, default)` 工具函数（duck typing 接受 StringVar 或裸值；空串/None/非数字回退；`"0"` 必须透传 —— 关键边界 `test_zero_is_not_misread_as_empty` 防回归）。`_save_config` 全部 `int(var.get().strip())` 改 `_safe_int(var, default)`（`data_start_row` 默认 6、`sample_row` 默认 5）；`sheet_name` 加 `or 'FAI'` 兜底。不动 `_load_existing_config`（读时宽容、写时严格是惯例）。**11 用例**（`tests/test_template_wizard_save.py`）：`_safe_int` 单元 7 + `_save_config` 集成 4。「有牙」证明：回退 `template_wizard.py` → 9 failed / 1 passed / 1 skipped（5 TestSafeInt AttributeError + 4 TestSaveConfigDefaults 真抛 ValueError / sheet 空断言失败；那条 passed 是 `test_save_with_zero_data_start_row_passes_through` —— 旧逻辑下 `int('0')=0` 凑巧过）。基线 250 → 261 passed |
 | 2026-09-24 | **P3-13 实施完成（commit `49165cc`）**。`TemplateWizard.__init__` 末尾挂 `self.root.report_callback_exception = self._silence_destroyed_widget_callback`（**仅作用域**：模板向导自己的 Tk root，不影响主窗口/Shell/pc_to_excel）；新增 `@staticmethod _silence_destroyed_widget_callback(exc, val, tb)`，**仅同时满足三条件**才放行（`AttributeError` 子类 + `str(val)` 含 `master` + traceback 含 `ctk_scrollable_frame` 帧），其它异常走 `traceback.print_exception` 照常打 stderr。**3 用例**（`tests/test_template_wizard_callback.py`）：CTk 帧静音 / 其它 AttributeError 不静音 / RuntimeError 不静音。「有牙」证明：回退 → 3 failed（`_silence_destroyed_widget_callback` 不存在）。**根治 vs 本轮**：根治需 CTk 升级或切原生 Scrollbar，超出范围。基线 261 → 264 passed |
 | 2026-09-24 | **P3-10 / B 方案实施完成（commit `6876e65`）**。**主页面**（`gui.py:234-242`）：模板行 Entry + 浏览按钮 → Label +「📂 更换」按钮；新增 `_format_template_label()`（空 → `(未配置)`，有值 → `basename`，长路径不撑窗口）；Label 由 `template_display_var` 控，通过 `trace_add('write', ...)` 单向跟踪 `template_var`。**向导**（`template_wizard.py:42-66`）：`__init__` 多收 `initial_template_path: str \| None = None`，缓存到 `_initial_template_path`；`_build_ui` 用它预填 `file_var`；`_load_existing_config` 加守卫——仅当未传 initial 时才从 config 回填 file_var（**主 GUI 场景**：传了 initial 就压过 config 旧值；**CLI 场景**：initial 为 None → 保留旧行为）。`_open_wizard` 多传 `initial_template_path=self.template_var.get()`。**7 用例**（`tests/test_template_wizard_initial_path.py`）：`TemplateWizard(initial=...)` 缓存 3 + label 渲染 4。「有牙」证明：回退 → 7 failed（全 AttributeError）。**保留不动**：DnD 处理（`_setup_dnd` / `_on_drop` 的 template 分支）、`_browse_template` —— guide 弹窗还在用；guide 一行 Entry + 浏览完整保留（只改主页一行）。基线 264 → **271 passed**。本文件整体进度「已完成 7 / 17」改为「**已完成 10 / 20**」（P3-10/12/13 均完成） |
+| 2026-09-24 | **新发现 P3-11 + 实施（commit `ac105f9` + `d469da3`）**。用户跑参考 PDF `cm2xl开发用报告2.PDF`（2026-09-24 提供，含 8 种形位符号：⊕⊥↗⌒◎//∠○）发现 GD&T 行 `+TOL/-TOL` 解析成 `+14.5/-9.000` / `+10.0/-86.267` 之类乱码（实际是单值公差 0.5/0.3）。**根因（基于本机 PaddleOCR 实测 OCR 输出）**：8 种符号 5 种完全丢失、◎→①、∠→<、○→\|；符号 + 公差值 + 基准字母 被合并到**单个 bbox**（`'0.3ABC'` / `'00.6A'` / `'①0.5] MEDIAN'`）→ 即使切列也切不开；下游 `_resolve_pc_dmis_nums` 默认按 ±上下公差扫描 → 拿相邻 ±值填形位单值。**修法分两步**——**识别层**（`ac105f9`）：`parse_measurements.py` 新增 4 条正则常量 + `_looks_like_gdt_spec()` 静态 helper（覆盖 datum 尾缀、`//`/`①`/`<` 前缀模式；排除 ± 上下公差对）+ `_extract_gdt_tolerance()` 单值提取（跳前缀 + 后缀 + datums）；**集成层**（`d469da3`）：`_is_gdt_label_row()`（同行含 ASME Y14.5 即 True）+ `_resolve_gdt_nums()`（返回 `[0, spec_value, 0, measured]`）+ `parse_from_ocr_boxes` 主流程集成（GD&T 行走新路径，否则走原 `_resolve_pc_dmis_nums`）。**58 用例**（`tests/test_gdt_ocr.py`）：`TestLooksLikeGdtSpec` 30 + `TestExtractGdtTolerance` 16 + `TestIsGdtLabelRow` 8 + `TestResolveGdtNums` 4。「有牙」证明：识别层回退 → ImportError 阻 collect 全部 ERROR；集成层回退 → 同上。基线 271 → 317 → **329 passed**（+58 全为新测试，零回归）。本文件条目数 20 → **21**（+P3-11）。整体进度「已完成 10 / 20」改为「**已完成 11 / 21**」。**已知 follow-up**（不在本 PR 范围）：① 多表嵌套（CC_21 「尺寸」+「圆度」两张堆叠表）的精确归属；② +TOL 列 vs MEAS 列边界判定（当前 measured 取第一个非零，会撞 +TOL；CC_43 MEAS=错误场景）；③ 形位符号描述文字（"轮廓度"/"圆度"等中文）的 OCR 后修；④ OCR 模型升级（根治符号丢失） |
