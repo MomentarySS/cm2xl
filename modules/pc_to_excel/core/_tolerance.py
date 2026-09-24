@@ -273,6 +273,10 @@ def _extract_tolerance_commands(
                                 break
                         except Exception:
                             continue
+                    # P3-11.1：BONUS 列透传（PC-DMIS 2024.1 dump 确认
+                    # tol_cmd.segmentDimBonus(k, j) / tol_cmd.sizeBonus(j) 对形位公差返 0.0 ok）。
+                    # 与 `minus_tol / outtol` 一致：兜住「COM 抛异常」与「返 False」两种失败。
+                    bonus = _safe_com_float(lambda: tol_cmd.sizeBonus(j))
                     records.append(
                         FeatureRecord(
                             name=name,
@@ -287,6 +291,7 @@ def _extract_tolerance_commands(
                             feat1=feat_text,
                             plus_tol=plus,
                             minus_tol=minus_tol,
+                            bonus=bonus,
                             outtol=outtol,
                         )
                     )
@@ -362,6 +367,11 @@ def _extract_tolerance_commands(
                                     break
                             except Exception:
                                 continue
+                        # P3-11.1：BONUS 列透传 —— dump 2026-09-24 确认
+                        # tol_cmd.segmentDimBonus(k, j) 对所有 13 种形位符号都返 0.0 [ok]，
+                        # 而 cmd.GetFieldValue(LINE2_BONUS) 在 2024.1 上返 False ⇒ 修复前 cm2xl
+                        # 输出的 BONUS 列在 4 个位置度/垂直度/平行度/倾斜度行（CC_38/39/50/51/52/69）漏填 0。
+                        bonus = _safe_com_float(lambda kk=k, jj=j: tol_cmd.segmentDimBonus(kk, jj))
                         records.append(
                             FeatureRecord(
                                 name=name,
@@ -377,6 +387,7 @@ def _extract_tolerance_commands(
                                 segment=segment,
                                 plus_tol=plus,
                                 minus_tol=minus_tol,
+                                bonus=bonus,
                                 outtol=outtol,
                             )
                         )

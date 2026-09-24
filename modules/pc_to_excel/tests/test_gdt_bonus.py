@@ -213,6 +213,176 @@ def test_extract_fcf_commands_propagates_bonus_to_records():
     )
 
 
-# ── helper 路径导入 ──
+# ── 真实集成路径：_extract_tolerance_commands 也必须传 bonus ──
 
-# helper 从顶层 `from ..core._tolerance import _read_gdt_bonus` 导入
+def test_extract_tolerance_commands_propagates_segment_bonus():
+    """P3-11.1 集成测试：_extract_tolerance_commands（PC-DMIS 2024.1 走的路径）也透传 bonus。
+
+    关键修复 = 之前的 helper 替换只动 _extract_fcf_commands（老 FCF 路径），
+    而 PC-DMIS 2024.1 上 CC_38/39/50/51/52/69 走 _extract_tolerance_commands
+    （IsToleranceCommand=True），那个函数之前完全没读 BONUS。
+
+    模拟 PC-DMIS 2024.1 形态：sizeCountCombined=0 / SegmentCount=1 / segmentDimBonus(1,1)=0.0
+    """
+    from ..core._tolerance import _extract_tolerance_commands
+
+    class _Tol:
+        ID = "CC_38"
+        gdtSymbol = "位置度"
+        sizeCountCombined = 0
+        SegmentCount = 1
+        FeatureCount = 1
+        _feats = {1: "圆柱3"}
+        _meas = {1: 0.0}
+
+        def FeatureID(self, j):
+            return self._feats[j]
+
+        def SegmentAxis(self, j):
+            return "DRF"
+
+        def SegmentDimNominal(self, k, j):
+            return 0.0
+
+        def SegmentDimMeasured(self, k, j):
+            return self._meas[j]
+
+        def SegmentDimDeviation(self, k, j):
+            return self._meas[j]
+
+        def SegmentDimPlusTol(self, k, j):
+            return 0.3
+
+        def segmentDimMinusTol(self, k, j):
+            return 0.0
+
+        def SegmentDimOutTol(self, k, j):
+            return 0.0
+
+        def segmentDimOutTol(self, k, j):
+            return 0.0
+
+        def segmentDimBonus(self, k, j):
+            return 0.0  # PC-DMIS 2024.1 实测：返 0.0
+
+    class _Cmd:
+        ID = "CC_38"
+        IsToleranceCommand = True
+        ToleranceCommand = _Tol()
+
+    records, indices = _extract_tolerance_commands([(82, _Cmd())], show_negative=False)
+    assert indices == {82}
+    assert len(records) == 1, f"应有 1 条记录，实际 {len(records)}"
+    assert records[0].bonus == 0.0, (
+        f"P3-11.1 修复必须覆盖 _extract_tolerance_commands（PC-DMIS 2024.1 走的路径）—— "
+        f"实际 bonus={records[0].bonus!r}（修复前是 None）"
+    )
+
+
+def test_extract_tolerance_commands_size_bonus_zero():
+    """_extract_tolerance_commands 尺寸行 path：sizeBonus(j) 返 0.0 → bonus=0.0 透传。
+
+    模拟 PC-DMIS sizeCountCombined > 0 的场景（形位公差的 FCF_SIZE / 直径公差等）。
+    """
+    from ..core._tolerance import _extract_tolerance_commands
+
+    class _Tol:
+        ID = "CC_FCFSIZE"
+        gdtSymbol = "位置度"
+        sizeCountCombined = 1
+        SegmentCount = 0
+        FeatureCount = 0
+
+        def sizeText(self, j):
+            return "圆柱1"
+
+        def SizeAxis(self, j):
+            return "D"
+
+        def sizeNominal(self, j):
+            return 0.0
+
+        def sizeMeasured(self, j):
+            return 0.005
+
+        def sizeDeviation(self, j):
+            return 0.005
+
+        def sizePlusTol(self, j):
+            return 0.3
+
+        def sizeMinusTol(self, j):
+            return 0.0
+
+        def sizeOutOfTol(self, j):
+            return 0.0
+
+        def SizeOutOfTol(self, j):
+            return 0.0
+
+        def sizeBonus(self, j):
+            return 0.0  # PC-DMIS 实测：返 0.0
+
+    class _Cmd:
+        ID = "CC_FCFSIZE"
+        IsToleranceCommand = True
+        ToleranceCommand = _Tol()
+
+    records, indices = _extract_tolerance_commands([(50, _Cmd())], show_negative=False)
+    assert len(records) == 1
+    assert records[0].bonus == 0.0, (
+        f"_extract_tolerance_commands 尺寸行的 bonus 必须透传 —— "
+        f"实际={records[0].bonus!r}"
+    )
+
+
+def test_extract_tolerance_commands_bonus_raises_does_not_drop():
+    """_extract_tolerance_commands 段 segmentDimBonus 抛异常 → bonus=None（不外抛、不丢行）。"""
+    from ..core._tolerance import _extract_tolerance_commands
+
+    class _Tol:
+        ID = "CC_BREAK"
+        gdtSymbol = "位置度"
+        sizeCountCombined = 0
+        SegmentCount = 1
+        FeatureCount = 1
+
+        def FeatureID(self, j):
+            return "圆柱1"
+
+        def SegmentAxis(self, j):
+            return "D"
+
+        def SegmentDimNominal(self, k, j):
+            return 0.0
+
+        def SegmentDimMeasured(self, k, j):
+            return 0.0
+
+        def SegmentDimDeviation(self, k, j):
+            return 0.0
+
+        def SegmentDimPlusTol(self, k, j):
+            return 0.3
+
+        def segmentDimMinusTol(self, k, j):
+            return 0.0
+
+        def SegmentDimOutTol(self, k, j):
+            return 0.0
+
+        def segmentDimOutTol(self, k, j):
+            return 0.0
+
+        def segmentDimBonus(self, k, j):
+            raise OSError("模拟 COM 抛异常")
+
+    class _Cmd:
+        ID = "CC_BREAK"
+        IsToleranceCommand = True
+        ToleranceCommand = _Tol()
+
+    records, indices = _extract_tolerance_commands([(99, _Cmd())], show_negative=False)
+    # 不外抛、不丢行（与 minus_tol / outtol 的兜住策略一致）
+    assert len(records) == 1
+    assert records[0].bonus is None  # 抛异常 → 归 None（cm2xl 输出空 cell）
