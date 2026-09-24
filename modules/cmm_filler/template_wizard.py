@@ -74,6 +74,10 @@ class TemplateWizard:
         self.root.title('模板配置向导')
         self.root.geometry('1000x780')
         apply_window_icon(self.root)
+        # P3-13：CTk 5.x 滚轮回调在 widget 被销毁后访问 event.widget.master 会
+        # 抛 AttributeError，正常使用无副作用但 traceback 刷屏。
+        # 这里只静音**特定**的 CTk 滚轮噪声，其它异常照常打到 stderr。
+        self.root.report_callback_exception = self._silence_destroyed_widget_callback
 
         self.template_path = None
         self.wb = None
@@ -472,6 +476,26 @@ class TemplateWizard:
             self.root.wait_window()
         else:
             self.root.mainloop()
+
+    @staticmethod
+    def _silence_destroyed_widget_callback(exc, val, tb):
+        """P3-13：仅静音 CTk 滚轮回调中"已销毁 widget 取 master"的 AttributeError。
+
+        真机：CTk 5.x 的 _check_if_valid_scroll 在用户关闭窗口瞬间仍有 mouse-wheel
+        事件在飞时，event.widget 已是字符串（widget 已销毁），访问 .master 抛
+        AttributeError，刷屏几百行 traceback 但不影响功能。
+
+        这里**只**对"CTk 滚轮 + AttributeError + master"这条特定路径放行，其它
+        异常照常打到 stderr（不掩盖真问题）。
+        """
+        import traceback as _tb
+        if (
+            issubclass(exc, AttributeError)
+            and 'master' in str(val)
+            and 'ctk_scrollable_frame' in '\n'.join(_tb.format_tb(tb))
+        ):
+            return
+        _tb.print_exception(exc, val, tb)
 
 
 if __name__ == '__main__':
