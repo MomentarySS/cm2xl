@@ -167,6 +167,33 @@ def _gdt_record_name(
     return f"GDT_{feat_index}"
 
 
+def _read_gdt_bonus(cmd: Any, k: int, j: int) -> float | None:
+    """形位公差 BONUS 字段读取（P3-11.1 修复）。
+
+    优先 ToleranceCommand 方法路径：`tol.segmentDimBonus(k, j)`。
+    PC-DMIS 2024.1 真机 dump（2026-09-24）确认此路径对 13 种形位符号
+    （位置度 / 垂直度 / 平行度 / 倾斜度 / 圆度 / 圆跳动 / 同轴度 /
+    圆柱度 / 同心度 / 线轮廓度 / 面轮廓度 / 平面度 / 圆度 等）
+    都返回 0.0 [ok] —— 真实 BONUS=0 表示位置度允差补偿场景。
+
+    回退字段 ID 路径：`cmd.GetFieldValue(LINE1_BONUS/LINE2_BONUS/LINE3_BONUS, j)`。
+    此路径在 PC-DMIS 2024.1 上返 False，`_safe_float` 把它归 None
+    —— 这是修复前 cm2xl 输出 BONUS 列空的原因。保留作未来 PC-DMIS 版本兼容。
+
+    返回 None 时 cm2xl 输出空 cell（与 PC-DMIS 原生写空场景一致）。
+    """
+    try:
+        tol = cmd.ToleranceCommand
+    except Exception:
+        tol = None
+    if tol is not None:
+        raw = _safe_com_float(lambda t=tol, kk=k, jj=j: t.segmentDimBonus(kk, jj))
+        if raw is not None:
+            return raw
+    # 回退：字段 ID 路径
+    return _safe_float(_field_value(cmd, f"LINE{k}_BONUS", j))
+
+
 def _extract_tolerance_commands(
     cache: list[tuple[int, Any]],
     show_negative: bool,
@@ -408,7 +435,7 @@ def _extract_fcf_commands(
                         feat1=feat,
                         plus_tol=plus_tol,
                         minus_tol=minus_tol,
-                        bonus=_safe_float(_field_value(cmd, "LINE1_BONUS", j)),
+                        bonus=_read_gdt_bonus(cmd, 1, j),
                         outtol=_safe_float(_field_value(cmd, "LINE1_OUTTOL", j)),
                     )
                 )
@@ -446,7 +473,7 @@ def _extract_fcf_commands(
                         segment="SEG=1",
                         plus_tol=plus_tol,
                         minus_tol=minus_tol,
-                        bonus=_safe_float(_field_value(cmd, "LINE2_BONUS", j)),
+                        bonus=_read_gdt_bonus(cmd, 2, j),
                         outtol=_safe_float(_field_value(cmd, "LINE2_OUTTOL", j)),
                     )
                 )
@@ -472,6 +499,7 @@ def _extract_fcf_commands(
                         cmd_index=idx,
                         source_kind="fcf",
                         write_axis="D",
+                        bonus=_read_gdt_bonus(cmd, 3, j),
                     )
                 )
 
