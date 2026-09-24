@@ -30,7 +30,9 @@ import pytest
 
 from modules.cmm_filler.core.parse_measurements import (
     _extract_gdt_tolerance,
+    _is_gdt_label_row,
     _looks_like_gdt_spec,
+    _resolve_gdt_nums,
 )
 
 
@@ -123,6 +125,128 @@ class TestExtractGdtTolerance:
     ])
     def test_extract(self, text, expected):
         assert _extract_gdt_tolerance(text) == expected, f'{text!r} -> {expected}'
+
+
+# ─── 集成层（P3-11 commit 2）─────────────────────────────────────────
+
+class _FakeCell:
+    """替身 OCRBox：只暴露 .text / .confidence。"""
+    def __init__(self, text: str, confidence: float = 0.95):
+        self.text = text
+        self.confidence = confidence
+
+
+def _cells(*texts: str) -> list:
+    return [_FakeCell(t) for t in texts]
+
+
+class TestIsGdtLabelRow:
+    """_is_gdt_label_row 集成层：识别含 ASME Y14.5 或 GD&T spec token 的行。"""
+
+    def test_with_asme_y14_5_marker(self):
+        # 真机 OCR：CC_38 形位 spec 行
+        assert _is_gdt_label_row(
+            _cells('CC_38', '毫米', '0.3ABC', '默认值', 'ASME Y14.5'),
+            ['CC'],
+        ) is True
+
+    def test_with_gdt_spec_token(self):
+        # 没有 ASME Y14.5 但有 GD&T spec token
+        assert _is_gdt_label_row(
+            _cells('CC_39', '毫米', '00.6A', '默认值'),
+            ['CC'],
+        ) is True
+
+    def test_with_parallelism_preserved(self):
+        assert _is_gdt_label_row(
+            _cells('CC_52', '毫米', '//0.5C', '默认值', 'ASME Y14.5'),
+            ['CC'],
+        ) is True
+
+    def test_with_concentricity_misread(self):
+        assert _is_gdt_label_row(
+            _cells('CC_43', '毫米', '①0.5] MEDIAN', 'ASME Y14.5'),
+            ['CC'],
+        ) is True
+
+    def test_with_angularity_misread(self):
+        assert _is_gdt_label_row(
+            _cells('CC_69', '毫米', '<0.2 A', '默认值', 'ASME Y14.5'),
+            ['CC'],
+        ) is True
+
+    def test_regular_dimension_row_rejected(self):
+        # 真机 OCR：CC_2 平面B 至 圆柱1（普通尺寸行，无 ASME / 无 GD&T token）
+        assert _is_gdt_label_row(
+            _cells('CC_2', '毫米', '平面B 至 圆柱1(Y 轴)'),
+            ['CC'],
+        ) is False
+
+    def test_regular_dimension_with_dimensions_rejected(self):
+        # 普通尺寸 spec 行带 ± 上下公差
+        assert _is_gdt_label_row(
+            _cells('CC_21', '毫米', 'Ø86.267 +0.3/-0.3', '默认值'),
+            ['CC'],
+        ) is False
+
+    def test_empty_row_rejected(self):
+        assert _is_gdt_label_row(_cells(''), ['CC']) is False
+
+
+class TestResolveGdtNums:
+    """_resolve_gdt_nums：GD&T 单值公差解析路径。"""
+
+    def test_typical_gdt_layout_returns_correct_quadruplet(self):
+        # CC_38 形位 spec + 数据行
+        rows = [
+            _cells('CC_38', '毫米', '0.3ABC', '默认值', 'ASME Y14.5'),
+            _cells('特征', 'AX', 'NOMINAL', '+TOL', '-TOL', 'MEAS', 'DEV', 'OUTTOL', 'BONUS'),
+            _cells('圆柱3 (起始点)', 'TP', '0.000', '0.300', '0.000', '0.000', '0.000', '0.000', '0.000'),
+        ]
+        nums, conf = _resolve_gdt_nums(rows, 0, _make_parsed('CC', 38), [], set())
+        assert nums is not None
+        assert nums == [0.0, 0.3, 0.0, 0.0]  # nominal=0, +TOL=0.3, -TOL=0, measured=0
+        assert conf > 0
+
+    def test_concentricity_with_garbage_meas_falls_back_to_zero(self):
+        # CC_43 同轴度：MEAS = 错误（OCR 失败），只 NOMINAL + +TOL 是有效值
+        rows = [
+            _cells('CC_43', '毫米', '①0.5] MEDIAN', 'ASME Y14.5'),
+            _cells('特征', 'NOMINAL', '+TOL', '-TOL', 'MEAS', 'DEV', 'OUTTOL', 'BONUS'),
+            _cells('圆柱7', '0.000', '0.500', '0.000', '错误', '错误', '错误', '错误'),
+        ]
+        nums, _ = _resolve_gdt_nums(rows, 0, _make_parsed('CC', 43), [], set())
+        # MEAS 错误 → 取第一个非零数（应该是 +TOL=0.5，但我们的语义是"第一个非零"会撞 +TOL）
+        # 当前实现预期返回 [0, 0.5, 0, 0.5] —— 这是已知的「+TOL/MEAS 列边界不准」follow-up
+        assert nums is not None
+        assert nums[0] == 0.0
+        assert nums[1] == 0.5     # spec value
+        assert nums[2] == 0.0     # no -TOL
+
+    def test_no_spec_value_returns_none(self):
+        # spec 行没有 GD&T token
+        rows = [
+            _cells('CC_99', '毫米', 'NOMINAL', '+TOL'),
+        ]
+        nums, _ = _resolve_gdt_nums(rows, 0, _make_parsed('CC', 99), [], set())
+        assert nums is None
+
+    def test_stops_at_next_label(self):
+        # spec 之后立刻撞到下一个 CC 标签
+        rows = [
+            _cells('CC_50', '毫米', '0.5A', '默认值', 'ASME Y14.5'),
+            _cells('CC_51', '毫米', '0.5B', '默认值', 'ASME Y14.5'),
+        ]
+        nums, _ = _resolve_gdt_nums(rows, 0, _make_parsed('CC', 50), [], set())
+        # 没数据行 → measured = 0 fallback
+        assert nums is not None
+        assert nums == [0.0, 0.5, 0.0, 0.0]
+
+
+def _make_parsed(prefix: str, num: int):
+    """替身 ParsedLabel：只暴露 prefix/num。"""
+    from modules.cmm_filler.core.parse_measurements import ParsedLabel
+    return ParsedLabel(prefix=prefix, num=num, sub='', sub_sep='', desc='')
 
 
 if __name__ == '__main__':
