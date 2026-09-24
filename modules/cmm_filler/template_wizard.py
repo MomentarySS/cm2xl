@@ -25,6 +25,28 @@ def _get_appdata_dir():
 CONFIG_PATH = os.path.join(_get_appdata_dir(), 'template_config.json')
 
 
+def _safe_int(value, default):
+    """读 StringVar/字符串为 int；空串/非数字回退 default（不抛）。
+
+    用途：模板向导的 data_start_row / sample_row 等数字字段若被清空或读到非数字
+    （如 _load_existing_config() 命中 JSON 里值为 '' 或 null），直接 int() 会崩。
+    真机场景：用户首启向导保存时即触发（2026-09-24 13:54 traceback）。
+    """
+    if hasattr(value, 'get'):
+        v = value.get()
+    else:
+        v = value
+    if v is None:
+        return default
+    s = str(v).strip()
+    if not s:
+        return default
+    try:
+        return int(s)
+    except ValueError:
+        return default
+
+
 class TemplateWizard:
     COLUMN_LABELS = {
         'serial': '序号',
@@ -406,9 +428,9 @@ class TemplateWizard:
     def _save_config(self):
         config = {
             'template_path': self.file_var.get().strip(),
-            'sheet_name': self.sheet_var.get().strip(),
-            'data_start_row': int(self.data_start_var.get().strip()),
-            'sample_row': int(self.sample_row_var.get().strip()),
+            'sheet_name': self.sheet_var.get().strip() or 'FAI',
+            'data_start_row': _safe_int(self.data_start_var, 6),
+            'sample_row': _safe_int(self.sample_row_var, 5),
             'main_sample_count': self._get_main_count(),
             'columns': {},
             'sample_cols': {},
