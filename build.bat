@@ -19,13 +19,10 @@ if exist "modules\cmm_filler\models\paddleocr" (
     echo       如需离线打包，请先运行 CMMFiller\download_ocr_models.py
 )
 
-REM ── 检查 BAS 脚本模板 ──────────────────────────────────────────────
-if not exist "scripts\export_current.bas.template" (
-    echo [ERROR] 未找到 scripts\export_current.bas.template
-    echo         请从 pc to excel\scripts\ 复制 BAS 脚本到 scripts\
-    pause
-    exit /b 1
-)
+REM ── 脚本输出功能已取消（2026-09-23, commit 76657ac）─────────────────
+REM   原「检查 BAS 脚本模板 scripts\export_current.bas.template」一步已移除：
+REM   该模板与 inject 子模块整目录删除，不再打包。不要再加回这项检查，
+REM   否则打包会因文件不存在直接 exit /b 1。
 
 echo.
 echo [1/6] Clean old build...

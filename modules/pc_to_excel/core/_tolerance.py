@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ._common import (
@@ -10,11 +11,14 @@ from ._common import (
     _field_value,
     _get_data_type_count,
     _normalize_minus_tol,
+    _safe_com_float,
     _safe_float,
     _text_value,
     _tolerance_from_limits,
 )
 from .models import AxisValues, FeatureRecord
+
+logger = logging.getLogger("pc_to_excel")
 
 
 def _gdt_axis_letter(symbol: str, axis: str) -> str:
@@ -198,8 +202,21 @@ def _extract_tolerance_commands(
 
             for j in range(1, size_count + 1):
                 try:
-                    minus_raw = tol_cmd.sizeMinusTol(j)
-                    minus_tol = minus_raw if show_negative else -minus_raw
+                    # COM 失败值（False/None）与「直接调用抛异常」都必须归 None：
+                    # 前者直接取负会得到 0，下公差被当成真实下限 ⇒ 负侧偏差全判超差（假 NG）；
+                    # 后者会冒到外层 except 把整行丢掉（静默丢行）。
+                    minus_tol = _normalize_minus_tol(
+                        _safe_com_float(lambda: tol_cmd.sizeMinusTol(j)), show_negative
+                    )
+                    if minus_tol is None:
+                        # 有 plus 也是有效数据 ⇒ 保留该行（单边公差），只记日志便于追溯
+                        logger.debug(
+                            "尺寸行下公差不可用（COM 返回 False/None、抛异常或未设置），"
+                            "按单边公差保留: cmd=%s size=%d/%d",
+                            display_name,
+                            j,
+                            size_count,
+                        )
                     feat_text = str(tol_cmd.sizeText(j) or "").strip()
                     name = display_name if size_count == 1 else f"{display_name}_{j}"
                     if size_count > 1 and feat_text and feat_text != display_name:
@@ -280,8 +297,18 @@ def _extract_tolerance_commands(
                             feat_count=len(feat_indices),
                         )
                         axis = str(tol_cmd.SegmentAxis(j) or "D")
-                        minus_raw = tol_cmd.segmentDimMinusTol(k, j)
-                        minus_tol = minus_raw if show_negative else -minus_raw
+                        minus_tol = _normalize_minus_tol(
+                            _safe_com_float(lambda: tol_cmd.segmentDimMinusTol(k, j)),
+                            show_negative,
+                        )
+                        if minus_tol is None:
+                            logger.debug(
+                                "区段行下公差不可用（COM 返回 False/None、抛异常或未设置），"
+                                "按单边公差保留: cmd=%s seg=%d feat=%d",
+                                display_name,
+                                k,
+                                j,
+                            )
 
                         nom, meas, dev = _axis_values_for_letter(
                             axis,

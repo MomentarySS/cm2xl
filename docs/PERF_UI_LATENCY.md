@@ -398,6 +398,11 @@ D:\AI\miniconda3\envs\paddleocr_gpu\python.exe bench_fix4.py
 4. `tests/phase8_smoke.py::TestCrashLog::test_exception_written` 是**排查前就存在**
    的失败：断言字面量 `MODEL_MISSING`，但 `ToolboxError.__str__` 只输出
    `[E1003]`。与本文所有改动无关。
+
+   > **2026-09-22 补注**：该用例**现已通过**（`df91650` 之后修复），本节描述的是当时的
+   > 状态。另外，`tests/` 目录当时**不被 pytest 默认收集**（文件名不匹配 `test_*.py`），
+   > 所以本文引用的测试数字只覆盖 `modules/*/tests` —— 详见
+   > `docs/CORE_DEFECT_PLAN.md` 的 P3-7。
 5. 连接流程中仍有 tasklist（`try_connect_with_app():437`、`check_elevation_match()`），
    一次性动作可接受，未改动。详见 4.9。
 6. **模块切换黑白闪屏**（用户后续反馈）已在 `95be9e9` 修复：所有 module host

@@ -2,6 +2,10 @@
 
 所有版本升级记录。格式：`## [版本] — 日期`，按模块分小节，方便追踪每个模块的变更。
 
+> 🗑 **2026-09-23 取消**：脚本输出功能（PC2XL_EXPORT BAS 脚本部署 + 自动植入 + 工具栏启动器）整 feature 移除。
+> 9 个相关 commit (`4ef50eb` ~ `fcf8bad`) 保留为证据。详见 `docs/CORE_DEFECT_PLAN.md` 变更记录。
+> 本 CHANGELOG 历史条目**不再反映当前代码**（如提到 `inject/command_injector.py` 的修复）—— 这些路径已不存在。
+
 ---
 
 ## [1.1.0] — 2026-09-22
@@ -191,7 +195,7 @@
 - 应用图标：`cm2xl.ico` 换新；新增 `utils/app_icon.py` 统一窗口标题栏图标与界面 Logo（Splash / 关于 / 顶栏 / 子窗口）
 - `assets/app_logo.png`：界面内 Logo 资源；`pcdmis_toolbox.spec` 打包 `cm2xl.ico` 与 `assets/app_logo.png`
 - 浅色主题「暖灰纸感」：`utils/theme.py` 调整页面/卡片/边框/输入框对比度，修复勾选框白勾不可见（`CTkCheckBox.fg_color` 改回品牌青绿）
-- `build/generate_theme_preview.py`：主题改善前后对比预览图生成脚本
+- `build/generate_theme_preview.py`：主题改善前后对比预览图生成脚本 🗑 **已于 2026-09-23 移除**（一次性产物，主题工作完成后无复用价值）
 
 ### pc_to_excel 模块
 

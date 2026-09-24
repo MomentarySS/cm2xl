@@ -29,12 +29,6 @@ from ..export.inspection_form_fill import (
     summarize_fill_result,
 )
 from ..export.template_report import export_report
-from ..inject.command_injector import check_export_command, deploy_bas_script, inject_export_command
-from ..inject.toolbar_launcher import (
-    INSTALL_STEPS,
-    deploy_toolbar_launcher,
-    resolve_toolbar_argv,
-)
 from ..utils.action_hints import format_user_error
 from ..utils.admin import admin_status_text, is_admin, is_process_elevated
 from ..utils.local_settings import build_export_filename, ensure_default_dirs, load_settings, save_settings
@@ -476,12 +470,6 @@ class MainWindow:
         btn_row = ctk.CTkFrame(export, fg_color="transparent")
         btn_row.pack(fill="x", pady=(10, 0))
         self._btn_primary(btn_row, "一键导出 Excel", self._export_excel, width=150, height=34).pack(side="left")
-        self._btn_accent(btn_row, "部署工具栏启动器", self._deploy_toolbar, width=150, height=34).pack(
-            side="left", padx=(8, 0)
-        )
-        self._btn_muted(btn_row, "打开启动器目录", self._open_launcher_dir, width=118, height=34).pack(
-            side="left", padx=(8, 0)
-        )
 
         ctk.CTkLabel(
             export,
@@ -596,26 +584,6 @@ class MainWindow:
             text_color=_C["subtle"],
         ).pack(side="left", padx=10)
 
-        # —— 植入 ——
-        inject = self._section(
-            scroll,
-            "PRG 命令植入",
-            subtitle="测量中可把光标放到 PC2XL_EXPORT → 从光标执行（CSV）",
-            collapsible=True,
-            expanded=True,
-        )
-        self._hint(
-            inject,
-            "在程序末尾插入导出命令。适合边测边出 CSV；完整 xlsx 请用上方「一键导出」或 PC-DMIS 工具栏。",
-        )
-        inj_row = ctk.CTkFrame(inject, fg_color="transparent")
-        inj_row.pack(fill="x", pady=(4, 0))
-        self._btn_muted(inj_row, "部署 BAS 脚本", self._deploy_bas, width=116, height=32).pack(side="left")
-        self._btn_warn(inj_row, "植入 / 更新导出命令", self._inject_command, width=152, height=32).pack(
-            side="left", padx=6
-        )
-        self._btn_muted(inj_row, "检查是否已植入", self._check_inject, width=116, height=32).pack(side="left")
-
         # —— 说明 ——
         help_body = self._section(
             scroll,
@@ -635,17 +603,9 @@ class MainWindow:
         help_text.pack(fill="both", expand=True)
         help_text.insert(
             "1.0",
-            "【工具栏一键出 Excel】\n"
-            "1. 点击「部署工具栏启动器」（写入 LocalAppData 下 vbs/bat）。\n"
-            "2. PC-DMIS：视图 → 工具栏 → 自定义 → 创建项目 → 选 cm2xl_toolbar_export.vbs。\n"
-            "3. 从「用户自定义命令」拖到工具栏。测完点该按钮即可。\n"
-            "4. cm2xl 跳到本页并按「仅 Mark 命令」自动导出 xlsx。已打开则唤醒再导。\n\n"
-            "【PRG 植入 CSV】\n"
-            "1. 点击「植入 / 更新导出命令」后保存 PRG。\n"
-            "2. Edit 窗口光标放在 PC2XL_EXPORT → 文件 → 部分执行 → 从光标执行。\n"
-            "3. 脚本导出 CSV；完整 xlsx 请用工具栏或上方「一键导出」。\n\n"
-            "注意：PC-DMIS Pro 无 BASIC，工具栏请用 vbs/bat（不要用 .bas）。\n"
-            "工具与 PCDMIS 须同为普通用户或同为管理员运行。",
+            "1. 点击上方「一键导出 Excel」：从活动 PCDMIS 程序读尺寸、判定超差、按模板格式写 xlsx。\n"
+            "2. 路径/模板在代码顶部核对（reports 子目录 + template_report.py）。\n"
+            "3. 工具与 PCDMIS 须同为普通用户或同为管理员运行。",
         )
         help_text.configure(state="disabled")
 
@@ -1183,103 +1143,11 @@ class MainWindow:
         self._refresh_connection_ui()
         messagebox.showinfo("导出完成", f"共 {count} 条数据\n\n{path}")
 
-    def _deploy_bas(self) -> None:
-        try:
-            path = deploy_bas_script()
-            launcher = deploy_toolbar_launcher()
-            target = resolve_toolbar_argv()[0]
-            audit("pcdmis_bas_deploy", path=str(path), launcher=str(launcher), target=target)
-            messagebox.showinfo(
-                "部署完成",
-                f"脚本已更新:\n{path}\n\n工具栏将启动：\n{target}\n\n启动器:\n{launcher}",
-            )
-        except Exception as exc:
-            logger.exception("BAS 部署失败: %s", exc)
-            messagebox.showerror("部署失败", format_user_error("部署失败", exc))
-
-    def _deploy_toolbar(self) -> None:
-        try:
-            path = deploy_toolbar_launcher()
-            target = resolve_toolbar_argv()[0]
-            audit("pcdmis_toolbar_deploy", path=str(path), target=target)
-            messagebox.showinfo(
-                "工具栏启动器已部署",
-                INSTALL_STEPS + f"\n\n将启动：\n{target}\n\n启动器:\n{path}",
-            )
-        except Exception as exc:
-            logger.exception("工具栏启动器部署失败: %s", exc)
-            messagebox.showerror("部署失败", format_user_error("部署失败", exc))
-
-    def _open_launcher_dir(self) -> None:
-        folder = paths.bas_deploy_dir
-        folder.mkdir(parents=True, exist_ok=True)
-        try:
-            import os
-
-            os.startfile(folder)  # noqa: S606 — 打开本机资源管理器
-        except Exception as exc:
-            messagebox.showerror("无法打开目录", format_user_error("无法打开目录", exc))
-
-    def _inject_command(self) -> None:
-        if self._busy:
-            return
-        if not self.connector.is_connected():
-            info = self.connector.connect()
-            if not info.connected:
-                messagebox.showerror(
-                    "连接失败",
-                    format_user_error("连接失败", info.message or "无法连接 PCDMIS COM"),
-                )
-                return
-        self._set_busy(True, "正在植入命令…")
-
-        def work():
-            try:
-                from ..connector.com_detector import com_apartment, dispatch_pcdmis
-
-                with com_apartment():
-                    app = dispatch_pcdmis(self.connector.prog_id)
-                    result = inject_export_command(app, prog_id=self.connector.prog_id)
-                self.root.after(0, lambda: self._on_inject_done(result))
-            except Exception as exc:
-                logger.exception("植入失败: %s", exc)
-                self.root.after(
-                    0,
-                    lambda: self._on_error("植入失败", format_user_error("植入失败", exc, with_trace=True)),
-                )
-
-        CancellableWorker().start(work)
-
-    def _on_inject_done(self, result) -> None:
-        self._set_busy(False)
-        audit("pcdmis_inject", success=result.success, already_exists=result.already_exists)
-        if result.success:
-            self.status_var.set("命令已植入")
-            messagebox.showinfo("植入完成", result.message)
-        else:
-            messagebox.showerror("植入失败", format_user_error("植入失败", result.message))
-
-    def _check_inject(self) -> None:
-        if not self.connector.is_connected():
-            info = self.connector.connect()
-            if not info.connected:
-                messagebox.showerror(
-                    "连接失败",
-                    format_user_error("连接失败", info.message or "无法连接 PCDMIS COM"),
-                )
-                return
-        try:
-            from ..connector.com_detector import com_apartment, dispatch_pcdmis
-
-            with com_apartment():
-                app = dispatch_pcdmis(self.connector.prog_id)
-                result = check_export_command(app, prog_id=self.connector.prog_id)
-            if result.success:
-                messagebox.showinfo("检查结果", result.message)
-            else:
-                messagebox.showwarning("检查结果", result.message)
-        except Exception as exc:
-            messagebox.showerror("检查失败", format_user_error("检查失败", exc))
+    # P1-4 ~ P1-8（脚本输出功能）于 2026-09-23 取消：
+    #   _deploy_bas / _deploy_toolbar / _open_launcher_dir /
+    #   _inject_command / _on_inject_done / _check_inject
+    #   这 6 个方法已删除（modules/pc_to_excel/inject/ 整目录移除）。
+    #   GUI 不再显示「部署 BAS 脚本」「植入 / 更新导出命令」「部署工具栏启动器」等按钮。
 
     def _on_error(self, title: str, msg: str) -> None:
         # 所有调用方已通过 format_user_error 格式化，此处直接使用

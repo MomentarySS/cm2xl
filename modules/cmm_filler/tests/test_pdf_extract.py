@@ -2,6 +2,7 @@
 
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
 
 from modules.cmm_filler.core.parse_measurements import (
     cluster_ocr_rows,
@@ -9,7 +10,7 @@ from modules.cmm_filler.core.parse_measurements import (
     parse_from_text_lines,
     parse_from_ocr_boxes,
 )
-from modules.cmm_filler.core.pdf_extract import TEXT_CHARS_THRESHOLD
+from modules.cmm_filler.core.pdf_extract import TEXT_CHARS_THRESHOLD, pdf_to_images
 from modules.cmm_filler.ocr.engine import OCRBox
 
 
@@ -304,6 +305,65 @@ class TestPCDMISOrphanAndMultiAxis(unittest.TestCase):
 class TestPDFExtractConstants(unittest.TestCase):
     def test_text_threshold(self):
         self.assertEqual(TEXT_CHARS_THRESHOLD, 50)
+
+
+class TestPdfToImagesCacheName(unittest.TestCase):
+    """缓存图片名必须由全部渲染输入决定。
+
+    缓存 key 是图片**路径**的 MD5（filler._cache_key），所以两个不同输入只要渲染出
+    同一个文件名，第二个就会读到第一个的 OCR 结果。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        cls._tmp = Path(tempfile.mkdtemp())
+        cls._cache = cls._tmp / 'cache'
+
+    @staticmethod
+    def _make_pdf(path: Path) -> None:
+        import fitz
+        path.parent.mkdir(parents=True, exist_ok=True)
+        doc = fitz.open()
+        doc.new_page()
+        doc.save(str(path))
+        doc.close()
+
+    def test_same_stem_in_different_dirs_gets_different_image(self):
+        """同名不同目录的 PDF 必须落到不同缓存图片（旧实现只看 stem）。"""
+        a = self._tmp / 'a' / '001.pdf'
+        b = self._tmp / 'b' / '001.pdf'
+        self._make_pdf(a)
+        self._make_pdf(b)
+
+        img_a = pdf_to_images(a, self._cache)[0]
+        img_b = pdf_to_images(b, self._cache)[0]
+
+        self.assertNotEqual(
+            img_a, img_b,
+            '同名不同目录的 PDF 渲染到了同一张缓存图片 → 第二个 PDF 会复用第一个的 OCR 结果',
+        )
+
+    def test_different_roi_gets_different_image(self):
+        """ROI 值必须进文件名：旧实现只加布尔 `_roi`，改 ROI 后仍命中旧 OCR。"""
+        p = self._tmp / 'roi.pdf'
+        self._make_pdf(p)
+
+        full = pdf_to_images(p, self._cache)[0]
+        roi_20 = pdf_to_images(p, self._cache, roi={'top': 0.2})[0]
+        roi_30 = pdf_to_images(p, self._cache, roi={'top': 0.3})[0]
+
+        self.assertNotEqual(full, roi_20, '有 ROI 与无 ROI 必须分开缓存')
+        self.assertNotEqual(roi_20, roi_30, '不同 ROI 值必须分开缓存')
+
+    def test_filename_keeps_stem_readable(self):
+        """文件名里必须保留 stem —— 日志与人工排查都靠它认图。"""
+        p = self._tmp / 'WF-2026-08-27-001.pdf'
+        self._make_pdf(p)
+
+        img = pdf_to_images(p, self._cache)[0]
+
+        self.assertIn('WF-2026-08-27-001', Path(img).name)
 
 
 if __name__ == '__main__':

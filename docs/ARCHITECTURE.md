@@ -26,7 +26,7 @@
 ### 三、核心设计决策（50 个子节）
 - 3.0 依赖分条件安装 / 3.1 模块独立性 / 3.2 tkinterdnd2 挂载 / 3.3 模块接口协议
 - 3.4 主题统一策略 / 3.5 路径管理 / **3.6 日志系统（统一 + 轮转 + GUI Handler）**
-- 3.7 BAS 脚本部署 / 3.8 版本文件统一 / 3.9 配置迁移 / 3.9.1 版本升级 / 3.9.2 降级回退
+- 3.7 ~~BAS 脚本部署~~（2026-09-23 取消）/ 3.8 版本文件统一 / 3.9 配置迁移 / 3.9.1 版本升级 / 3.9.2 降级回退
 - 3.10 PyInstaller spec / 3.11 fix_dist.py / 3.12 PaddleOCR 环境变量 / 3.13 自定义 Hook
 - 3.14 admin 启动器 / 3.15 Python 64 位 / 3.16 COM Apartment
 - 3.17 模板向导 / 3.18 用户文档 / 3.19 PCDMIS 状态轮询 / 3.20 freeze_support / 3.21 默认配置 / 3.22 测试套件
@@ -453,19 +453,23 @@ class GuiLogHandler(logging.Handler):
 
 ---
 
-### 3.7 BAS 脚本部署路径约束（pc to excel 专用）
+### 3.7 ~~BAS 脚本部署路径约束（pc to excel 专用）~~
 
-pc to excel 通过 COM 连接 PCDMIS，再注入 BAS 脚本执行数据导出。BAS 脚本必须部署到固定路径供 PCDMIS 调用。
+> 🗑 **已取消**（2026-09-23，commit `76657ac`）。原保留为历史描述。
+
+~~pc to excel 通过 COM 连接 PCDMIS，再注入 BAS 脚本执行数据导出。BAS 脚本必须部署到固定路径供 PCDMIS 调用。~~
 
 ```
 DEPLOY_DIR = LocalAppData/PCDMIS_ExcelExporter/scripts/
 ```
 
 **约束**：
-- BAS 脚本文件名固定为 `export_current.bas`（由 PCDMIS 菜单项引用）
-- `DEPLOY_DIR` 路径不能含空格，不能在 `Program Files` 等需要权限的目录
-- 打包后，BAS 脚本通过 PyInstaller `binaries` 注入到 `DEPLOY_DIR`
-- Shell 无需感知 BAS 脚本，仅 pc_to_excel 模块内部处理
+- ~~BAS 脚本文件名固定为 `export_current.bas`（由 PCDMIS 菜单项引用）~~
+- ~~`DEPLOY_DIR` 路径不能含空格，不能在 `Program Files` 等需要权限的目录~~
+- ~~打包后，BAS 脚本通过 PyInstaller `binaries` 注入到 `DEPLOY_DIR`~~
+- ~~Shell 无需感知 BAS 脚本，仅 pc_to_excel 模块内部处理~~
+
+**取消原因**：连续三轮真机下来脚本始终报 `执行 BASIC 脚本时出错`，用户判断「脚本输出本身就是为了锦上添花」 ⇒ 整 feature 移除。9 个 commit (`4ef50eb` ~ `fcf8bad`) 保留为历史记录。当前替代：从 cm2xl GUI 用「一键导出 Excel」直接抽数到 xlsx。
 
 ---
 
@@ -1129,13 +1133,17 @@ datas=[
 
 ---
 
-### 3.25 注入命令的 PCDMIS 命令 ID 常量
+### 3.25 ~~注入命令的 PCDMIS 命令 ID 常量~~
 
-`pc to excel/config.py:EXPORT_CMD_ID = "PC2XL_EXPORT"` 是 PCDMIS BASIC SCRIPT 命令的固定 ID，植入后命令在 PRG 内的显示名为 `PC2XL_EXPORT`。
+> 🗑 **已取消**（2026-09-23，commit `76657ac`）。原保留为历史描述。
 
-`OBTYPE_BASIC_SCRIPT` 来自 `pcdlrn_constants.get_const("OBTYPE_BASIC_SCRIPT")`，用于 `cmds.Add(OBTYPE_BASIC_SCRIPT, True)` 插入 BASIC SCRIPT 命令类型。
+~~`pc to excel/config.py:EXPORT_CMD_ID = "PC2XL_EXPORT"` 是 PCDMIS BASIC SCRIPT 命令的固定 ID，植入后命令在 PRG 内的显示名为 `PC2XL_EXPORT`。~~
 
-**集成后约束**：常量统一从 `toolbox/app_meta.py` 引用，避免硬编码分散在多处。
+~~`OBTYPE_BASIC_SCRIPT` 来自 `pcdlrn_constants.get_const("OBTYPE_BASIC_SCRIPT")`，用于 `cmds.Add(OBTYPE_BASIC_SCRIPT, True)` 插入 BASIC SCRIPT 命令类型。~~
+
+~~**集成后约束**：常量统一从 `toolbox/app_meta.py` 引用，避免硬编码分散在多处。~~
+
+**取消说明**：`EXPORT_CMD_ID` 已从 `toolbox/app_meta.py` + `modules/pc_to_excel/app_meta.py` + `toolbox/__init__.py` 的 re-export 中移除；`OBTYPE_BASIC_SCRIPT` 一并移除。原因见 §3.7。
 
 ---
 
@@ -1212,10 +1220,12 @@ CMMFiller 已有一个完整的 Inno Setup 安装包脚本 `CMMFiller/installer/
 ```python
 # pc to excel/cli.py
 import argparse
-# 子命令：export / inject / fill / form / ...
+# 子命令：export / fill-form / dump-tols
+# （原 inject 子命令已于 2026-09-23 随脚本输出功能取消，commit 76657ac）
 
 def cmd_export(args): ...
-def cmd_inject(args): ...
+def cmd_fill_form(args): ...
+def cmd_dump_tols(args): ...
 ```
 
 **集成后策略**：
@@ -1678,7 +1688,7 @@ parser.add_argument('--version', action='version', version=f'CMMFiller {__versio
 
 # pc to excel/cli.py:43+
 def cmd_export(args): ...
-def cmd_inject(args): ...
+def cmd_inject(args): ...   # ← 2026-09-23 取消（脚本输出功能整 feature 移除，commit 76657ac）
 
 # CMMFiller/main.py (迁移后) — 顶层 GUI
 # pc to excel/main.py (迁移后) — 顶层 GUI
@@ -1777,9 +1787,15 @@ core/tolerance.py:apply_tolerance()
 list[FeatureRecord] with status
     │
     ├─→ export/pcdmis_style_report.py:export_pcdmis_excel()  ← "一键导出 Excel"
-    ├─→ export/pcdmis_style_report.py:export_pcdmis_csv()    ← BAS 脚本导出
+    ├─→ export/pcdmis_style_report.py:export_pcdmis_csv()    ← CSV 导出（**当前零调用**，见下方注）
     └─→ export/inspection_form_fill.py:fill_inspection_form() ← "填入出货表"
 ```
+
+> **注（2026-09-23）**：`export_pcdmis_csv()` 是**定义但零调用**的死函数（不在
+> `export/__init__.py` 的 `__all__` 里，全仓无 call site、无测试）。它与本次取消的
+> BAS 脚本**无关** —— BAS 脚本用自己的 `saveCsv` 写 CSV，不经过 Python。
+> 原图把它标成「BAS 脚本导出」是**归因错误**，实际从未被 BAS 路径调用。
+> 已登记为独立清理项（见 `docs/CORE_DEFECT_PLAN.md`），**未删除**。
 
 **集成后约束**：
 - 这条 pipeline 是 pc_to_excel 的**核心业务逻辑**，迁移时严禁改动

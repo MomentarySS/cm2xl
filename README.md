@@ -33,12 +33,14 @@ cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 ```
 
-烟测命令：
+烟测命令（全量回归，收集范围由 `pytest.ini` 限定）：
 
 ```powershell
 cd D:\AI\work\cm2xl
-D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q
 ```
+
+> 注意：只跑 `pytest tests\phase8_smoke.py` 会漏掉 `modules/*/tests` 下的 200+ 个用例。
 
 如只想快速验证主窗口、跳过 OCR 预加载：
 
@@ -73,7 +75,6 @@ cm2xl/
 ├── build.bat / build_installer.bat / run_as_admin.bat
 ├── installer/cm2xl.iss           # Inno Setup 安装脚本
 ├── preview/index.html            # UI 修复对比预览（开发辅助）
-├── scripts/export_current.bas*   # PCDMIS BAS 脚本模板
 ├── requirements/
 │   ├── base.txt                  # GUI / Excel / PyInstaller
 │   ├── cmm_filler.txt            # OCR + PDF 渲染
@@ -105,7 +106,6 @@ cm2xl/
 │       │   ├── classification.py # 分类统计
 │       │   └── models.py         # 数据模型
 │       ├── export/               # Excel 报告导出
-│       ├── inject/               # PCDMIS 命令植入
 │       └── utils/                # admin 权限 / 本地配置
 ├── utils/                        # 通用工具
 │   ├── paths.py                  # 路径管理（frozen/dev）
@@ -126,6 +126,11 @@ cm2xl/
 ---
 
 ## 核心模块
+
+> **pc_to_excel 当前范围（2026-09-23 取消脚本输出功能后）**：
+> - ✅ **保留**：从 PCDMIS COM 抽数到 xlsx、出货表填入、连接诊断 / `dump-tols` 子命令、整体连接 UI
+> - 🗑 **取消**（commit `76657ac`）：BAS 脚本模板 + 部署 + 自动植入 `PC2XL_EXPORT` 命令 + 工具栏启动器部署。
+>   9 个相关 commit (`4ef50eb` ~ `fcf8bad`) 保留为历史记录但代码已删除 —— `modules/pc_to_excel/inject/`、`modules/pc_to_excel/scripts/`、仓库根 `scripts/export_current.bas*`、GUI「部署 BAS 脚本 / 植入导出命令 / 部署工具栏启动器」按钮、`cli.py` `inject` 子命令、`cm2xl.spec` BAS datas 等全部移除。详见 `docs/CORE_DEFECT_PLAN.md` 变更记录。
 
 ### `toolbox/shell.py` — Shell 主窗口
 
@@ -232,7 +237,7 @@ cm2xl；`build.bat` 会自动将该启动器复制到 `dist/cm2xl/`。
 
 ### 中文路径报错
 
-不要将工具放在含空格或中文路径下。BAS 脚本部署路径也禁含空格（PCDMIS Basic 解释器限制）。
+不要将工具放在含空格或中文路径下。
 
 ---
 

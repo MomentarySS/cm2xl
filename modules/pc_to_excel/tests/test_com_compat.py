@@ -324,3 +324,141 @@ def test_com_session_error_detects_rpc_not_tk():
     assert _is_com_session_error(RuntimeError("RPC server is unavailable"))
     assert _is_com_session_error(RuntimeError("main thread is not in main loop")) is False
     assert _is_com_session_error(ToolboxError(ErrorCode.PCDMIS_NO_DATA, "empty")) is False
+
+
+# ── P2-5：get_report_header_info() 漏锁的回归防护 ───────────────────────────
+
+
+class _SpyLock:
+    """可记账的 com_call_lock 替身：同时支持 `with` 与 acquire/release 两种用法。"""
+
+    def __init__(self) -> None:
+        self._inner = threading.RLock()
+        self.acquisitions = 0
+
+    def acquire(self, blocking: bool = True, timeout: float = -1):
+        self.acquisitions += 1
+        return self._inner.acquire(blocking, timeout)
+
+    def release(self) -> None:
+        self._inner.release()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.release()
+        return False
+
+
+class _HeaderPart:
+    Name = "PART-7.PRG"
+    PartName = "PART-7"
+    SerialNumber = "SN-123"
+
+    def GetVariableValue(self, name):  # pragma: no cover
+        raise AssertionError("SerialNumber 有值时不应再回退读变量")
+
+
+def _make_header_connector(monkeypatch, *, connected: bool = True):
+    """构造只注入 get_report_header_info 依赖的最小连接器（不碰真实 COM）。"""
+    from ..connector.base import ConnectionInfo
+    from ..connector.pcdmis_connector import PcdmisConnector
+
+    conn = PcdmisConnector()
+    conn._connected = connected
+    conn._active_prog_id = "PCDLRN.Application.19.1" if connected else ""
+
+    monkeypatch.setattr(
+        conn,
+        "ensure_session",
+        lambda: ConnectionInfo(connected=connected, source="PCDMIS COM"),
+    )
+    monkeypatch.setattr(conn, "_bind_app", lambda: _FakeApp(_HeaderPart()))
+    return conn
+
+
+def test_get_report_header_info_acquires_com_call_lock(monkeypatch):
+    """锁必须真的被拿到。
+
+    源码断言只能证明「代码里写了 com_call_lock」，这条证明「执行时确实进了锁」——
+    漏锁的失效模式是「与主线程探测交错」，光看文本挡不住。
+    """
+    from ..connector import pcdmis_connector as pc
+
+    spy = _SpyLock()
+    monkeypatch.setattr(pc, "com_call_lock", spy)
+    conn = _make_header_connector(monkeypatch)
+
+    header = conn.get_report_header_info()
+
+    assert spy.acquisitions == 1, "get_report_header_info() 必须进 com_call_lock"
+    assert header.program_name == "PART-7.PRG"
+    assert header.part_name == "PART-7"
+    assert header.serial_number == "SN-123"
+
+
+def test_get_report_header_info_not_connected_returns_empty(monkeypatch):
+    """未连接时在锁外早退，返回空表头（不碰 COM、不进锁）。"""
+    from ..connector import pcdmis_connector as pc
+
+    spy = _SpyLock()
+    monkeypatch.setattr(pc, "com_call_lock", spy)
+    conn = _make_header_connector(monkeypatch, connected=False)
+
+    header = conn.get_report_header_info()
+
+    assert header.program_name == ""
+    assert header.part_name == ""
+    assert header.serial_number == ""
+    assert spy.acquisitions == 0, "未连接时不应进锁"
+
+
+# ── 守「全约定」而不是守单点 ────────────────────────────────────────────────
+
+
+_CONNECTOR_DIR = Path(__file__).resolve().parent.parent / "connector"
+_COM_APARTMENT_MODULES = ("pcdmis_connector.py", "com_detector.py")
+
+
+def _functions_opening_apartment_without_lock(module_path: Path) -> list[str]:
+    """返回模块里「打开了 COM apartment 却没有进 com_call_lock」的函数名。
+
+    按 AST 判定，所以 docstring 里提到的名字天然不计入（不需要 _code_source
+    那套文本剔除）。粒度取**函数级**是刻意的：两种加锁写法都要认 ——
+    `with com_call_lock:`（阻塞）与 `com_call_lock.acquire(blocking=False)`（非阻塞）。
+    """
+    tree = ast.parse(module_path.read_text(encoding="utf-8"))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name == "com_apartment":
+            continue  # 上下文管理器自身的定义，不是调用点
+        opens_apartment = False
+        has_lock = False
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.With):
+                for item in inner.items:
+                    if "com_apartment" in ast.unparse(item.context_expr):
+                        opens_apartment = True
+            if "com_call_lock" in ast.unparse(inner):
+                has_lock = True
+        if opens_apartment and not has_lock:
+            offenders.append(node.name)
+    return offenders
+
+
+@pytest.mark.parametrize("module_name", _COM_APARTMENT_MODULES)
+def test_every_com_apartment_is_inside_com_call_lock(module_name):
+    """所有 PC-DMIS COM 调用必须串行化 —— 守全约定，不守单点。
+
+    漏锁的历史：get_report_header_info() 曾是 5 个 COM 接触点里唯一没进锁的。
+    只守单个方法的话，下一个新增的 COM 方法会以完全相同的方式漂移。
+    """
+    offenders = _functions_opening_apartment_without_lock(_CONNECTOR_DIR / module_name)
+    assert offenders == [], (
+        f"{module_name} 里这些函数打开了 com_apartment() 却没有进 com_call_lock：{offenders}。"
+        "所有 PC-DMIS COM 调用必须串行化（见 CLAUDE.md「PC-DMIS COM」一节）。"
+    )

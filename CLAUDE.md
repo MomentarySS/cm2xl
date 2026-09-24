@@ -25,7 +25,9 @@
 cd D:\AI\work\cm2xl
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py
 D:\AI\miniconda3\envs\paddleocr_gpu\python.exe main.py --skip-ocr
-D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest tests\phase8_smoke.py -q
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m pytest -q          # 全量回归（收集范围由 pytest.ini 的 testpaths 限定）
+# 只读诊断：转储各命令上/下公差的 COM 读取结果（连运行中的 PC-DMIS，不改任何数据）
+D:\AI\miniconda3\envs\paddleocr_gpu\python.exe -m modules.pc_to_excel.cli dump-tols --filter CC_ -o dump.txt
 ```
 
 ### 导入路径
@@ -42,7 +44,11 @@ multiprocessing.freeze_support()             # PyInstaller 多进程必需
 
 工具栏一键导出：`cm2xl.exe --module pc_to_excel --auto-export`（跳过 OCR；已有实例则 IPC 转发给现有窗口）。
 
-PC-DMIS COM：所有调用走 `com_call_lock`；已运行实例只用 `GetActiveObject` / `Dispatch`，**禁止 `EnsureDispatch`**（会重建 gencache，第二次导出假死）。抽数时不要从工作线程 `root.after` 刷进度，状态轮询在 `_busy` 时跳过。Tk `main thread is not in main loop` 不是 COM 失效，不要因此重连。
+PC-DMIS COM：所有调用走 `com_call_lock`（**该约定由 `test_com_compat.py::test_every_com_apartment_is_inside_com_call_lock` 源码级守护 —— 凡打开 `com_apartment()` 的函数都必须进锁**）；已运行实例只用 `GetActiveObject` / `Dispatch`，**禁止 `EnsureDispatch`**（会重建 gencache，第二次导出假死）。抽数时不要从工作线程 `root.after` 刷进度，状态轮询在 `_busy` 时跳过。Tk `main thread is not in main loop` 不是 COM 失效，不要因此重连。
+
+取命令**必须**用 `core/_command_cache.py` 的 `_get_command_at()`：本机 2024.1 上 `cmds.Item(i)` 对**每个**索引都抛 `TypeError`，靠它的回退链（`Item` → 调用式 → `[]`）才取得到；不要"简化"成直接 `Item()`。
+
+读公差/实测字段时，**直接调用**（`tol_cmd.sizeMinusTol(j)` 这类）与 `_field_value()` 是两种风险：前者会**抛异常**，异常冒到外层 `except Exception: continue` 就会静默丢整行；后者自带 try/except。统一用 `_common._safe_com_float(lambda: ...)` 兜住「抛异常」与「返回 COM 失败值 `False`/`None`」两种情况。注意 `_com_failed` 用的是 `is False`（不是 `==`），所以真实 `0.0` 公差**不算**失败 —— 别把单边公差改成无下公差。
 
 ### 主题
 - **`apply_theme()` 只在 `main.py` 启动最早处调用一次**
@@ -86,6 +92,7 @@ register_module("<module_name>", ModuleClass())
 | 审计日志 | `utils/audit.py` |
 | 路径管理 | `utils/paths.py` |
 | 模块接口协议 | `toolbox/protocol.py` |
+| 已知缺陷修复计划（长期） | `docs/CORE_DEFECT_PLAN.md`（**顶部「待办与进度总览」= 要人做的真机验证 / 下一步推荐顺序 / 整体进度**；下面是每条的状态总览表 / 语义边界 / 实施记录 / 真机清单，随进度更新） |
 | PCDMIS 数据提取（已拆分） | `modules/pc_to_excel/core/`（`data_extractor.py` 入口 + `_common`/`_command_cache`/`_dimension`/`_tolerance`/`feature`/`_datum`/`classification`） |
 
 ---
@@ -169,6 +176,8 @@ spec `datas` 列表里加：
 3. **打包前清缓存**：删除 `utils/theme.json`、`data/logs/`、`data/config/`，避免脏缓存
 4. **打包后真机测**：必须跑 `dist/cm2xl/cm2xl.exe`（不是 `python main.py`）才算验证
 5. **dev 模式没色块 ≠ 打包后没色块**：很多 GUI 问题只在 frozen exe 出现
+6. **提交中文 commit message 用 `-F`，不要用 `-m`**：PowerShell 5.1 把参数按 ANSI 编码传给原生程序，`git commit -m "中文"` 会把 GBK 字节写进历史（仓库既有提交是 UTF-8），事后很难修。做法：把消息写成 UTF-8 文件，再 `git commit -F <文件>`。
+7. **新增回归测试后验证它「有牙」**：`git stash push -- <实现文件>` 退回修复前的实现，跑同一组测试确认它**会失败**，再 `git stash pop`。只断言"现在通过"无法区分真守卫与空壳。
 
 ---
 
@@ -215,6 +224,6 @@ python -c "from utils.theme import _build_theme_json; _build_theme_json()"
 | 0–6 | ✅ 完成 |
 | 7 | ✅ 完成（README + CLAUDE.md + 旧入口重定向） |
 | 7.5 | ✅ 完成（设置 + 关于对话框，外观/OCR模型/日志级别） |
-| 8 | ✅ 完成（130 tests passed；GUI/OCR/PCDMIS 需人工真机验证） |
+| 8 | ✅ 完成（当时 130 tests passed —— **该数字已过期**，当前基线与收集范围见 `pytest.ini` 与 `docs/CORE_DEFECT_PLAN.md`；GUI/OCR/PCDMIS 需人工真机验证） |
 
 详细参见 `docs/MIGRATION_ARCHIVE.md`。
