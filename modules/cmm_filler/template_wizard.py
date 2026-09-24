@@ -25,6 +25,28 @@ def _get_appdata_dir():
 CONFIG_PATH = os.path.join(_get_appdata_dir(), 'template_config.json')
 
 
+def _safe_int(value, default):
+    """读 StringVar/字符串为 int；空串/非数字回退 default（不抛）。
+
+    用途：模板向导的 data_start_row / sample_row 等数字字段若被清空或读到非数字
+    （如 _load_existing_config() 命中 JSON 里值为 '' 或 null），直接 int() 会崩。
+    真机场景：用户首启向导保存时即触发（2026-09-24 13:54 traceback）。
+    """
+    if hasattr(value, 'get'):
+        v = value.get()
+    else:
+        v = value
+    if v is None:
+        return default
+    s = str(v).strip()
+    if not s:
+        return default
+    try:
+        return int(s)
+    except ValueError:
+        return default
+
+
 class TemplateWizard:
     COLUMN_LABELS = {
         'serial': '序号',
@@ -41,9 +63,15 @@ class TemplateWizard:
         'date': '日期',
     }
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_template_path: str | None = None):
         """parent=None 时独立窗口运行（CLI --wizard）；
-        传入主 GUI root 时作为模态对话框运行（同进程，避免多 Tk 实例冲突）。"""
+        传入主 GUI root 时作为模态对话框运行（同进程，避免多 Tk 实例冲突）。
+
+        initial_template_path: 主 GUI 传入的当前模板路径（解决 P3-10）。
+        为 None 时退回空串（同旧行为）。传入非 None 时：
+        - 文件选择框预填该路径
+        - 不立刻校验文件是否存在（用户可能正要换模板；向导自身的加载按钮负责校验）
+        """
         if parent is None:
             self.root = tk.Tk()
         else:
@@ -52,6 +80,13 @@ class TemplateWizard:
         self.root.title('模板配置向导')
         self.root.geometry('1000x780')
         apply_window_icon(self.root)
+        # P3-13：CTk 5.x 滚轮回调在 widget 被销毁后访问 event.widget.master 会
+        # 抛 AttributeError，正常使用无副作用但 traceback 刷屏。
+        # 这里只静音**特定**的 CTk 滚轮噪声，其它异常照常打到 stderr。
+        self.root.report_callback_exception = self._silence_destroyed_widget_callback
+
+        # 缓存初始模板路径，_build_ui 时用它预填 file_var（P3-10）
+        self._initial_template_path = initial_template_path or ''
 
         self.template_path = None
         self.wb = None
@@ -94,7 +129,7 @@ class TemplateWizard:
         file_frame = ttk.Frame(self.scrollable_frame)
         file_frame.pack(fill='x', padx=20, pady=5)
         ttk.Label(file_frame, text='模板文件:').pack(side='left')
-        self.file_var = tk.StringVar(value='')
+        self.file_var = tk.StringVar(value=self._initial_template_path)
         self.file_entry = ttk.Entry(file_frame, textvariable=self.file_var, width=60)
         self.file_entry.pack(side='left', padx=5)
         ttk.Button(file_frame, text='浏览', command=self._browse).pack(side='left')
@@ -204,7 +239,10 @@ class TemplateWizard:
             return
 
         # 回填文件路径和 Sheet 名称
-        if 'template_path' in self.config:
+        # 当主 GUI 显式传入 initial_template_path 时，让它压过 config 里的旧值
+        # （修 P3-10：避免主页面模板与向导内部模板状态分裂）；CLI 场景
+        # initial_template_path 为 None，从 config 回填。
+        if not self._initial_template_path and 'template_path' in self.config:
             self.file_var.set(self.config['template_path'])
         if 'sheet_name' in self.config:
             self.sheet_var.set(self.config['sheet_name'])
@@ -406,9 +444,9 @@ class TemplateWizard:
     def _save_config(self):
         config = {
             'template_path': self.file_var.get().strip(),
-            'sheet_name': self.sheet_var.get().strip(),
-            'data_start_row': int(self.data_start_var.get().strip()),
-            'sample_row': int(self.sample_row_var.get().strip()),
+            'sheet_name': self.sheet_var.get().strip() or 'FAI',
+            'data_start_row': _safe_int(self.data_start_var, 6),
+            'sample_row': _safe_int(self.sample_row_var, 5),
             'main_sample_count': self._get_main_count(),
             'columns': {},
             'sample_cols': {},
@@ -450,6 +488,26 @@ class TemplateWizard:
             self.root.wait_window()
         else:
             self.root.mainloop()
+
+    @staticmethod
+    def _silence_destroyed_widget_callback(exc, val, tb):
+        """P3-13：仅静音 CTk 滚轮回调中"已销毁 widget 取 master"的 AttributeError。
+
+        真机：CTk 5.x 的 _check_if_valid_scroll 在用户关闭窗口瞬间仍有 mouse-wheel
+        事件在飞时，event.widget 已是字符串（widget 已销毁），访问 .master 抛
+        AttributeError，刷屏几百行 traceback 但不影响功能。
+
+        这里**只**对"CTk 滚轮 + AttributeError + master"这条特定路径放行，其它
+        异常照常打到 stderr（不掩盖真问题）。
+        """
+        import traceback as _tb
+        if (
+            issubclass(exc, AttributeError)
+            and 'master' in str(val)
+            and 'ctk_scrollable_frame' in '\n'.join(_tb.format_tb(tb))
+        ):
+            return
+        _tb.print_exception(exc, val, tb)
 
 
 if __name__ == '__main__':
