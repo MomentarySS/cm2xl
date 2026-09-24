@@ -258,6 +258,9 @@ _DUMP_SIZE_METHODS = (
     "sizePlusTol",
     "sizeMinusTol",
     "sizeOutOfTol",
+    # P3-11.1 诊断：BONUS 列漏填根因定位 —— cm2xl 输出位置度/垂直度/平行度/倾斜度
+    # 的 BONUS 列空，但 PC-DMIS 原生写 0。需抓 PC-DMIS COM 返回值（0 / False / 抛异常）
+    "sizeBonus",
 )
 
 _DUMP_SEG_METHODS = (
@@ -267,6 +270,8 @@ _DUMP_SEG_METHODS = (
     "SegmentDimDeviation",
     "SegmentDimPlusTol",
     "segmentDimMinusTol",
+    # P3-11.1 诊断：同上
+    "segmentDimBonus",
 )
 
 

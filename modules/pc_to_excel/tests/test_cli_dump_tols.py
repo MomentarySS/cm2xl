@@ -67,3 +67,23 @@ def test_dump_tols_reports_not_connected(capsys, monkeypatch):
     )
     assert cmd_dump_tols(_FakeArgs()) == 1
     assert "未连接" in capsys.readouterr().err
+
+
+# ─── P3-11.1 诊断：BONUS 必须在 dump 范围里 ───────────────────────────────
+
+def test_dump_size_methods_includes_size_bonus():
+    """P3-11.1 诊断：ToleranceCommand 尺寸行的 BONUS 必须在 dump 范围里。
+
+    不加则 PC-DMIS 上 PC-DMIS 返回 False/抛异常 的真实原因被遮蔽，
+    只能瞎猜根因。
+    """
+    from ..cli import _DUMP_SIZE_METHODS
+
+    assert "sizeBonus" in _DUMP_SIZE_METHODS
+
+
+def test_dump_seg_methods_includes_segment_dim_bonus():
+    """P3-11.1 诊断：ToleranceCommand 区段行的 BONUS 必须在 dump 范围里。"""
+    from ..cli import _DUMP_SEG_METHODS
+
+    assert "segmentDimBonus" in _DUMP_SEG_METHODS
