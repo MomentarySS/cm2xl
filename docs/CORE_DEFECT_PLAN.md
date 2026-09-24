@@ -18,6 +18,12 @@
 > **用法**：长期跟踪文档。每条独立 commit，做完把 TL;DR 表的「状态」和文末「变更记录」一起更新。
 > 每条开工前先读「语义边界」—— 那是本计划里最容易被忽略、也最容易改出回归的部分。
 
+## 相关文档
+
+- [cm2xl 输出 vs PC-DMIS 原生 对照报告 (2026-09-24)](CMMFILLER_VS_PCDMIS_对比报告_2026-09-24.md)
+  —— 实测 `cm2xl-塑料DEMO_report.xlsx` 与 `cm2xl开发用报告3.XLSX` 的逐列对照结果。
+  发现 P3-11.1 BONUS 列漏填（6 个形位公差行）；其它差异（描述翻译 / 列结构精简 / -TOL=0 vs ''）语义等价、不修。
+
 ---
 
 ## 待办与进度总览
@@ -1718,6 +1724,44 @@ traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INF
 2. **+TOL 列 vs MEAS 列边界判定** —— 当前 measured 取第一个非零，会撞 +TOL（CC_43 同轴度 MEAS=错误场景）
 3. **形位符号描述文字**（"轮廓度"/"圆度" 等中文）的 OCR 后修 —— 当前解析已不再走入错误路径，但描述字段可能仍是噪声字符
 4. **OCR 模型升级** —— 根治符号丢失问题，超出本 PR 范围
+
+### P3-11.1 BONUS 列漏填（2026-09-24 登记）
+
+**位置**：`pc_to_excel/export/pcdmis_style_report.py` 的形位公差导出逻辑（待定位具体行）
+
+**现象**：用户 2026-09-24 15:57 提供 `cm2xl-塑料DEMO_report.xlsx`（cm2xl pc_to_excel 模块输出），与
+PC-DMIS 原生 `cm2xl开发用报告3.XLSX` 对照，发现 **BONUS 列 4 个 GD&T 类型全漏**：
+
+| GD&T 类型 | cm2xl BONUS | PC-DMIS BONUS |
+|---|---|---|
+| 位置度 (CC_38) | None | **0** |
+| 垂直度 (CC_39 / CC_50 / CC_51) | None | **0** |
+| 平行度 (CC_52) | None | **0** |
+| 倾斜度 (CC_69) | None | **0** |
+
+圆度 / 圆跳动 / 同轴度 / 轮廓度 在 PC-DMIS 原生里 BONUS 也是空，cm2xl None = 语义等价。
+
+**根因**（推断）：
+- `_resolve_gdt_nums()` 返回 `[nominal, +TOL, -TOL, measured]` 四元组，**未读 BONUS 列**
+- 导出侧 `pcdmis_style_report.py` 拿到四元组即按四列输出，BONUS 列永远填 None
+
+**对照结论**（其它差异已检视，**仅此 1 项需修**）：
+- ✓ 所有数值列完全一致（NOMINAL / MEAS / +TOL / -TOL / DEV / OUTTOL）
+- ⚠ -TOL=0 vs ''：语义等价（都表"无下公差"），无需改
+- ✓ 72 个 CC 全部合格、超 0 计数 0、合格率 100.0%（cm2xl 与 PC-DMIS 完全一致）
+- ⚠ 形位描述 "ISO 形位公差" vs "ASME 形位公差"：命名标准差异，**不算 bug**
+- ⚠ cm2xl 简化的列结构（去掉 轴/SEG/DEVANG）：**不算 bug**（PC-DMIS 原生模板可选）
+
+**修法建议**（待开工时细化）：
+1. `_resolve_gdt_nums()` 多返回一个 `bonus` 字段，从 data row 的 BONUS 列位置取值
+2. `_build_measurement()` 加 `bonus` 字段透传
+3. `pcdmis_style_report.py` 写 BONUS 列时填 `m.bonus`
+4. 不改动无 BONUS 的 GD&T 行（圆度/圆跳动/同轴度/轮廓度）；只对位置度/垂直度/平行度/倾斜度填 0
+
+**测试矩阵**（待开工时写）：
+- 位置度 / 垂直度 / 平行度 / 倾斜度 → BONUS=0 正确透传
+- 圆度 / 圆跳动 / 同轴度 / 轮廓度 → BONUS=None 保持空
+- 普通尺寸行 → 不写 BONUS 列（或保持 None）
 
 ---
 
