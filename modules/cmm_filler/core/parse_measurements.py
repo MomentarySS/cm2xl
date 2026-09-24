@@ -512,6 +512,88 @@ def _try_forward_plane_nums(
     return None, 1.0
 
 
+# GD&T（形位公差）spec row 检测（P3-11 集成层）──────────────────────────
+
+def _is_gdt_label_row(row_cells: list[OCRBox], item_prefixes: list[str]) -> bool:
+    """判断包含 CC_N / FAI_N 标签的 spec 行是否是形位公差（GD&T）。
+
+    真机样例（参考 PDF 第 4 页）：
+        形位：[('CC_38', ...), ('毫米', ...), ('0.3ABC', ...), ('默认值', ...), ('ASME Y14.5', ...)]
+        普通：[('CC_2', ...), ('毫米', ...), ('平面B 至 圆柱1(Y 轴)', ...), ('AX', ...), ('NOMINAL', ...), ...]
+
+    强信号（满足任一即 True）：
+    - 同行含 'ASME Y14.5'（PC-DMIS 报告里 ASME Y14.5 标在形位 spec 行的右端）
+    - 同行任一格文本通过 `_looks_like_gdt_spec` 判定为 GD&T
+
+    返回 False = 普通尺寸行（走 _resolve_pc_dmis_nums ±上下公差 路径）。
+    """
+    row_text = ' '.join(c.text for c in row_cells)
+    if 'ASME Y14.5' in row_text:
+        return True
+    for cell in row_cells:
+        if _looks_like_gdt_spec(cell.text):
+            return True
+    return False
+
+
+def _resolve_gdt_nums(
+    rows: list[list[OCRBox]],
+    label_idx: int,
+    parsed: ParsedLabel,
+    item_prefixes: list[str],
+    skip_lines: set[str],
+) -> tuple[list[float] | None, float]:
+    """GD&T 单值公差解析路径（避开 _resolve_pc_dmis_nums 的 ±上下公差 假设）。
+
+    返回 [nominal, +TOL, -TOL, measured]：
+    - nominal = 0（形位公差相对基准，名义值恒 0）
+    - +TOL = spec 行的单值公差（如 0.5 / 0.3 / 0.6 等，从 spec token 提取）
+    - -TOL = 0（GD&T 单边公差，无下公差）
+    - measured = spec 行下一行数据行（特征/NOMINAL/+TOL/...）的第一个非零数值
+
+    失败返回 (None, 1.0)。
+
+    不做的：
+    - 不解析多表嵌套（CC_21 的「尺寸」+「圆度」两张堆叠表）—— 单值公差会取第一张表的 measured
+    - 不处理 AX 列（GD&T 通常只有 1 个数据行，不像尺寸行有多轴）
+    - 不解析 BONUS / OUTTOL 等高级字段
+    """
+    label_cells = rows[label_idx]
+    # 从 spec 行所有 cell 里提取 GD&T 公差值（**只**取通过 `_looks_like_gdt_spec`
+    # 的 cell，避免把 CC_N 标签里的数字、ASME Y14.5 里的 5/14/5 当成 spec）
+    spec_value: float | None = None
+    for cell in label_cells:
+        if _looks_like_gdt_spec(cell.text):
+            v = _extract_gdt_tolerance(cell.text)
+            if v is not None:
+                spec_value = v
+                break
+    if spec_value is None:
+        return None, 1.0
+
+    # 找 spec 行后的数据行（跳过表头）
+    measured = 0.0
+    data_conf = _row_confidence(label_cells)
+    for j in range(label_idx + 1, min(label_idx + 6, len(rows))):
+        row_text = ' '.join(c.text for c in rows[j])
+        if find_label_in_row(row_text, item_prefixes):
+            break  # 撞到下一个 CC 标签，停止
+        if _is_ax_header_row(rows[j]) or _is_table_header_row(rows[j]):
+            continue  # 跳过表头行
+        # 取数据行第一个非零数字作为 measured
+        # （GD&T 数据行通常是 [特征, AX?, NOMINAL=0, +TOL, -TOL=0, MEAS, ...]，
+        # 第一个非零数字不是 NOMINAL=0 就是 MEAS —— 命中 MEAS 的概率更大）
+        nums = _numeric_values_from_cells(rows[j], skip_lines)
+        for n in nums:
+            if abs(n) > 1e-9:
+                measured = n
+                data_conf = _row_confidence(rows[j])
+                break
+        break  # 只取第一个数据行
+
+    return [0.0, spec_value, 0.0, measured], data_conf
+
+
 def _resolve_pc_dmis_nums(
     rows: list[list[OCRBox]],
     label_idx: int,
@@ -858,9 +940,16 @@ def parse_from_ocr_boxes(
     assigned_nums: set[int] = set()
     for i, parsed in label_positions:
         label = format_item_label(parsed.prefix, parsed.num, parsed.sub, parsed.sub_sep)
-        nums, confidence = _resolve_pc_dmis_nums(
-            rows, i, parsed, item_prefixes, skip_lines, axis_preferences,
-        )
+        # P3-11：形位公差（GD&T）spec 行走单值公差分支，避开 ±上下公差 误匹配
+        is_gdt = _is_gdt_label_row(rows[i], item_prefixes)
+        if is_gdt:
+            nums, confidence = _resolve_gdt_nums(
+                rows, i, parsed, item_prefixes, skip_lines,
+            )
+        else:
+            nums, confidence = _resolve_pc_dmis_nums(
+                rows, i, parsed, item_prefixes, skip_lines, axis_preferences,
+            )
         if not nums:
             warnings.append(f'{label} 表格行未找到完整数据')
             continue
