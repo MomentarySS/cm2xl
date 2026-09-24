@@ -231,15 +231,22 @@ class CMMFillerGUI:
             font=ctk.CTkFont(size=17, weight='bold'),
         ).pack(anchor='w', padx=10, pady=(8, 4))
 
-        # 模板行
+        # 模板行（B 方案：只读显示 + 改去向导；解决 P3-10 重复设置问题）
         tpl_frame = ctk.CTkFrame(config_card, fg_color="transparent")
         tpl_frame.pack(pady=2, padx=10, fill='x')
         ctk.CTkLabel(tpl_frame, text='📄 Excel 模板:', width=90, anchor='w').pack(side='left')
         self.template_var = ctk.StringVar(value=self.default_template)
-        self.template_entry = ctk.CTkEntry(tpl_frame, textvariable=self.template_var, height=30)
-        self.template_entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
-        self._setup_dnd(self.template_entry, 'template')
-        ctk.CTkButton(tpl_frame, text='浏览', width=52, height=30, command=self._browse_template).pack(side='left')
+        # 单独的展示用 var：实时跟踪 template_var（外部代码改 template_var 也会触发刷新）
+        self.template_display_var = ctk.StringVar(value=self._format_template_label())
+        self.template_var.trace_add(
+            'write', lambda *_: self.template_display_var.set(self._format_template_label())
+        )
+        self.template_label = ctk.CTkLabel(
+            tpl_frame, textvariable=self.template_display_var, height=30, anchor='w',
+        )
+        self.template_label.pack(side='left', fill='x', expand=True, padx=(0, 6))
+        # 不再绑 DnD / 不再放「浏览」按钮：模板唯一改的入口是向导
+        ctk.CTkButton(tpl_frame, text='📂 更换', width=72, height=30, command=self._open_wizard).pack(side='left')
 
         # PDF 行（支持拖拽文件夹/文件）
         pdf_frame = ctk.CTkFrame(config_card, fg_color="transparent")
@@ -1703,12 +1710,28 @@ class CMMFillerGUI:
         try:
             from .template_wizard import TemplateWizard
             # 模态对话框：向导关闭前主窗口不可操作，关闭后自动刷新模板路径
-            TemplateWizard(self.root.winfo_toplevel()).run()
+            # P3-10：把当前主页面路径传给向导，避免向导空白起步后配置错列映射
+            TemplateWizard(
+                self.root.winfo_toplevel(),
+                initial_template_path=self.template_var.get(),
+            ).run()
         except Exception as exc:
             self._log(f'打开向导失败: {exc}')
         finally:
             self._refresh_template_path()
             self._set_status('就绪')
+
+    def _format_template_label(self) -> str:
+        """B 方案：把 self.template_var 渲染成首页 Label 文本。
+
+        - 空：显示「(未配置)」
+        - 短路径：显示 basename（路径可能很长，全文显示会撑爆窗口）
+        - 完整路径保留在 self.template_var，仅 Label 显示摘要
+        """
+        path = self.template_var.get().strip()
+        if not path:
+            return '(未配置)'
+        return os.path.basename(path)
 
     def _refresh_template_path(self):
         config_path = str(paths.config_dir / 'cmm_filler' / 'template_config.json')
