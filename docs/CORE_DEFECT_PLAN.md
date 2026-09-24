@@ -75,9 +75,16 @@ P3-5 也碰 `export/pcdmis_style_report.py`（保存侧）；P3-8 同样碰
 先 P3-8（纯删除，最小）→ 再 P3-5（保存侧改名）→ 最后 P2-2（判定侧，需先定设计决策）。
 P3 其余各项互不重叠。
 
-### 三、整体进度（截至 2026-09-23 下午）
+### 三、整体进度（截至 2026-09-24 下午）
 
-**已完成 7 / 17，未开始 10 / 17。** 2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），并**新登记** P3-8（`export_pcdmis_csv` 死函数）+ P3-9（`build.bat` 残留检查，已随 `371a5c7` 修复），本文件条目数 20 → 15 → 17。基线 233 → **250 passed**（`tests/` 42 + `modules/*/tests` 208）。
+**已完成 10 / 20，未开始 10 / 20。** 2026-09-24 真机试用 cm2xl 1.1.0 dev 模式时发现 3 个 UX/健壮性问题：
+- **P3-10**（主页面 ↔ 向导模板路径分裂）：UX 重复设置 + 漂移风险 ⇒ **B 方案**：首页只读 + 向导预填
+- **P3-12**（`_save_config` 字段空值）：首启向导点保存即崩 ⇒ 已在 `622db57` 修
+- **P3-13**（CTk 滚轮回调噪声）：日志被 600+ 行 `AttributeError` traceback 淹没 ⇒ 已在 `49165cc` 精确静音
+
+三项已实现 + 测试通过（基线 250 → **271 passed**），PR/合并待办。
+
+历史脉络：2026-09-23 下午**取消** P1-4 ~ P1-8 整 feature（详见本节「脚本输出功能取消」段），并**新登记** P3-8（`export_pcdmis_csv` 死函数）+ P3-9（`build.bat` 残留检查，已随 `371a5c7` 修复），本文件条目数 20 → 15 → 17 → 20（+P3-10/12/13）。基线 233 → 250 → **271 passed**（`tests/` 42 + `modules/*/tests` 229）。
 
 **2026-09-23 取消后的收尾清理**：删除 `76657ac` 遗漏的构建侧引用 —— `build.bat:22-28` 的「检查 BAS 模板」前置检查（会让打包第一步就 `exit /b 1`）+ `cm2xl.spec:112` 的 `modules.pc_to_excel.inject.toolbar_launcher` hiddenimport。另清理 `scripts/` 下两个一次性探针（`inspect_fai_labels.py` / `test_pdf_folder.py`，硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用）。
 
@@ -132,6 +139,9 @@ P3 其余各项互不重叠。
 | P1-7（提示补全）| `_save_failure_hint` 增列 read-only 形态说明，明示「cm2xl 无降级路径 ⇒ 走 Ctrl+S」 | `5d11cdd` |
 | P1-7（运行时）| `_trigger_part_save` 形态 C 降级到 `SaveAs(part.FullName)`（实测可调） | `711753c` |
 | P1-8 | `deploy_bas_script` 按 GBK 编码写出 BAS（PC-DMIS Basic Scripting Engine 按 ANSI 读） | `63b55c0` |
+| P3-12 | 模板向导 `_save_config` 字段空值兜底（`_safe_int` 工具 + sheet_name 'FAI' 默认） | `622db57` |
+| P3-13 | 模板向导装 Tk 回调异常处理器，精确静音 CTk 滚轮噪声（不影响其它异常） | `49165cc` |
+| P3-10 / B 方案 | 主页面模板改为只读显示 + 向导接收 `initial_template_path` 预填 | `6876e65` |
 
 | 项 | 做了什么 | commit |
 |----|---------|--------|
@@ -184,6 +194,9 @@ P3 其余各项互不重叠。
 | P3-7 | `tests/` 目录默认不被 pytest 收集（42 个测试静默不跑） | `pytest.ini`（新建） | 测试可信度 | ❌ | ✅ **已完成** |
 | P3-8 | `export_pcdmis_csv()` 定义但零调用（死函数，且被架构文档错误归因为「BAS 脚本导出」） | `export/pcdmis_style_report.py:382` | 死代码 / 文档错归因 | ❌ | ⬜ 未开始（2026-09-23 登记） |
 | P3-9 | `build.bat` 残留已删除文件的检查 ⇒ 打包第一步就 `exit /b 1`（`76657ac` 遗漏） | `build.bat:22-28` | 构建失败 | ❌ | ✅ **已修 + 完整打包实跑验证**（`371a5c7`；6/6 步全过 + exe 冒烟通过） |
+| P3-10 | 主页面 Excel 模板与向导内部模板状态分裂（重复设置、漂移） | `cmm_filler/gui.py:234-242` + `template_wizard.py:42-66` | UX / 配置漂移 | ✅ | ✅ **已修（B 方案）**（`622db57` + `6876e65`；主页只读 + 向导预填） |
+| P3-12 | `_save_config()` 字段空值未防护 ⇒ `int('')` 抛 `ValueError` | `cmm_filler/template_wizard.py:_save_config` | 健壮性 | ✅ | ✅ **已修 + 真机已撞**（`622db57`；2026-09-24 13:54 traceback） |
+| P3-13 | CTk 5.x 滚轮回调在 widget 销毁后访问 `event.widget.master` 抛 `AttributeError`，刷屏 600+ 行 traceback | `ctk_scrollable_frame.py:_check_if_valid_scroll`（库内部） | 可诊断性 / 日志噪声 | ✅ | ✅ **已修 + 精确静音**（`49165cc`；只放行 CTk 滚轮 + master + AttributeError，其它照常） |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -1431,6 +1444,180 @@ pytest 250 passed。
 
 ---
 
+### P3-10 主页面 Excel 模板与向导内部模板状态分裂
+
+**位置**：`modules/cmm_filler/gui.py:234-242` + `modules/cmm_filler/template_wizard.py:42-66`
+
+**现象**：用户在主页面已经选好模板并跑过几次，进入「模板配置」向导还得再选一次路径。
+最差情况：主页面选中 A、向导自己另选 B，跑 OCR 用的是 A 但向导里编辑的是 B——
+**两份模板状态分裂**，改完保存的列映射作用不到 A 上，下次跑 OCR 还是错的。
+
+**真机首撞**：2026-09-24 13:48 dev 启动 → 13:54 模板配置向导第一次保存。
+截图里两份路径完全不同（主页面 = `模板2.xlsx`，向导 = `检测报告样板-2026.xlsx`）。
+
+**根因**：
+- `gui.py` 主页面 `self.template_var`（可编辑 Entry + 浏览按钮）
+- `template_wizard.py` 向导 `self.file_var = tk.StringVar(value='')` —— **初始化为空**
+- `gui.py:_open_wizard()` 直接 `TemplateWizard(parent).run()`，**完全没传主页面的路径**
+- 向导 `_load_existing_config()` 从磁盘 `template_config.json` 读取，与主页面 StringVar 完全无关
+
+**改法（B 方案，用户拍板）**：
+- **主页面**：去掉 Entry + 浏览按钮，新增 Label +「📂 更换」按钮
+  - Label 由 `template_display_var` 控制，通过 `trace_add('write', ...)` 跟踪 `template_var`
+  - 显示文本由 `_format_template_label()` 渲染（空 → `(未配置)`，有值 → `basename`）
+- **`_open_wizard()`**：多传 `initial_template_path=self.template_var.get()`
+- **`TemplateWizard.__init__`**：多收 `initial_template_path: str | None = None`，缓存到 `_initial_template_path`
+- **`_build_ui`**：用 `_initial_template_path` 预填 `file_var`
+- **`_load_existing_config`**：仅当**未传** `initial_template_path` 时才从 config 回填 `file_var`
+  - 主 GUI 场景：传了 initial 就压过 config（修漂移）
+  - CLI 场景：initial 为 None → 保留旧行为（CLI 不破坏）
+
+**语义边界（最要紧）**：
+1. **DnD 模板文件到首页 Label 不再生效** —— 替代：向导内点「浏览」。若恢复 DnD
+   需在 Label 上 register DND_FILES，但 Label 视觉无 drop 反馈会让人困惑，本次不做。
+2. **Guide 弹窗（首次启动引导）不受影响** —— 仍用 Entry + 浏览按钮（其 row 构造
+   仍依赖 `self._browse_template` 回调）。本次只改主页一行，guide 完整保留。
+3. **`_browse_template` / `_on_drop(template 分支)` 保留** —— guide 还在用，**删
+   不得**（若删除会破坏 guide）。
+4. **`initial_template_path` 不做文件存在性校验** —— 传入路径可能就是用户要换掉
+   的（不存在的旧路径）。向导自身「加载模板」按钮会校验。
+5. **trace 的 `_format_template_label()`** 只对 `self.template_var` 生效，**外部
+   直接写 `template_display_var` 会绕过** —— 这是有意的（trace 是单向同步）。
+
+**实施记录（2026-09-24）**：
+
+| 文件 | 改动 | 行数 |
+|------|------|------|
+| `modules/cmm_filler/gui.py` | 主页面模板行 Entry → Label +「更换」；新增 `_format_template_label()` | +29 / -6 |
+| `modules/cmm_filler/template_wizard.py` | `__init__` 加 `initial_template_path`；`_load_existing_config` 加守卫 | +16 / -4 |
+| `modules/cmm_filler/tests/test_template_wizard_initial_path.py` | 7 用例（3 个 wizard initial + 4 个 label 渲染） | +84（新建） |
+
+测试矩阵：`TemplateWizard(initial=...)` 缓存 + `_format_template_label()` 渲染。
+
+「有牙」验证（`git stash push -- <gui.py + template_wizard.py>` 退回修复前）：
+- 修复前：7 failed / 0 passed —— `_initial_template_path` 和 `_format_template_label`
+  全 AttributeError（不存在）。
+- 修复后（pop 后）：7 passed / 0 failed。
+
+回归基线：264 → **271 passed**（+7 新测试，0 旧测试变红）。
+
+### P3-12 模板向导 `_save_config()` 字段空值未防护
+
+**位置**：`modules/cmm_filler/template_wizard.py:_save_config`（原 line 410-411）
+
+**现象**：模板向导点「保存配置」时，若 `data_start_row` / `sample_row` StringVar
+是空串，直接 `int('')` 抛 `ValueError: invalid literal for int() with base 10: ''`，
+整份配置无法落盘。
+
+**真机首撞**：2026-09-24 13:54，用户在主页面选好模板后第一次点「保存配置」即崩。
+完整 traceback 见 dev GUI 后台日志：
+```
+File "modules/cmm_filler/template_wizard.py", line 411, in _save_config
+    'sample_row': int(self.sample_row_var.get().strip()),
+ValueError: invalid literal for int() with base 10: ''
+```
+
+**根因**：
+- `_load_existing_config()`（line 211-216）仅在 JSON 里有对应键时才 `set()` ，
+  但没有兜底机制
+- 用户首启向导时，StringVar 默认值 `'6'`/`'5'` 是没问题的，但若之前清空过输入框
+  或 JSON 里是空串/null，字段被 set 为空后再保存即崩
+- `sheet_name` 同理：默认 `'FAI'` 但无兜底，保存出 `sheet_name=''` 让后续下游崩溃
+
+**改法**（`modules/cmm_filler/template_wizard.py`）：
+1. 新增模块级 `_safe_int(value, default)` 工具函数
+   - 接受 StringVar 或裸值（duck typing via `.get`）
+   - 空串 / `None` / 非数字 → 回退 `default`
+   - `"0"` / `0` / 合法整数 → 透传（**不能误判为"空"而回退**）
+2. `_save_config()` 全部改用 `_safe_int(...)`：
+   - `data_start_row` 默认 `6`
+   - `sample_row` 默认 `5`
+3. `sheet_name` 加 `or 'FAI'` 兜底
+
+**语义边界（最要紧）**：
+1. **`"0"` 必须是合法值** —— 这是关键边界。`_safe_int` 先 strip 再判断空
+   空（不能把 `"0"` 当空），再 int()。测试矩阵里专门有一条
+   `test_zero_is_not_misread_as_empty` 防回归。
+2. **不接浮点** —— 用户填 `6.5` 走默认 6（向导字段语义上是整数行号）。
+3. **不扩展到 columns / N 字母列** —— 那些字段本就值空合法（只填了某些列也能保存）。
+4. **不动 `_load_existing_config`** —— 那段只是把 JSON 反序列化到 StringVar，
+   真正的崩溃点（int 转换）放在保存侧更合理（"读时宽容、写时严格"是惯例外）。
+
+**实施记录（2026-09-24）**：
+
+| 文件 | 改动 | 行数 |
+|------|------|------|
+| `modules/cmm_filler/template_wizard.py` | 新增 `_safe_int` 工具；`_save_config` 改用；sheet_name 加 `or 'FAI'` | +25 / -3 |
+| `modules/cmm_filler/tests/test_template_wizard_save.py` | 11 用例（7 个 `_safe_int` 单元 + 4 个集成） | +196（新建） |
+
+测试矩阵：
+- `_safe_int` 单元（7）：空串 / None / 空白 / 非数字 / `0` / 合法整数 / padding
+- `_save_config` 集成（4）：空值落默认 / `0` 透传 / 空 sheet 落 `'FAI'` / 端到端落盘
+
+「有牙」验证（`git stash push -- <template_wizard.py>` 退回修复前）：
+- 修复前：9 failed / 1 passed / 1 skipped
+  - `TestSafeInt` 6 用例失败（`_safe_int` 不存在 → ImportError 阻 collect）
+  - `TestSaveConfigDefaults` 3 用例跑原始 `int('')` 路径 → `ValueError` + 空 sheet 断言失败
+  - 1 passed 是 `test_save_with_zero_data_start_row_passes_through`（旧逻辑下 `int('0')=0` 凑巧过）
+  - 1 skipped 是无 fix 时的退路（与本节无关）
+- 修复后（pop 后）：11 passed / 0 failed
+
+回归基线：250 → **261 passed**（+11 新测试，0 旧测试变红）。
+
+### P3-13 CTk 5.x 滚轮回调噪声（`AttributeError: 'str' has no attribute 'master'`）
+
+**位置**：`CTk 5.x: ctk_scrollable_frame.py:_check_if_valid_scroll`（库内部，
+本项目不可修改）
+
+**现象**：使用模板向导滚轮时，CTk 5.x 的 `_check_if_valid_scroll` 在 widget 已被
+销毁、mouse-wheel 事件仍在飞时，访问 `event.widget.master` 抛
+`AttributeError: 'str' object has no attribute 'master'`。30 秒使用刷屏 600+ 行
+traceback，但**不影响功能**。
+
+**真机观察**：2026-09-24 13:48 dev 启动到 13:54 关窗，`cmm_filler.log` 里这段
+traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INFO/ERROR 行被冲掉。
+
+**权衡**：
+- ❌ 不能 monkey-patch CTk（影响所有使用方，脆弱）
+- ❌ 不能完全关 Tk 回调异常（会掩盖真问题）
+- ❌ 改 wizard 自己的 `<MouseWheel>` binding（错误源不在我们的 binding）
+- ✅ 在向导自己的 Tk root 上挂 `report_callback_exception`，**精准放行**特定模式
+
+具体改法（`modules/cmm_filler/template_wizard.py`）：
+1. 新增 `@staticmethod _silence_destroyed_widget_callback(exc, val, tb)`
+   - 仅当**同时满足**三个条件时放行（`return`）：
+     a) `exc` 是 `AttributeError` 的子类
+     b) `str(val)` 含 `'master'` 子串
+     c) traceback 中含 `'ctk_scrollable_frame'` 帧（限定 CTk 库）
+   - 其它异常走 `traceback.print_exception` 照常打到 stderr
+2. `__init__` 末尾挂上：`self.root.report_callback_exception = _silence_destroyed_widget_callback`
+   - **作用域**：仅模板向导自身的 Tk root，不影响主窗口 / Shell / pc_to_excel
+
+**语义边界（最要紧）**：
+1. **不能扩展静音条件** —— 一旦误命中会掩盖真 AttributeError（`test_unrelated_attribute_error_still_prints` 防回归）
+2. **不能完全静默** —— 其它类型的异常照常输出（`test_non_attribute_error_still_prints` 防回归）
+3. **作用域限定到向导 root** —— 主窗口如果有同样问题需要单独处理（本次不动）
+4. **CTk 升级修了此 bug 时方法自动变 no-op** —— 永远不命中，无副作用
+
+**根治 vs 本轮**：**根治需 CTk 库升级或切到 tk 原生 Scrollbar**（已调研，超出本
+轮范围）。本轮只把日志净化掉，保证排错时不被噪声淹没。
+
+**实施记录（2026-09-24）**：
+
+| 文件 | 改动 | 行数 |
+|------|------|------|
+| `modules/cmm_filler/template_wizard.py` | `__init__` 挂 `report_callback_exception`；新增静态方法 `_silence_destroyed_widget_callback` | +24 |
+| `modules/cmm_filler/tests/test_template_wizard_callback.py` | 3 用例（CTK 帧静音 / 其它 AttributeError 不静音 / 其它异常类型不静音） | +76（新建） |
+
+「有牙」验证（`git stash push -- <template_wizard.py>` 退回修复前）：
+- 修复前：3 failed / 0 passed —— `AttributeError: type object 'TemplateWizard'
+  has no attribute '_silence_destroyed_widget_callback'`
+- 修复后（pop 后）：3 passed / 0 failed
+
+回归基线：261 → **264 passed**（+3 新测试，0 旧测试变红）。
+
+---
+
 ## 开放决策（需要现场/产品信息才能定）
 
 | # | 决策点 | 结论 |
@@ -1471,12 +1658,43 @@ pytest 250 passed。
       （头行 + X/Y/直径位置 配对行，各轴公差不同），见 P2-2「现场实测补充」
 - [ ] P2-3：多件连续测 + 子编号冲突弹窗
 - [ ] P3-2：冷启动期间点工具栏一键导出
-- [ ] 全量回归：`python -m pytest -q`（当前 **314 passed** = 278 + P1-5 的 25 + P1-6 的 6 + P1-7 提示补全的 1 + P1-7 降级路径的 2 + P1-8 的 2）
+- [ ] 全量回归：`python -m pytest -q`（当前 **271 passed** = 250 + P3-12 的 11 + P3-13 的 3 + P3-10 的 7）
 - [ ] **发布前写 CHANGELOG**：OCR 缓存图片命名变更 → 历史缓存图片全部失效
       （由 `_cleanup_cache()` 的 30 天 mtime 自动清理，无需人工干预）。见 P1-3 边界 1
 - [ ] ~~**发布前写 CHANGELOG**：`export_config.txt` 写入编码改为 UTF-16 →~~ **已取消**（P1-4 整 feature 移除；2026-09-23）
 - [ ] ~~**发布前写 CHANGELOG**：P1-5 BAS 字段常量加 `FLD_` 前缀 →~~ **已取消**（同 P1-4）
 - [ ] ~~**发布前写 CHANGELOG**：P1-8 BAS 文件部署出按 GBK 编码 →~~ **已取消**（同 P1-4）
+
+### P3-10 真机验证清单（commit `6876e65`）
+
+- [ ] **主页 → 向导 → 主页 一轮端到端**：
+  1. 启动 dev，主页面模板 Label 应显示当前模板 basename（不是路径全文）
+  2. 点「📂 更换」打开向导 —— **向导 file_var 应已预填主页面的当前路径**
+  3. 不动 file_var，直接点「加载模板」 —— 表头预览正常显示
+  4. 点「保存配置」关窗 —— 主页 Label 应自动同步到向导里最终保存的路径
+- [ ] **DnD 失效回归验证**：拖 .xlsx 模板到主页 Label → 无任何反应（这是预期，替代路径：向导内点「浏览」）
+- [ ] **Guide 弹窗不受影响**：首次启动如果弹出，引导向导内仍能选择模板、浏览按钮照常工作
+- [ ] **CLI 场景回归**：`python -m modules.cmm_filler.template_wizard` 独立运行 → 应从 `template_config.json` 读路径（`initial_template_path=None` 走 config 回填路径）
+
+### P3-12 真机验证清单（commit `622db57`）
+
+- [ ] **首启向导保存不再崩**：
+  1. 删除 `%APPDATA%\cm2xl\config\cmm_filler\template_config.json`（强制首启场景）
+  2. 主页面点「📂 更换」打开向导
+  3. 不动任何字段直接点「保存配置」 —— 应**不抛 ValueError**；`data_start_row=6` / `sample_row=5` / `sheet_name='FAI'` 写入
+- [ ] **空字段容忍**：向导内手动清空「数据起始行」/「送检产品序号行」任一 → 保存应**不抛**，落默认值
+- [ ] **真值 0 守门**：把「数据起始行」改成 0 保存 → 读回应是 0（不是默认 6）—— 反向守卫
+- [ ] **空 Sheet 名容忍**：把 Sheet 名清空保存 → 读回应是 `FAI`
+
+### P3-13 真机验证清单（commit `49165cc`）
+
+- [ ] **日志噪声验证**：
+  1. 启动 dev，打开向导，**反复滚轮滚动** 30 秒
+  2. 看 `%LOCALAPPDATA%\cm2xl\logs\cmm_filler.log` —— 应**没有** `'str' object has no attribute 'master'` 的 600+ 行刷屏
+  3. （对照）若 `git revert 49165cc` 后跑同一操作，应刷屏
+- [ ] **真异常不被吞验证**（手动测一条容易触发的）：
+  1. 在向导内改坏一个 `columns` 配置（如写成 `serial: 'XX'`），点保存 → 应仍弹 messagebox 报错（**不静默**）—— 验证非 CTk 滚轮路径照常抛
+  2. dev 主窗口 / Shell / pc_to_excel 不受 `report_callback_exception` 影响（**作用域限定**已通过代码 review）
 
 ---
 
@@ -1512,3 +1730,8 @@ pytest 250 passed。
 | 2026-09-23 | **取消后的收尾清理 + 登记 P3-8 / P3-9**（用户要求「先清理孤儿文件，然后更新 md」）。**① 修构建侧遗漏**（commit `371a5c7`）：`76657ac` 取消脚本输出功能时只改了 spec 与 Python 侧，漏了 `build.bat:22-28` 的「检查 `scripts/export_current.bas.template`」前置检查 —— 该文件已删 ⇒ **打包第一步就 `exit /b 1`**；同批还有 `cm2xl.spec:112` 残留 `"modules.pc_to_excel.inject.toolbar_launcher"` hiddenimport。两处一并删除。**② 清理孤儿探针**：删 `scripts/inspect_fai_labels.py` + `scripts/test_pdf_folder.py`（硬编码 `C:\Users\terence\Desktop\test\` 路径、全仓零引用、flatten 重构遗留），`scripts/` 目录随之清空。**③ 登记 P3-8**：`export/pcdmis_style_report.py:382` 的 `export_pcdmis_csv()` 定义但**零调用**（无 CLI/GUI/测试引用、不在 `export/__init__.py` 的 `__all__`），且 `ARCHITECTURE.md` 数据流图把它错误归因为「BAS 脚本导出」—— 实际 BAS 脚本用自己的 `saveCsv` 写 CSV，不经过 Python。**不是本次取消造成的**（最后改动是 `df91650`），是预先存在的死代码；按用户「发现新 bug 只登记不动手」纪律只登记。**④ 登记 P3-9**（已随 ① 修复）：`build.bat` 残留检查，属构建失败类。**⑤ 文档同步**：`README.md` 目录树去掉 `scripts/` 与 `inject/` 两条；`ARCHITECTURE.md` §3.25（EXPORT_CMD_ID 常量）+ §3.29 / §3.47（CLI `cmd_inject`）+ 数据流图（`export_pcdmis_csv` 错归因）+ 已排除候选表（`inject/toolbar_launcher.py:201` 条目失效）全部标注。**整体进度**「已完成 6 / 15」改为「7 / 17」（P3-9 已完成、P3-8 未开始），条目数 15 → 17。**基线 250 passed 不变**（无代码改动 —— 删的是零引用探针 + 构建配置）。**可复用排查法**（删任何模块/文件后都该跑）：① spec `ast.parse` + 过滤注释搜旧模块名 ② 全仓 `*.py` 搜被删符号 ③ 构建脚本（`build.bat` / `build_installer.bat` / `installer/`）搜旧路径 ④ spec 的 `datas` 与 `hiddenimports` 列表 |
 | 2026-09-23 | **孤儿扫描收尾：删主题预览脚本 + 清本地 ignored 产物**（用户选择「只删主题预览脚本」）。**① 删 `build/generate_theme_preview.py`**（6.5 KB）：一次性脚本，硬编码 OLD/NEW 两套配色生成主题改善前后对比图 `cm2xl_theme_preview.png`；主题工作已完成（`utils/theme.py` 定稿），该对比图冻结在过去的配色上、无复用价值。**保留 `preview/index.html`**（11.6 KB 静态 UI mock，作为 UI 设计参考）。**② 清本地 ignored 产物**（均被 `.gitignore` 的 Junk files 段覆盖、不入库）：`cm2xl_theme_preview.png`、`cm2xl_preview.png`、`build/icon_concepts/`（6 张图标概念稿 ~810 KB）、`build/__pycache__/generate_theme_preview.cpython-314.pyc`。**③ 系统扫描结论（受跟踪文件已无真孤儿）**：写脚本对全部受跟踪文件做「是否被其它文件提及」检查，剩余命中全部可解释 —— 6 个 `test_*.py` + `conftest.py`（pytest 自动收集）、`build/hooks/hook-customtkinter.py`（spec:225 `hookspath` 按约定自动加载该目录所有 `hook-*.py`）、`build_installer.bat` / `requirements/cmm_filler_optional.txt`（顶层入口 / 依赖清单）、配置与文档。**④ 清残留空目录与陈旧字节码**：`modules/pc_to_excel/inject/`（已删模块的目录壳 + 8 个 cpython-312/314 陈旧 `.pyc`）、`scripts/__pycache__/`、`scripts/`。**⑤ 文档**：`CHANGELOG.md` 的 v1.1.0 历史条目加「🗑 已于 2026-09-23 移除」标记；`README.md` 未提及该脚本，无需改。**基线 250 passed 不变**（删的是无引用脚本）。**`.gitignore` 未动**：三个 Junk files 条目的生产者虽已全部不在仓库里，但保留作防御性兜底（万一本地再生成同类产物仍被忽略） |
 | 2026-09-23 | **P3-9 完整打包实跑验证通过**（用户要求「先跑一次 build.bat 确认打包真的能过」）。`build.bat` 6/6 步全过：`[0/6]` 模型检测 → `[1/6]` 清理旧 dist（2026-09-04 的 594 MB 陈旧构建）→ **原先会挂的 BAS 模板检查已通过**（修前此处 `exit /b 1`）→ `[2/6]` PyInstaller 6.21.0 / Python 3.12.10 → `[3/6]` `fix_dist.py` `Fix complete!` → `[4/6]` 启动器 → `[5/6]` 删 ffmpeg DLL → `[6/6]` `Build OK: dist\cm2xl\`。**产物核验**：`cm2xl.exe` 26.3 MB · dist 总 592.4 MB · **BAS/inject 残留 = 0** · 本地模块 `__init__.py` 打包 10 个且 **`inject/__init__.py` 已正确消失**（spec `_local_pkgs` 生效）。**依赖完整性**：`warn-cm2xl.txt` 439 条全是噪声；11 个关键三方依赖（customtkinter / paddleocr / paddle / fitz / openpyxl / win32com / tkinterdnd2 / PIL / lxml / cv2 / lmdb）**全部 OK 无 missing**；警告里完全没有 `inject` / `command_injector` / `save_helper` / `toolbar_launcher` ⇒ 取消干净。**exe 冒烟测试通过**（按 CLAUDE.md「打包后必须跑 exe」）：启动 → Shell 初始化 → 2 模块注册，零 ERROR / Traceback，进程存活 236.2 MB，frozen 数据落 `%LOCALAPPDATA%\cm2xl\`。**顺带核对两条**（都非本轮引入）：① `crash.log` 是 2026-08-28 历史残留，它记录的 `utils/app_icon.py:81` frozen 下传 str 而非 `PIL.Image` 的崩溃**已在 `df91650` 修掉**（现返回 `pil.copy()` 或 `None`，`splash.py:129-139` 有 None fallback）；② `build.bat` 调裸 `python` → 系统 Python 3.12（依赖全齐含 pandas），`paddleocr_gpu`(3.10) 缺 pandas 但本项目零处用 pandas —— 两者都能打包，本次走 3.12；若要固定到 `paddleocr_gpu` 需显式改 `build.bat`，属**独立决策本轮未动**。**非交互执行提示**：`build.bat` 末尾 `pause` 会让 agent/CI 挂住，用 `cmd /c "build.bat < NUL"` 绕开。TL;DR P3-9 状态改为「已修 + 完整打包实跑验证」；P3-9 节补「完整打包实跑验证」小节。**基线 250 passed 不变**（纯文档回填） |
+| 2026-09-24 | **PR #1 合并**：分支 `fix/core-defects` 上 30+ commit（含 P1-1 / P1-2 / P1-3 / P2-1 / P2-5 / P3-7 + 脚本输出功能整 feature 取消 + 构建侧脚本依赖清理 + 主题预览脚本清理 + P3-9 完整打包实跑验证）通过 PR #1 合并入 `main`（merge commit `d2d2089`）。本文件基线 250 passed 不变（PR 内已含） |
+| 2026-09-24 | **真机试用 cm2xl 1.1.0 dev 模式（13:48 启动）+ 新发现 P3-10 / P3-12 / P3-13**（用户操作流程：选模板 → 走模板向导 → 点保存即崩 → 关窗）。**P3-12**（`622db57`）：`_save_config` 在 `data_start_row` / `sample_row` StringVar 为空时 `int('')` 抛 `ValueError`，用户 13:54 撞上首例。**P3-13**（`49165cc`）：CTk 5.x 滚轮回调在 widget 销毁后访问 `event.widget.master` 抛 `AttributeError`，刷屏 670+ 行 traceback（dev 启动到关窗 6 分钟内）。**P3-10**（`6876e65`）：用户反馈"主页面已经选好模板，进入向导还得再选一次路径"，真机截图证实两份路径分裂 —— 主页面 `模板2.xlsx`、向导 `检测报告样板-2026.xlsx`。**B 方案决定**（用户拍板）：首页不可编辑模板（移除 Entry + 浏览按钮），改为 Label +「📂 更换」按钮（向导向导唯一入口）；向导 `__init__` 接收 `initial_template_path` 预填 `_initial_template_path` 重压 config 里的旧值（修漂移）。TL;DR 三项状态从 ⬜ 改 ✅；待办与进度总览「整体进度」+3；本文件条目数 17 → 20。基线 250 → **271 passed**（+21 全为新测试，零回归） |
+| 2026-09-24 | **P3-12 实施完成（commit `622db57`）**。新增模块级 `_safe_int(value, default)` 工具函数（duck typing 接受 StringVar 或裸值；空串/None/非数字回退；`"0"` 必须透传 —— 关键边界 `test_zero_is_not_misread_as_empty` 防回归）。`_save_config` 全部 `int(var.get().strip())` 改 `_safe_int(var, default)`（`data_start_row` 默认 6、`sample_row` 默认 5）；`sheet_name` 加 `or 'FAI'` 兜底。不动 `_load_existing_config`（读时宽容、写时严格是惯例）。**11 用例**（`tests/test_template_wizard_save.py`）：`_safe_int` 单元 7 + `_save_config` 集成 4。「有牙」证明：回退 `template_wizard.py` → 9 failed / 1 passed / 1 skipped（5 TestSafeInt AttributeError + 4 TestSaveConfigDefaults 真抛 ValueError / sheet 空断言失败；那条 passed 是 `test_save_with_zero_data_start_row_passes_through` —— 旧逻辑下 `int('0')=0` 凑巧过）。基线 250 → 261 passed |
+| 2026-09-24 | **P3-13 实施完成（commit `49165cc`）**。`TemplateWizard.__init__` 末尾挂 `self.root.report_callback_exception = self._silence_destroyed_widget_callback`（**仅作用域**：模板向导自己的 Tk root，不影响主窗口/Shell/pc_to_excel）；新增 `@staticmethod _silence_destroyed_widget_callback(exc, val, tb)`，**仅同时满足三条件**才放行（`AttributeError` 子类 + `str(val)` 含 `master` + traceback 含 `ctk_scrollable_frame` 帧），其它异常走 `traceback.print_exception` 照常打 stderr。**3 用例**（`tests/test_template_wizard_callback.py`）：CTk 帧静音 / 其它 AttributeError 不静音 / RuntimeError 不静音。「有牙」证明：回退 → 3 failed（`_silence_destroyed_widget_callback` 不存在）。**根治 vs 本轮**：根治需 CTk 升级或切原生 Scrollbar，超出范围。基线 261 → 264 passed |
+| 2026-09-24 | **P3-10 / B 方案实施完成（commit `6876e65`）**。**主页面**（`gui.py:234-242`）：模板行 Entry + 浏览按钮 → Label +「📂 更换」按钮；新增 `_format_template_label()`（空 → `(未配置)`，有值 → `basename`，长路径不撑窗口）；Label 由 `template_display_var` 控，通过 `trace_add('write', ...)` 单向跟踪 `template_var`。**向导**（`template_wizard.py:42-66`）：`__init__` 多收 `initial_template_path: str \| None = None`，缓存到 `_initial_template_path`；`_build_ui` 用它预填 `file_var`；`_load_existing_config` 加守卫——仅当未传 initial 时才从 config 回填 file_var（**主 GUI 场景**：传了 initial 就压过 config 旧值；**CLI 场景**：initial 为 None → 保留旧行为）。`_open_wizard` 多传 `initial_template_path=self.template_var.get()`。**7 用例**（`tests/test_template_wizard_initial_path.py`）：`TemplateWizard(initial=...)` 缓存 3 + label 渲染 4。「有牙」证明：回退 → 7 failed（全 AttributeError）。**保留不动**：DnD 处理（`_setup_dnd` / `_on_drop` 的 template 分支）、`_browse_template` —— guide 弹窗还在用；guide 一行 Entry + 浏览完整保留（只改主页一行）。基线 264 → **271 passed**。本文件整体进度「已完成 7 / 17」改为「**已完成 10 / 20**」（P3-10/12/13 均完成） |
