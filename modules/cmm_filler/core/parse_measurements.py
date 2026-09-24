@@ -122,6 +122,85 @@ def _is_table_header_row(row_cells: list[OCRBox]) -> bool:
     return 'NOMINAL' in text and ('MEAS' in text or 'TOL' in text)
 
 
+# ─── GD&T（形位公差）识别（P3-11）────────────────────────────────────
+
+# 单值 + 1-3 datums（最常见 OCR 形态）
+_GDT_DATUM_TAIL_RE = re.compile(r'[+\-]?\d+(?:\.\d+)?\s*[A-Ca-c]{1,3}\s*$')
+# 平行度 // 被 PaddleOCR 保留（少见但稳定）
+_GDT_PARALLEL_RE = re.compile(r'^//\s*[+\-]?\d')
+# 同轴度 ◎ 被误读为圆圈数字 ①
+_GDT_CONCENTRIC_RE = re.compile(r'^①\s*[+\-]?\d')
+# 倾斜度 ∠ 被误读为小于号 <
+_GDT_ANGULAR_RE = re.compile(r'^<\s*[+\-]?\d')
+
+
+def _looks_like_gdt_spec(text: str) -> bool:
+    """判断 OCR 合并的 spec 单元格文本是否形位公差（GD&T）单值。
+
+    真机样例（CMM 报告参考 PDF，2026-09-24 实测 PaddleOCR 输出）：
+        0.5A / 0.3ABC / 00.6A   ← 单值 + 基准字母（最常见，符号框丢 OCR）
+        //0.5C                  ← 平行度 // 保留
+        ①0.5]                   ← 同轴度 ◎ 误读为圆圈数字 ①
+        <0.2 A                  ← 倾斜度 ∠ 误读为小于号 <
+
+    返回 True = 看起来是 GD&T spec（单值公差），False = 普通 ±上下公差 / 不可判定。
+
+    排除信号（任一即 False）：
+    - 含 ± 上下公差符号对（'+0.3/-0.3'）—— 必是普通尺寸
+    - 仅数字、无 datums、无形位符号（'0.300'）—— 歧义，**不**判定为 GD&T
+      （留给上层 spec row 邻列有 ASME Y14.5 时兜底）
+
+    注：本 helper 只看 spec token 本身，**不**结合 ASME Y14.5 / 邻列等上下文。
+    整合到 `parse_from_ocr_boxes` 时由调用方补上 ASME Y14.5 邻列判断。
+    """
+    text = text.strip()
+    if not text:
+        return False
+    # 排除：± 上下公差对
+    if '+' in text and '-' in text:
+        return False
+    # 强信号（任一即 True）
+    if _GDT_DATUM_TAIL_RE.match(text):
+        return True
+    if _GDT_PARALLEL_RE.match(text):
+        return True
+    if _GDT_CONCENTRIC_RE.match(text):
+        return True
+    if _GDT_ANGULAR_RE.match(text):
+        return True
+    return False
+
+
+def _extract_gdt_tolerance(text: str) -> float | None:
+    """从 GD&T spec token 里提取单值公差数值（绝对值）。
+
+    处理：
+    - 已知形位符号前缀 `//` `①` `<` —— 跳过
+    - 已知 OCR 噪声后缀 `]` `)`、`MEDIAN`、`ASME Y14.5` —— 跳过
+    - 末尾 datum 字母 A/B/C（1-3 个）—— 跳过
+    - 含符号 + / - —— 取绝对值
+
+    返回 None 表示提取失败（空、非数字、纯字母等）。
+    """
+    if not text:
+        return None
+    cleaned = text.strip()
+    # 跳前缀
+    cleaned = re.sub(r'^(//|①|<)+\s*', '', cleaned)
+    # 跳后缀：右括号、MEDIAN、ASME Y14.5
+    cleaned = re.sub(r'\s*(MEDIAN|ASME\s*Y14\.5)\s*$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'[\]\)]+\s*$', '', cleaned)
+    # 跳末尾 datums（A/B/C 1-3 个，可能被空格分隔）
+    cleaned = re.sub(r'\s+[A-Ca-c]{1,3}\s*$', '', cleaned)
+    cleaned = re.sub(r'[A-Ca-c]{1,3}\s*$', '', cleaned)
+    cleaned = cleaned.strip()
+    # 取第一个数字
+    m = re.search(r'[-+]?\d+(?:\.\d+)?', cleaned)
+    if not m:
+        return None
+    return abs(float(m.group()))
+
+
 def _remainder_after_label(text: str, item_prefixes: list[str]) -> tuple[ParsedLabel, str] | None:
     """解析标签并返回标签之后的剩余文本（用于提取数值）。"""
     line = text.strip()
