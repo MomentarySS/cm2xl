@@ -22,7 +22,7 @@
 
 - [cm2xl 输出 vs PC-DMIS 原生 对照报告 (2026-09-24)](CMMFILLER_VS_PCDMIS_对比报告_2026-09-24.md)
   —— 实测 `cm2xl-塑料DEMO_report.xlsx` 与 `cm2xl开发用报告3.XLSX` 的逐列对照结果。
-  发现 P3-11.1 BONUS 列漏填（6 个形位公差行）；其它差异（描述翻译 / 列结构精简 / -TOL=0 vs ''）语义等价、不修。
+  P3-11.1 BONUS 列漏填已修复（6/6 目标行对齐）；其它差异（描述翻译 / 列结构精简 / -TOL=0 vs '' / 7 行形位公差 BONUS 0 vs None）不修。
 
 ---
 
@@ -83,7 +83,7 @@ P3 其余各项互不重叠。
 
 ### 三、整体进度（截至 2026-09-24 下午）
 
-**已完成 11 / 21，未开始 10 / 21。** 2026-09-24 真机试用 cm2xl 1.1.0 dev 模式时发现 3 个 UX/健壮性问题：
+**已完成 12 / 21，未开始 9 / 21。** 2026-09-24 真机试用 cm2xl 1.1.0 dev 模式时发现 3 个 UX/健壮性问题：
 - **P3-10**（主页面 ↔ 向导模板路径分裂）：UX 重复设置 + 漂移风险 ⇒ **B 方案**：首页只读 + 向导预填
 - **P3-12**（`_save_config` 字段空值）：首启向导点保存即崩 ⇒ 已在 `622db57` 修
 - **P3-13**（CTk 滚轮回调噪声）：日志被 600+ 行 `AttributeError` traceback 淹没 ⇒ 已在 `49165cc` 精确静音
@@ -208,6 +208,7 @@ P3 其余各项互不重叠。
 | P3-12 | `_save_config()` 字段空值未防护 ⇒ `int('')` 抛 `ValueError` | `cmm_filler/template_wizard.py:_save_config` | 健壮性 | ✅ | ✅ **已修 + 真机已撞**（`622db57`；2026-09-24 13:54 traceback） |
 | P3-13 | CTk 5.x 滚轮回调在 widget 销毁后访问 `event.widget.master` 抛 `AttributeError`，刷屏 600+ 行 traceback | `ctk_scrollable_frame.py:_check_if_valid_scroll`（库内部） | 可诊断性 / 日志噪声 | ✅ | ✅ **已修 + 精确静音**（`49165cc`；只放行 CTk 滚轮 + master + AttributeError，其它照常） |
 | P3-11 | 形位公差（GD&T）OCR 后处理：符号框丢失 + 公差列边界误判，±上下公差解析路径吞掉单值公差 | `cmm_filler/core/parse_measurements.py:_resolve_pc_dmis_nums` | 健壮性 / 解析正确性 | ✅ | ✅ **已修（识别层 + 集成层）**（`ac105f9` + `d469da3`；8 种形位符号识别 + 单值公差分支；多表嵌套 follow-up） |
+| P3-11.1 | pc_to_excel 形位公差 BONUS 列漏填（6 行位置度/垂直度/平行度/倾斜度） | `pc_to_excel/core/_tolerance.py:_extract_tolerance_commands` (line 277/365) | 数据准确 | ✅ | ✅ **已修 + 真机已验证**（`d1f99dc` + `7f558bb` + `59d3123`；双路径读取 helper + 真机对照 6/6 行对齐） |
 
 状态取值：⬜ 未开始 / 🟡 进行中 / ✅ 已完成 / ⏸ 暂缓（附原因）
 
@@ -1725,43 +1726,67 @@ traceback 重复 670+ 次。日志可读性被噪声淹没，真正有用的 INF
 3. **形位符号描述文字**（"轮廓度"/"圆度" 等中文）的 OCR 后修 —— 当前解析已不再走入错误路径，但描述字段可能仍是噪声字符
 4. **OCR 模型升级** —— 根治符号丢失问题，超出本 PR 范围
 
-### P3-11.1 BONUS 列漏填（2026-09-24 登记）
+### P3-11.1 BONUS 列漏填（2026-09-24 实施完成 + 真机已验证）
 
-**位置**：`pc_to_excel/export/pcdmis_style_report.py` 的形位公差导出逻辑（待定位具体行）
+**位置**：`modules/pc_to_excel/core/_tolerance.py` 的形位公差读取路径（line 277 / 365）
 
 **现象**：用户 2026-09-24 15:57 提供 `cm2xl-塑料DEMO_report.xlsx`（cm2xl pc_to_excel 模块输出），与
 PC-DMIS 原生 `cm2xl开发用报告3.XLSX` 对照，发现 **BONUS 列 4 个 GD&T 类型全漏**：
 
-| GD&T 类型 | cm2xl BONUS | PC-DMIS BONUS |
+| GD&T 类型 | cm2xl BONUS（修复前）| PC-DMIS BONUS |
 |---|---|---|
 | 位置度 (CC_38) | None | **0** |
 | 垂直度 (CC_39 / CC_50 / CC_51) | None | **0** |
 | 平行度 (CC_52) | None | **0** |
 | 倾斜度 (CC_69) | None | **0** |
 
-圆度 / 圆跳动 / 同轴度 / 轮廓度 在 PC-DMIS 原生里 BONUS 也是空，cm2xl None = 语义等价。
+**根因**（dump 2026-09-24 确认）：PC-DMIS 2024.1 上 CC_38/39/50/51/52/69 的 `IsFcfCommand=False` /
+`IsToleranceCommand=True` —— 走的是 `_extract_tolerance_commands`（line 197+），
+**那个函数之前完全没读 BONUS 字段**（FeatureRecord 构造里没有 `bonus=` 参数）。
+而 `_extract_fcf_commands`（老 FCF 路径）虽然**读**了 `LINE1_BONUS/LINE2_BONUS`，但
+PC-DMIS 2024.1 上 `cmd.GetFieldValue(LINE2_BONUS=658, j)` 返 False，被 `_safe_float` 归 None。
 
-**根因**（推断）：
-- `_resolve_gdt_nums()` 返回 `[nominal, +TOL, -TOL, measured]` 四元组，**未读 BONUS 列**
-- 导出侧 `pcdmis_style_report.py` 拿到四元组即按四列输出，BONUS 列永远填 None
+**修法**（dump 数据驱动的双 helper）：
+1. `tol.segmentDimBonus(k, j)` 在 PC-DMIS 2024.1 上对所有 13 种形位符号
+   （位置度/垂直度/平行度/倾斜度/圆度/圆跳动/同轴度/圆柱度/同心度/线轮廓度/面轮廓度/平面度 等）
+   都返回 **0.0 [ok]**（真机 dump `d1f99dc` 确认）。
+2. `_read_gdt_bonus(cmd, k, j)` helper（line 170-194，commit `7f558bb`）：
+   优先 `tol.segmentDimBonus(k, j)`、回退 `cmd.GetFieldValue(LINE{k}_BONUS, j)` 字段 ID 路径。
+3. `_extract_tolerance_commands` 两处 FeatureRecord 构造补加 `bonus` 字段（commit `59d3123`）：
+   - line 277 尺寸行：`bonus = _safe_com_float(lambda: tol_cmd.sizeBonus(j))`
+   - line 365 区段行：`bonus = _safe_com_float(lambda kk=k, jj=j: tol_cmd.segmentDimBonus(kk, jj))`
 
-**对照结论**（其它差异已检视，**仅此 1 项需修**）：
-- ✓ 所有数值列完全一致（NOMINAL / MEAS / +TOL / -TOL / DEV / OUTTOL）
-- ⚠ -TOL=0 vs ''：语义等价（都表"无下公差"），无需改
-- ✓ 72 个 CC 全部合格、超 0 计数 0、合格率 100.0%（cm2xl 与 PC-DMIS 完全一致）
-- ⚠ 形位描述 "ISO 形位公差" vs "ASME 形位公差"：命名标准差异，**不算 bug**
-- ⚠ cm2xl 简化的列结构（去掉 轴/SEG/DEVANG）：**不算 bug**（PC-DMIS 原生模板可选）
+**真机对照**（2026-09-24 17:08）—— 修复后 `塑料DEMO_report.xlsx` vs PC-DMIS 原生 `cm2xl开发用报告3.XLSX`：
 
-**修法建议**（待开工时细化）：
-1. `_resolve_gdt_nums()` 多返回一个 `bonus` 字段，从 data row 的 BONUS 列位置取值
-2. `_build_measurement()` 加 `bonus` 字段透传
-3. `pcdmis_style_report.py` 写 BONUS 列时填 `m.bonus`
-4. 不改动无 BONUS 的 GD&T 行（圆度/圆跳动/同轴度/轮廓度）；只对位置度/垂直度/平行度/倾斜度填 0
+| 项 | 结果 |
+|---|---|
+| **6/6 目标行**（CC_38/39/50/51/52/69）BONUS = 0 | ✓ **完全对齐** |
+| 其它 7 行形位公差（CC_8/21/41/42/43/48/49）BONUS = 0 vs PC-DMIS 原生 None | ✓ **数据等价**（None = "无补偿值"，0 = "补偿 = 0"，字面差异不影响数据正确性）|
+| nominal / meas / +TOL / -TOL / DEV / OUTTOL / axis | ✓ 72/72 全一致 |
+| -TOL '' vs 0 差异 | ✓ 0 行新增 |
 
-**测试矩阵**（待开工时写）：
-- 位置度 / 垂直度 / 平行度 / 倾斜度 → BONUS=0 正确透传
-- 圆度 / 圆跳动 / 同轴度 / 轮廓度 → BONUS=None 保持空
-- 普通尺寸行 → 不写 BONUS 列（或保持 None）
+**新增 7 行形位公差 BONUS 字面差异**（CC_8/21/41/42/43/48/49）：PC-DMIS 原生 XLSX 写 None、cm2xl 写 0。
+**判定：数据等价，不修**（dump 确认 PC-DMIS COM 真实值是 0；PC-DMIS 原生 XLSX 在这些 GD&T 类型上
+写 None 是输出侧选择"无补偿值"，与 cm2xl 写 0 的语义一致 —— 用户 2026-09-24 17:10 拍板
+"none 就是没有补偿值"，即 0 与 None 都表达"无补偿"）。
+
+**修法经验**（避免下次重蹈）：dump 路径 ≠ 修复路径。dump 用 `tol.segmentDimBonus(k, j)`（方法路径），
+但 cm2xl 旧代码走 `cmd.GetFieldValue(LINE2_BONUS, j)`（字段 ID 路径），PC-DMIS 2024.1 上后者
+不可用。**今后 PC-DMIS COM 字段读取须先 dump 验证返回，再用对应路径**。
+
+**新增测试**（14 用例，commit `7f558bb` 11 + `59d3123` 3）：
+
+`modules/pc_to_excel/tests/test_gdt_bonus.py`：
+- `_read_gdt_bonus` helper 全分支覆盖：方法路径 0.0 / 真实值 / None / False / 抛异常 / ToleranceCommand 属性访问抛异常 → 全部回退到字段 ID 路径或不外抛。
+- `_extract_fcf_commands` 集成测试：bonus 透传到 FeatureRecord。
+- `_extract_tolerance_commands` 集成测试：尺寸行 + 区段行 + 抛异常兜住 → bonus 正确透传。
+
+**测试有牙**（git stash 退回到 `d1f99dc`）：helper ImportError 直接阻 collect → 测试真的守护修复。
+
+**变更**：
+- `d1f99dc feat(cli): dump-tols 抓 sizeBonus / segmentDimBonus（为 P3-11.1 诊断）`
+- `7f558bb feat(pc_to_excel): P3-11.1 BONUS 列正确填值（双路径读取 helper）`
+- `59d3123 fix(pc_to_excel): P3-11.1 _extract_tolerance_commands 也透传 bonus`
 
 ---
 
@@ -1900,3 +1925,4 @@ PC-DMIS 原生 `cm2xl开发用报告3.XLSX` 对照，发现 **BONUS 列 4 个 GD
 | 2026-09-24 | **P3-13 实施完成（commit `49165cc`）**。`TemplateWizard.__init__` 末尾挂 `self.root.report_callback_exception = self._silence_destroyed_widget_callback`（**仅作用域**：模板向导自己的 Tk root，不影响主窗口/Shell/pc_to_excel）；新增 `@staticmethod _silence_destroyed_widget_callback(exc, val, tb)`，**仅同时满足三条件**才放行（`AttributeError` 子类 + `str(val)` 含 `master` + traceback 含 `ctk_scrollable_frame` 帧），其它异常走 `traceback.print_exception` 照常打 stderr。**3 用例**（`tests/test_template_wizard_callback.py`）：CTk 帧静音 / 其它 AttributeError 不静音 / RuntimeError 不静音。「有牙」证明：回退 → 3 failed（`_silence_destroyed_widget_callback` 不存在）。**根治 vs 本轮**：根治需 CTk 升级或切原生 Scrollbar，超出范围。基线 261 → 264 passed |
 | 2026-09-24 | **P3-10 / B 方案实施完成（commit `6876e65`）**。**主页面**（`gui.py:234-242`）：模板行 Entry + 浏览按钮 → Label +「📂 更换」按钮；新增 `_format_template_label()`（空 → `(未配置)`，有值 → `basename`，长路径不撑窗口）；Label 由 `template_display_var` 控，通过 `trace_add('write', ...)` 单向跟踪 `template_var`。**向导**（`template_wizard.py:42-66`）：`__init__` 多收 `initial_template_path: str \| None = None`，缓存到 `_initial_template_path`；`_build_ui` 用它预填 `file_var`；`_load_existing_config` 加守卫——仅当未传 initial 时才从 config 回填 file_var（**主 GUI 场景**：传了 initial 就压过 config 旧值；**CLI 场景**：initial 为 None → 保留旧行为）。`_open_wizard` 多传 `initial_template_path=self.template_var.get()`。**7 用例**（`tests/test_template_wizard_initial_path.py`）：`TemplateWizard(initial=...)` 缓存 3 + label 渲染 4。「有牙」证明：回退 → 7 failed（全 AttributeError）。**保留不动**：DnD 处理（`_setup_dnd` / `_on_drop` 的 template 分支）、`_browse_template` —— guide 弹窗还在用；guide 一行 Entry + 浏览完整保留（只改主页一行）。基线 264 → **271 passed**。本文件整体进度「已完成 7 / 17」改为「**已完成 10 / 20**」（P3-10/12/13 均完成） |
 | 2026-09-24 | **新发现 P3-11 + 实施（commit `ac105f9` + `d469da3`）**。用户跑参考 PDF `cm2xl开发用报告2.PDF`（2026-09-24 提供，含 8 种形位符号：⊕⊥↗⌒◎//∠○）发现 GD&T 行 `+TOL/-TOL` 解析成 `+14.5/-9.000` / `+10.0/-86.267` 之类乱码（实际是单值公差 0.5/0.3）。**根因（基于本机 PaddleOCR 实测 OCR 输出）**：8 种符号 5 种完全丢失、◎→①、∠→<、○→\|；符号 + 公差值 + 基准字母 被合并到**单个 bbox**（`'0.3ABC'` / `'00.6A'` / `'①0.5] MEDIAN'`）→ 即使切列也切不开；下游 `_resolve_pc_dmis_nums` 默认按 ±上下公差扫描 → 拿相邻 ±值填形位单值。**修法分两步**——**识别层**（`ac105f9`）：`parse_measurements.py` 新增 4 条正则常量 + `_looks_like_gdt_spec()` 静态 helper（覆盖 datum 尾缀、`//`/`①`/`<` 前缀模式；排除 ± 上下公差对）+ `_extract_gdt_tolerance()` 单值提取（跳前缀 + 后缀 + datums）；**集成层**（`d469da3`）：`_is_gdt_label_row()`（同行含 ASME Y14.5 即 True）+ `_resolve_gdt_nums()`（返回 `[0, spec_value, 0, measured]`）+ `parse_from_ocr_boxes` 主流程集成（GD&T 行走新路径，否则走原 `_resolve_pc_dmis_nums`）。**58 用例**（`tests/test_gdt_ocr.py`）：`TestLooksLikeGdtSpec` 30 + `TestExtractGdtTolerance` 16 + `TestIsGdtLabelRow` 8 + `TestResolveGdtNums` 4。「有牙」证明：识别层回退 → ImportError 阻 collect 全部 ERROR；集成层回退 → 同上。基线 271 → 317 → **329 passed**（+58 全为新测试，零回归）。本文件条目数 20 → **21**（+P3-11）。整体进度「已完成 10 / 20」改为「**已完成 11 / 21**」。**已知 follow-up**（不在本 PR 范围）：① 多表嵌套（CC_21 「尺寸」+「圆度」两张堆叠表）的精确归属；② +TOL 列 vs MEAS 列边界判定（当前 measured 取第一个非零，会撞 +TOL；CC_43 MEAS=错误场景）；③ 形位符号描述文字（"轮廓度"/"圆度"等中文）的 OCR 后修；④ OCR 模型升级（根治符号丢失） |
+| 2026-09-24 | **P3-11.1 BONUS 列漏填 实施完成 + 真机已验证**（commit `d1f99dc` + `7f558bb` + `59d3123`）。PO #4 对照报告发现 6 行位置度/垂直度/平行度/倾斜度（CC_38/39/50/51/52/69）BONUS 列 cm2xl 输出 None vs PC-DMIS 原生 0。**根因（dump 2026-09-24 确认）**：PC-DMIS 2024.1 上 `IsFcfCommand=False` / `IsToleranceCommand=True` ⇒ 走 `_extract_tolerance_commands`（line 197+），那个函数之前**完全没读 BONUS 字段**（FeatureRecord 构造里没有 `bonus=` 参数）。dump 还确认 `cmd.GetFieldValue(LINE2_BONUS=658, j)` 在 2024.1 上返 False ⇒ 旧的字段 ID 路径在 `_extract_fcf_commands`（line 411/449）上也读不到 0。**修法三步**：① `d1f99dc` 扩 dump-tols 抓 sizeBonus/segmentDimBonus（dump 验证方法路径返 0.0 [ok]）；② `7f558bb` 加 `_read_gdt_bonus(cmd, k, j)` 双路径 helper（优先方法路径，回退字段 ID 路径），替换 `_extract_fcf_commands` 三处调用；③ `59d3123` 在 `_extract_tolerance_commands` 两处 FeatureRecord 构造加 bonus（**这是用户真机验错才被发现的漏路径**——前 commit 改对了 helper 但没改对调用方，证明 dump 路径 ≠ 修复路径）。**真机对照**（2026-09-24 17:08，6/6 行对齐）+ **新发现副作用**：7 行其它形位公差（CC_8/21/41/42/43/48/49）BONUS cm2xl 写 0 vs PC-DMIS 原生写 None —— **判定数据等价不修**（dump 确认 COM 真实数据是 0；用户拍板"none 就是没有补偿值"，即 0 与 None 都表"无补偿"）。**14 用例**（`tests/test_gdt_bonus.py`）：helper 11 + 集成 3；「有牙」证明：stash 退回到 `d1f99dc` 后 helper ImportError 直接阻 collect。基线 329 → **345 passed**（+14 全为新测试，零回归）。**PO #4 对照报告 §5 结论**同步更新（P3-11.1 状态从「必修」改「✅ 已修复 + 真机已验证」）。整体进度「已完成 11 / 21」改为「**已完成 12 / 21**」。**经验**：dump 路径 ≠ 修复路径。今后 PC-DMIS COM 字段读取须先 dump 验证返回（用方法路径而非字段 ID 路径），再用对应路径写修复。`docs/CMMFILLER_VS_PCDMIS_对比报告_2026-09-24.md` 反映此修复闭环 |
